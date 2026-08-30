@@ -114,13 +114,13 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
-  try {
-    const rawProduct = await fetchWCProductById(Number(id));
-    const product = mapWCProduct(rawProduct);
-    return product.price > 0 ? product : null;
-  } catch {
+  const rawProduct = await fetchWCProductById(Number(id));
+  if (!rawProduct) {
     return null;
   }
+
+  const product = mapWCProduct(rawProduct);
+  return product.price > 0 ? product : null;
 }
 
 export async function getCategories(): Promise<Category[]> {
