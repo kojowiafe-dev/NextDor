@@ -24,7 +24,7 @@ export function SearchBar({ className = "" }: { className?: string }) {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search NextDor"
-        className="w-full rounded-l-md border-0 px-4 py-2 text-sm text-zinc-900 outline-none"
+        className="w-full rounded-l-md border-0 border-r-0 px-4 py-2 text-sm text-white outline-none"
       />
       <button
         type="submit"
