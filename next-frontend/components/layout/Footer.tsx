@@ -5,18 +5,20 @@ const footerLinks = {
     { label: "All Products", href: "/shop" },
     { label: "Electronics", href: "/category/electronics" },
     { label: "Laptops", href: "/category/laptop" },
-    { label: "Beauty", href: "/category/beauty-personal-care" },
+    { label: "Beauty & Personal Care", href: "/category/beauty-personal-care" },
+    { label: "Bakery", href: "/category/bakery" },
   ],
   help: [
-    { label: "Customer Service", href: "#" },
-    { label: "Shipping Info", href: "#" },
-    { label: "Returns", href: "#" },
-    { label: "Contact Us", href: "#" },
+    { label: "Customer Service", href: "/contact" },
+    { label: "Shipping Info", href: "/shipping-info" },
+    { label: "Returns & Refunds", href: "/returns" },
+    { label: "Contact Us", href: "/contact" },
   ],
   account: [
-    { label: "Sign In", href: "/account" },
+    { label: "Sign In", href: "/login" },
+    { label: "Create Account", href: "/register" },
     { label: "Your Cart", href: "/cart" },
-    { label: "Track Order", href: "#" },
+    { label: "Track Order", href: "/account/orders" },
   ],
 };
 

@@ -9,6 +9,7 @@ import {
   fetchWCCategories,
   fetchWCProductById,
   fetchWCProducts,
+  fetchWCProductsWithMeta,
   fetchWCRelatedProducts,
 } from "@/lib/woocommerce/client";
 import {
@@ -61,7 +62,8 @@ export async function getProducts(
     }
   }
 
-  const rawProducts = await fetchWCProducts(params);
+  const { products: rawProducts, total, totalPages } =
+    await fetchWCProductsWithMeta(params);
   let products = mapWCProducts(rawProducts);
 
   if (options.onSale) {
@@ -70,8 +72,11 @@ export async function getProducts(
 
   return {
     products,
-    total: products.length,
-    totalPages: Math.max(1, Math.ceil(products.length / perPage)),
+    total,
+    // Fall back to local calculation only when onSale filter reduces the count
+    totalPages: options.onSale
+      ? Math.max(1, Math.ceil(products.length / perPage))
+      : Math.max(1, totalPages),
     page,
   };
 }

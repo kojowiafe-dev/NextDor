@@ -111,13 +111,12 @@ export default function CartPage() {
           <p className="mt-2 text-xs text-zinc-500">
             Shipping and taxes calculated at checkout.
           </p>
-          <button
-            type="button"
-            disabled
-            className="mt-4 w-full rounded-lg bg-[#ff9900] px-6 py-3 text-sm font-semibold text-zinc-900 opacity-60"
+          <Link
+            href="/checkout"
+            className="mt-4 block w-full rounded-lg bg-[#ff9900] px-6 py-3 text-center text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f08804]"
           >
-            Checkout — Coming Soon
-          </button>
+            Proceed to Checkout
+          </Link>
           <Link
             href="/shop"
             className="mt-3 block text-center text-sm text-[#007185] hover:text-[#c7511f] hover:underline"

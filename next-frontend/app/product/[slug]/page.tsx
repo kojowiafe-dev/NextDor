@@ -9,6 +9,7 @@ import {
 import { AddToCartButton } from "@/components/product/AddToCartButton";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductRow } from "@/components/home/ProductRow";
+import { ReviewsSection } from "@/components/product/ReviewsSection";
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
@@ -106,6 +107,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
           dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
         />
       </section>
+
+      <ReviewsSection
+        productId={product.id}
+        avgRating={product.rating}
+        reviewCount={product.reviewCount}
+      />
 
       {related.length > 0 && (
         <div className="mt-4">

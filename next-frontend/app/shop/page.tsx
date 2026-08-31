@@ -5,6 +5,7 @@ import {
   type ProductSort,
 } from "@/lib/catalog";
 import { ProductGrid } from "@/components/product/ProductGrid";
+import { Pagination } from "@/components/ui/Pagination";
 
 type ShopPageProps = {
   searchParams: Promise<{
@@ -96,28 +97,15 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
       <ProductGrid products={products} />
 
-      {totalPages > 1 && (
-        <div className="mt-8 flex justify-center gap-2">
-          {Array.from({ length: totalPages }, (_, index) => {
-            const pageNumber = index + 1;
-            return (
-              <Link
-                key={pageNumber}
-                href={`/shop?sort=${sort}&page=${pageNumber}${
-                  params.category ? `&category=${params.category}` : ""
-                }`}
-                className={`rounded px-3 py-1 text-sm ${
-                  pageNumber === page
-                    ? "bg-[#232f3e] text-white"
-                    : "bg-white text-zinc-700 hover:bg-zinc-100"
-                }`}
-              >
-                {pageNumber}
-              </Link>
-            );
-          })}
-        </div>
-      )}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        basePath="/shop"
+        searchParams={{
+          sort: sort !== "popularity" ? sort : undefined,
+          category: params.category,
+        }}
+      />
     </div>
   );
 }
