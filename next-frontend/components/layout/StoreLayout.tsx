@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { getCategories } from "@/lib/catalog";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -10,6 +11,19 @@ export default async function StoreLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Admin routes are tagged by middleware — skip the storefront shell for them
+  const headersList = await headers();
+  const isAdminRoute = headersList.get("x-is-admin-route") === "true";
+
+  if (isAdminRoute) {
+    // Providers still needed (AuthContext used by AdminGuard)
+    return (
+      <AuthProvider>
+        <CartProvider>{children}</CartProvider>
+      </AuthProvider>
+    );
+  }
+
   const categories = await getCategories();
 
   return (
