@@ -38,8 +38,10 @@ export function StatCard({
         <Icon className={`h-6 w-6 ${iconColor}`} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-zinc-500">{title}</p>
-        <p className="mt-0.5 text-2xl font-bold text-zinc-900">{value}</p>
+        <p className="text-sm leading-snug text-zinc-500">{title}</p>
+        <p className="mt-1 text-lg font-bold leading-tight text-zinc-900">
+          {value}
+        </p>
         {trend && (
           <p className={`mt-0.5 text-xs font-medium ${trendColor}`}>
             {trendPrefix} {trend}
