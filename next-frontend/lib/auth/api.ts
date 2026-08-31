@@ -7,6 +7,7 @@ export type AuthUser = {
   email: string;
   phone?: string;
   avatarInitials: string;
+  role: "customer" | "admin";
 };
 
 export type SignInPayload = {
@@ -41,6 +42,14 @@ function makeInitials(name: string): string {
     .slice(0, 2);
 }
 
+function assignRole(email: string): "customer" | "admin" {
+  const lower = email.toLowerCase();
+  if (lower.startsWith("admin") || lower.endsWith("@nextdor.online")) {
+    return "admin";
+  }
+  return "customer";
+}
+
 /**
  * Sign in with email and password.
  * TODO: Replace with `POST /api/auth/login`
@@ -68,6 +77,7 @@ export async function signIn(payload: SignInPayload): Promise<AuthUser> {
     id: "stub-" + Math.random().toString(36).slice(2),
     name: formattedName,
     email: payload.email,
+    role: assignRole(payload.email),
     avatarInitials: makeInitials(formattedName),
   };
 }
@@ -88,6 +98,7 @@ export async function signUp(payload: SignUpPayload): Promise<AuthUser> {
     name: payload.name,
     email: payload.email,
     phone: payload.phone,
+    role: assignRole(payload.email),
     avatarInitials: makeInitials(payload.name),
   };
 }
@@ -116,6 +127,7 @@ export async function updateUserProfile(
     name: payload.name,
     email: payload.email,
     phone: payload.phone,
+    role: assignRole(payload.email),
     avatarInitials: makeInitials(payload.name),
   };
 }

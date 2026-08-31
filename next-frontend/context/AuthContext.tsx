@@ -20,6 +20,7 @@ import type { SignInPayload, SignUpPayload, UpdateProfilePayload } from "@/lib/a
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   isLoading: boolean;
   login: (payload: SignInPayload) => Promise<void>;
   register: (payload: SignUpPayload) => Promise<void>;
@@ -84,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       isAuthenticated: !!user,
+      isAdmin: user?.role === "admin",
       isLoading: !hydrated,
       login,
       register,
