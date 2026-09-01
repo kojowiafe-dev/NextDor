@@ -1,0 +1,94 @@
+# NextDor — Local Development Stack
+#
+# DESIGN DECISION: Why Docker for local deps instead of local installs?
+# ──────────────────────────────────────────────────────────────────────
+# "Works on my machine" is the enemy of team productivity.
+# Docker guarantees every developer runs the EXACT same Postgres version,
+# Redis version, and config — no "I have Postgres 14, you have 15" bugs.
+#
+# WHAT IF: A developer forgets to run docker compose up before starting
+# the API? The API will log "Redis: error" and "Slow query" warnings,
+# then the Zod config check will fail cleanly. The health/ready endpoint
+# will return 503, making the problem immediately obvious.
+#
+# Usage:
+#   docker compose up -d          Start all services in background
+#   docker compose down           Stop all services
+#   docker compose down -v        Stop + wipe all data volumes (fresh start)
+#   docker compose logs -f redis  Tail logs for a specific service
+
+version: "3.9"
+
+services:
+  # ── PostgreSQL ────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine   # Alpine = smaller image, same Postgres
+    container_name: nextdor_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"             # Expose locally for Prisma Studio / psql
+    environment:
+      POSTGRES_USER: nextdor
+      POSTGRES_PASSWORD: nextdor_dev
+      POSTGRES_DB: nextdor
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Run any SQL scripts on first init (e.g., enable extensions)
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextdor -d nextdor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Redis ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nextdor_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    # Enable persistence so the cart/session data survives a restart.
+    # DESIGN: RDB snapshots every 60s if at least 1 key changed.
+    # In production you'd also enable AOF (appendonly yes) for durability.
+    # WHAT IF: Redis loses power mid-write without AOF? You'd lose up to
+    # 60 seconds of cache writes — which is acceptable for a cache, but
+    # not for a queue. BullMQ jobs are in Redis too, so in production
+    # enable AOF to prevent job loss on restart.
+    command: >
+      redis-server
+      --save 60 1
+      --loglevel notice
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis Commander (optional GUI) ────────────────────────────────
+  # Browse Redis keys visually at http://localhost:8081
+  # Useful for debugging cache, cart, and BullMQ job queues.
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: nextdor_redis_ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - tools   # Only starts with: docker compose --profile tools up
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
