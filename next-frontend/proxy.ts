@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const response = NextResponse.next();
   // Tag all admin-route requests so StoreLayout can skip storefront UI
   if (request.nextUrl.pathname.startsWith("/admin")) {
