@@ -28,9 +28,9 @@ services:
     ports:
       - "5432:5432"             # Expose locally for Prisma Studio / psql
     environment:
-      POSTGRES_USER: nextdor
-      POSTGRES_PASSWORD: nextdor_dev
-      POSTGRES_DB: nextdor
+      POSTGRES_USER: ${DB_USER:-nextdor}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nextdor_dev}
+      POSTGRES_DB: ${DB_NAME:-nextdor}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Run any SQL scripts on first init (e.g., enable extensions)
