@@ -188,7 +188,7 @@ function NoResults({ query }: { query: string }) {
 function EmptySearchState({
   categories,
 }: {
-  categories: { id: number; name: string; slug: string }[];
+  categories: { id: string | number; name: string; slug: string }[];
 }) {
   return (
     <div className="py-8">
