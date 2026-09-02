@@ -1,0 +1,19 @@
+{
+  "name": "nextdor-monorepo",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "workspaces": [
+    "next-frontend",
+    "next-backend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w next-backend",
+    "dev:frontend": "npm run dev -w next-frontend",
+    "build:shared": "npm run build -w @nextdor/shared",
+    "build:backend": "npm run build -w next-backend",
+    "build:frontend": "npm run build -w next-frontend"
+  }
+}

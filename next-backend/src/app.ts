@@ -21,6 +21,7 @@ import { config } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { isAppError } from "./lib/errors.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
+import { authRoutes } from "./modules/auth/auth.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -69,7 +70,7 @@ export async function buildApp() {
     timeWindow: "1 minute",
     // Redis plugin connection is provided here in Phase 2 when we
     // integrate @fastify/rate-limit with ioredis
-    keyGenerator: (req) => req.ip,
+    keyGenerator: (req: any) => req.ip,
     errorResponseBuilder: () => ({
       success: false,
       error: {
@@ -160,7 +161,7 @@ export async function buildApp() {
   await app.register(healthRoutes, { prefix: "/health" });
 
   // All API routes will be registered under /api/v1 in Phase 2+
-  // await app.register(authRoutes,    { prefix: "/api/v1/auth" });
+  await app.register(authRoutes,    { prefix: "/api/v1/auth" });
   // await app.register(productRoutes, { prefix: "/api/v1/products" });
   // ... etc.
 

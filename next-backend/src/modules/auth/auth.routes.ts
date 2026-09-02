@@ -26,8 +26,18 @@
  */
 
 import type { FastifyPluginAsync } from "fastify";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    cookies: Record<string, string>;
+  }
+  interface FastifyReply {
+    setCookie(name: string, value: string, options?: any): this;
+    clearCookie(name: string, options?: any): this;
+  }
+}
 import { AuthService } from "./auth.service.js";
-import { registerSchema, loginSchema, forgotPasswordSchema } from "./auth.schema.js";
+import { registerSchema, loginSchema, forgotPasswordSchema } from "@nextdor/shared";
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 
