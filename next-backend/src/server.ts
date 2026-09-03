@@ -49,8 +49,10 @@ async function main() {
       // 2. Close database pool
       await prisma.$disconnect();
 
-      // 3. Disconnect Redis
-      redis.disconnect();
+      // 3. Disconnect Redis if connected
+      if (redis.status !== "wait" && redis.status !== "end") {
+        redis.disconnect();
+      }
 
       logger.info("Shutdown complete");
       process.exit(0);

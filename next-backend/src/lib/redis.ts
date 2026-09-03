@@ -38,15 +38,16 @@ import { logger } from "./logger.js";
 
 function createRedisClient(): Redis {
   const client = new Redis(config.REDIS_URL, {
-    // Retry connection up to 10 times with exponential backoff
-    // WHAT IF: The Redis server restarts? This handles it transparently.
+    // Retry connection up to 3 times in dev, 10 times in prod with exponential backoff
+    // WHAT IF: Redis isn't running locally? Stops retrying quickly and falls back cleanly.
     retryStrategy(times) {
-      if (times > 10) {
-        logger.error("Redis: could not reconnect after 10 attempts");
+      const maxRetries = config.NODE_ENV === "development" ? 3 : 10;
+      if (times > maxRetries) {
+        logger.info("Redis: offline — continuing with direct database fallback");
         return null; // Stop retrying — let the caller handle the miss
       }
-      const delay = Math.min(times * 100, 3000); // max 3s between retries
-      logger.warn({ attempt: times, delayMs: delay }, "Redis: reconnecting");
+      const delay = Math.min(times * 100, 3000);
+      logger.debug({ attempt: times, delayMs: delay }, "Redis: reconnecting");
       return delay;
     },
 
@@ -59,14 +60,22 @@ function createRedisClient(): Redis {
     // Keep connection alive — prevents NAT/firewall from dropping idle TCP
     keepAlive: 1000,
 
-    lazyConnect: false, // Connect immediately so startup errors surface early
+    // Only connect when a command is executed, so the app can start without Redis
+    lazyConnect: true,
+    enableOfflineQueue: false,
   });
 
-  client.on("connect",    () => logger.info("Redis: connected"));
-  client.on("ready",      () => logger.info("Redis: ready"));
-  client.on("error",      (err) => logger.error({ err }, "Redis: error"));
-  client.on("close",      () => logger.warn("Redis: connection closed"));
-  client.on("reconnecting", () => logger.warn("Redis: reconnecting"));
+  client.on("connect", () => logger.info("Redis: connected"));
+  client.on("ready", () => logger.info("Redis: ready"));
+  client.on("error", (err: any) => {
+    if (err.code === "ECONNREFUSED") {
+      logger.warn("Redis: server not reachable at " + config.REDIS_URL + " — operating in cache-bypass mode");
+    } else {
+      logger.error({ err }, "Redis: error");
+    }
+  });
+  client.on("close", () => logger.debug("Redis: connection closed"));
+  client.on("reconnecting", () => logger.debug("Redis: reconnecting"));
 
   return client;
 }

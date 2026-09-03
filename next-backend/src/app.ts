@@ -27,7 +27,7 @@ export async function buildApp() {
   const app = Fastify({
     // Use our Pino instance so Fastify's built-in request logging
     // (req.log.info / req.log.error) flows through the same logger.
-    logger: logger,
+    loggerInstance: logger,
 
     // Automatically generate a unique requestId for every request.
     // This ID is attached to every log line via req.log — so you can
@@ -39,6 +39,13 @@ export async function buildApp() {
     // SHOULD INCASE: If you skip this, req.ip always shows the proxy IP,
     // not the real client IP — breaking IP-based rate limiting.
     trustProxy: config.NODE_ENV === "production",
+
+    // Allow OpenAPI schema keywords (like example, description) in Ajv
+    ajv: {
+      customOptions: {
+        strict: false,
+      },
+    },
   });
 
   // ── Plugins (order matters — each can depend on the previous) ────────────
@@ -104,7 +111,7 @@ export async function buildApp() {
   // This ensures every error response has the same JSON shape, and we
   // never accidentally leak a raw stack trace to the client.
 
-  app.setErrorHandler((error, req, reply) => {
+  app.setErrorHandler((error: any, req, reply) => {
     // Known operational error (thrown by our code intentionally)
     if (isAppError(error)) {
       req.log.warn({ err: error, code: error.code }, error.message);
@@ -114,6 +121,19 @@ export async function buildApp() {
           code: error.code,
           message: error.message,
           details: error.details ?? undefined,
+        },
+      });
+    }
+
+    // Zod validation error (from manual schema parsing)
+    if (error.name === "ZodError" || error.issues) {
+      req.log.warn({ issues: error.issues }, "Request validation failed");
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: error.issues?.[0]?.message ?? "Invalid request data",
+          details: error.issues,
         },
       });
     }
