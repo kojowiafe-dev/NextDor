@@ -64,6 +64,20 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     "/register",
     {
       config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Register a new user account",
+        tags: ["Auth"],
+        body: {
+          type: "object",
+          required: ["name", "email", "password"],
+          properties: {
+            name: { type: "string", minLength: 2, example: "Kojo Wiafe" },
+            email: { type: "string", format: "email", example: "kojo@nextdor.com" },
+            password: { type: "string", minLength: 8, example: "Password123!" },
+            phone: { type: "string", example: "+233241234567" },
+          },
+        },
+      },
     },
     async (req, reply) => {
       const body = registerSchema.parse(req.body);
@@ -96,6 +110,18 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     "/login",
     {
       config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Authenticate with email and password",
+        tags: ["Auth"],
+        body: {
+          type: "object",
+          required: ["email", "password"],
+          properties: {
+            email: { type: "string", format: "email", example: "kojo@nextdor.com" },
+            password: { type: "string", minLength: 1, example: "Password123!" },
+          },
+        },
+      },
     },
     async (req, reply) => {
       const body = loginSchema.parse(req.body);
@@ -123,25 +149,34 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    * with a refresh). The user never sees a login page — their session
    * just extends automatically.
    */
-  app.post("/refresh", async (req, reply) => {
-    const rawToken = req.cookies[REFRESH_COOKIE_NAME];
+  app.post(
+    "/refresh",
+    {
+      schema: {
+        description: "Refresh access token using the httpOnly cookie",
+        tags: ["Auth"],
+      },
+    },
+    async (req, reply) => {
+      const rawToken = req.cookies[REFRESH_COOKIE_NAME];
 
-    if (!rawToken) {
-      return reply.status(401).send({
-        success: false,
-        error: { code: "UNAUTHORIZED", message: "No refresh token provided" },
-      });
-    }
+      if (!rawToken) {
+        return reply.status(401).send({
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "No refresh token provided" },
+        });
+      }
 
-    const tokens = await AuthService.refresh(rawToken);
+      const tokens = await AuthService.refresh(rawToken);
 
-    reply
-      .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
-      .send({
-        success: true,
-        data: { accessToken: tokens.accessToken },
-      });
-  });
+      reply
+        .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
+        .send({
+          success: true,
+          data: { accessToken: tokens.accessToken },
+        });
+    },
+  );
 
   /**
    * POST /auth/logout
@@ -151,21 +186,30 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    * We return 200 anyway — logout is idempotent. "Already logged out"
    * is a success state, not an error.
    */
-  app.post("/logout", async (req, reply) => {
-    const rawToken = req.cookies[REFRESH_COOKIE_NAME];
+  app.post(
+    "/logout",
+    {
+      schema: {
+        description: "Log out and revoke the session refresh token",
+        tags: ["Auth"],
+      },
+    },
+    async (req, reply) => {
+      const rawToken = req.cookies[REFRESH_COOKIE_NAME];
 
-    if (rawToken) {
-      await AuthService.logout(rawToken);
-    }
+      if (rawToken) {
+        await AuthService.logout(rawToken);
+      }
 
-    // Clear the cookie by setting maxAge to 0
-    reply
-      .setCookie(REFRESH_COOKIE_NAME, "", {
-        ...refreshCookieOptions(0),
-        maxAge: 0,
-      })
-      .send({ success: true, data: null });
-  });
+      // Clear the cookie by setting maxAge to 0
+      reply
+        .setCookie(REFRESH_COOKIE_NAME, "", {
+          ...refreshCookieOptions(0),
+          maxAge: 0,
+        })
+        .send({ success: true, data: null });
+    },
+  );
 
   /**
    * POST /auth/forgot-password
@@ -181,6 +225,17 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     "/forgot-password",
     {
       config: { rateLimit: { max: 3, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Request a password reset link (idempotent)",
+        tags: ["Auth"],
+        body: {
+          type: "object",
+          required: ["email"],
+          properties: {
+            email: { type: "string", format: "email", example: "kojo@nextdor.com" },
+          },
+        },
+      },
     },
     async (req, reply) => {
       const body = forgotPasswordSchema.parse(req.body);
@@ -207,8 +262,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/me",
     {
-      // TODO Phase 2: add authenticate preHandler hook
-      // preHandler: [app.authenticate],
+      schema: {
+        description: "Get currently authenticated user details",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
     },
     async (req, reply) => {
       // Temporary: decode token manually until auth plugin is wired up

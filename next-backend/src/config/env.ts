@@ -16,6 +16,21 @@
  */
 
 import { z } from "zod";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+// Load .env automatically in development/local environments
+try {
+  if (typeof process.loadEnvFile === "function") {
+    if (existsSync(".env")) {
+      process.loadEnvFile(".env");
+    } else if (existsSync(resolve("next-backend", ".env"))) {
+      process.loadEnvFile(resolve("next-backend", ".env"));
+    }
+  }
+} catch {
+  // In containers or CI/CD, env vars are passed directly into the environment
+}
 
 const envSchema = z.object({
   // ── Runtime ─────────────────────────────────────────────────────────────
