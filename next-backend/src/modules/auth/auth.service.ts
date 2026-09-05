@@ -34,21 +34,21 @@ export type AuthUser = Pick<User, "id" | "email" | "name" | "phone" | "role" | "
 
 // ─── Token helpers ─────────────────────────────────────────────────────────────
 
-function signAccessToken(userId: string, role: string, vendorId?: string | null): string {
+function signAccessToken(userId: string, role: string, email?: string, vendorId?: string | null): string {
   return jwt.sign(
-    { sub: userId, role, ...(vendorId ? { vendorId } : {}) },
+    { sub: userId, role, ...(email ? { email } : {}), ...(vendorId ? { vendorId } : {}) },
     config.JWT_SECRET,
     { expiresIn: config.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions["expiresIn"] }
   );
 }
 
 function generateOpaqueToken(): string {
-  return crypto.randomBytes(64).toString("hex"); // 128 hex chars = 512 bits
+  return crypto.randomBytes(32).toString("hex");
 }
 
-function verifyAccessToken(token: string): { sub: string; role: string; vendorId?: string } {
+function verifyAccessToken(token: string): { sub: string; role: string; email?: string; vendorId?: string } {
   try {
-    return jwt.verify(token, config.JWT_SECRET) as { sub: string; role: string; vendorId?: string };
+    return jwt.verify(token, config.JWT_SECRET) as { sub: string; role: string; email?: string; vendorId?: string };
   } catch {
     throw new UnauthorizedError("Invalid or expired access token");
   }
@@ -195,7 +195,7 @@ export class AuthService {
     const user = await this.userRepo.findById(userId);
     if (!user) throw new NotFoundError("User not found");
 
-    const accessToken = signAccessToken(userId, user.role, user.vendorId);
+    const accessToken = signAccessToken(userId, user.role, user.email, user.vendorId);
     const refreshToken = generateOpaqueToken();
     const tokenHash = await bcrypt.hash(refreshToken, 10);
 

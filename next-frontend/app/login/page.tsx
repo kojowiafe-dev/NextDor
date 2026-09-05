@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { AuthFormField } from "@/components/account/AuthFormField";
@@ -16,7 +16,7 @@ type FormErrors = {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user, isAuthenticated, isLoading } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,6 +24,43 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // If already authenticated, redirect to appropriate portal immediately
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || !user) return;
+
+    const searchRedirect =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("redirect")
+        : null;
+
+    if (user.role === "admin" || user.role === "super_admin") {
+      if (searchRedirect && searchRedirect.startsWith("/admin")) {
+        router.replace(searchRedirect);
+      } else {
+        router.replace("/admin");
+      }
+    } else if (user.role === "vendor_owner" || user.role === "vendor_staff") {
+      if (
+        searchRedirect &&
+        (searchRedirect.startsWith("/vendor") || searchRedirect.startsWith("/shop"))
+      ) {
+        router.replace(searchRedirect);
+      } else {
+        router.replace("/vendor/dashboard");
+      }
+    } else {
+      if (
+        searchRedirect &&
+        !searchRedirect.startsWith("/admin") &&
+        !searchRedirect.startsWith("/vendor")
+      ) {
+        router.replace(searchRedirect);
+      } else {
+        router.replace("/account");
+      }
+    }
+  }, [isLoading, isAuthenticated, user, router]);
 
   function validate(): FormErrors {
     const errs: FormErrors = {};
@@ -50,14 +87,31 @@ export default function LoginPage() {
           ? new URLSearchParams(window.location.search).get("redirect")
           : null;
 
-      if (searchRedirect) {
-        router.push(searchRedirect);
+      if (loggedUser.role === "admin" || loggedUser.role === "super_admin") {
+        if (searchRedirect && searchRedirect.startsWith("/admin")) {
+          router.replace(searchRedirect);
+        } else {
+          router.replace("/admin");
+        }
       } else if (loggedUser.role === "vendor_owner" || loggedUser.role === "vendor_staff") {
-        router.push("/vendor/dashboard");
-      } else if (loggedUser.role === "admin" || loggedUser.role === "super_admin") {
-        router.push("/admin");
+        if (
+          searchRedirect &&
+          (searchRedirect.startsWith("/vendor") || searchRedirect.startsWith("/shop"))
+        ) {
+          router.replace(searchRedirect);
+        } else {
+          router.replace("/vendor/dashboard");
+        }
       } else {
-        router.push("/account");
+        if (
+          searchRedirect &&
+          !searchRedirect.startsWith("/admin") &&
+          !searchRedirect.startsWith("/vendor")
+        ) {
+          router.replace(searchRedirect);
+        } else {
+          router.replace("/account");
+        }
       }
     } catch (error) {
       setErrors({
@@ -67,6 +121,14 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (isLoading || isAuthenticated) {
+    return (
+      <div className="flex min-h-[calc(100vh-200px)] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-[#ff9900]" />
+      </div>
+    );
   }
 
   return (
@@ -224,6 +286,15 @@ export default function LoginPage() {
               Create one
             </Link>
           </p>
+        </div>
+
+        {/* Merchant Callout */}
+        <div className="mt-4 rounded-xl border border-purple-100 bg-purple-50/70 p-3.5 text-center text-xs text-purple-950">
+          <span className="font-semibold">Are you a merchant?</span>{" "}
+          Sign in above with your store email, or{" "}
+          <Link href="/vendor/register" className="font-semibold text-purple-700 hover:underline">
+            open a merchant store →
+          </Link>
         </div>
 
         {/* Back to shop */}

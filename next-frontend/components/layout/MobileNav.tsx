@@ -93,7 +93,7 @@ export function MobileNav({ categories }: MobileNavProps) {
                     </Link>
                   )}
 
-                  {isVendor && !isAdmin && (
+                  {isVendor && (
                     <Link
                       href="/vendor/dashboard"
                       onClick={close}
@@ -106,6 +106,17 @@ export function MobileNav({ categories }: MobileNavProps) {
                       <span className="rounded bg-purple-500 px-1.5 py-0.5 text-[10px] font-extrabold text-white uppercase">
                         Merchant
                       </span>
+                    </Link>
+                  )}
+
+                  {!isVendor && !isAdmin && (
+                    <Link
+                      href="/vendor/register"
+                      onClick={close}
+                      className="my-1 flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold text-purple-300 hover:bg-white/10"
+                    >
+                      <Store className="h-4 w-4 text-purple-400" />
+                      <span>Sell on NextDor</span>
                     </Link>
                   )}
 

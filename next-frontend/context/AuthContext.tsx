@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setToken(newAccessToken);
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshedUser));
                 localStorage.setItem(TOKEN_KEY, newAccessToken);
-                if (refreshedUser.role === "vendor_owner" || refreshedUser.role === "vendor_staff") {
+                if (refreshedUser.role === "vendor_owner" || refreshedUser.role === "vendor_staff" || refreshedUser.vendorId) {
                   localStorage.setItem("vendor_token", newAccessToken);
                 }
               }
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
       localStorage.setItem(TOKEN_KEY, accessToken);
-      if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff") {
+      if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
         localStorage.setItem("vendor_token", accessToken);
       }
     }
@@ -130,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
       localStorage.setItem(TOKEN_KEY, accessToken);
-      if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff") {
+      if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
         localStorage.setItem("vendor_token", accessToken);
       }
     }
@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: user?.role === "admin" || user?.role === "super_admin",
       isSuperAdmin: user?.role === "super_admin",
       isOpsAdmin: user?.role === "admin",
-      isVendor: user?.role === "vendor_owner" || user?.role === "vendor_staff",
+      isVendor: user?.role === "vendor_owner" || user?.role === "vendor_staff" || !!user?.vendorId,
       isLoading: !hydrated,
       login,
       register,

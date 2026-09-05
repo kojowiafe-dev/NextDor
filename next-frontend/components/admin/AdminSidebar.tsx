@@ -12,16 +12,27 @@ import {
   LogOut,
   ChevronRight,
   ExternalLink,
+  Store,
+  ShieldCheck,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-const navItems = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
+const superAdminNavItems = [
+  { label: "Platform Overview", href: "/admin", icon: LayoutDashboard, exact: true },
+  { label: "Merchants", href: "/admin/merchants", icon: Store },
+  { label: "Administrators", href: "/admin/admins", icon: ShieldCheck },
+  { label: "Audit Logs", href: "/admin/audit-logs", icon: FileText },
+  { label: "Platform Settings", href: "/admin/settings", icon: Settings },
+];
+
+const opsAdminNavItems = [
+  { label: "Operations Console", href: "/admin", icon: LayoutDashboard, exact: true },
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Customers", href: "/admin/customers", icon: Users },
+  { label: "Merchant Review", href: "/admin/merchants", icon: Store },
   { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 type AdminSidebarProps = {
@@ -30,9 +41,11 @@ type AdminSidebarProps = {
 
 export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, isSuperAdmin, logout } = useAuth();
 
-  function isActive(item: (typeof navItems)[0]) {
+  const currentNavItems = isSuperAdmin ? superAdminNavItems : opsAdminNavItems;
+
+  function isActive(item: (typeof superAdminNavItems)[0]) {
     return item.exact ? pathname === item.href : pathname.startsWith(item.href);
   }
 
@@ -73,7 +86,7 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
           </p>
         )}
         <ul className="space-y-0.5">
-          {navItems.map((item) => {
+          {currentNavItems.map((item) => {
             const active = isActive(item);
             return (
               <li key={item.href}>

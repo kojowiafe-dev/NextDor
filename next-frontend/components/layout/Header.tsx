@@ -92,7 +92,7 @@ function AccountDropdown() {
             </div>
           )}
 
-          {isVendor && !isAdmin && (
+          {isVendor && (
             <div className="border-b border-zinc-100 bg-purple-50/70 p-2">
               <Link
                 href="/vendor/dashboard"
@@ -104,6 +104,19 @@ function AccountDropdown() {
                 <span className="ml-auto rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
                   Merchant
                 </span>
+              </Link>
+            </div>
+          )}
+
+          {!isVendor && !isAdmin && (
+            <div className="border-b border-zinc-100 bg-purple-50/40 p-2">
+              <Link
+                href="/vendor/register"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs font-medium text-purple-900 hover:bg-purple-100/70 transition"
+              >
+                <Store className="h-4 w-4 text-purple-600" />
+                <span>Sell on NextDor</span>
               </Link>
             </div>
           )}
@@ -180,7 +193,7 @@ export function Header({ categories }: HeaderProps) {
             </Link>
           )}
 
-          {isVendor && !isAdmin && (
+          {isVendor && (
             <Link
               href="/vendor/dashboard"
               className="hidden items-center gap-1.5 rounded-lg bg-purple-500/20 border border-purple-400/40 px-2.5 py-1.5 text-xs font-bold text-purple-300 hover:bg-purple-500/30 transition md:flex"

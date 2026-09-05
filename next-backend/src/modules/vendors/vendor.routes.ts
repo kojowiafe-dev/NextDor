@@ -17,6 +17,7 @@ import { VendorRepository } from "./vendor.repository.js";
 import { VendorService } from "./vendor.service.js";
 import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
 import { AuthService } from "../auth/auth.service.js";
+import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
 
 // Extend FastifyRequest with vendor tenant context
@@ -25,6 +26,7 @@ declare module "fastify" {
     vendorId?: string;
     userId?: string;
     userRole?: string;
+    userEmail?: string;
   }
 }
 
@@ -58,12 +60,14 @@ async function requireVendorAuth(req: FastifyRequest, reply: FastifyReply) {
     }
 
     let vendorId = payload.vendorId;
-    if (!vendorId) {
+    let userEmail = payload.email;
+    if (!vendorId || !userEmail) {
       const user = await prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { vendorId: true, ownedVendor: { select: { id: true } } },
+        select: { email: true, vendorId: true, ownedVendor: { select: { id: true } } },
       });
-      vendorId = user?.vendorId || user?.ownedVendor?.id;
+      vendorId = vendorId || user?.vendorId || user?.ownedVendor?.id;
+      userEmail = userEmail || user?.email;
     }
 
     if (!vendorId) {
@@ -79,6 +83,7 @@ async function requireVendorAuth(req: FastifyRequest, reply: FastifyReply) {
     req.vendorId = vendorId;
     req.userId = payload.sub;
     req.userRole = payload.role;
+    req.userEmail = userEmail;
   } catch (err: any) {
     return reply.status(401).send({
       success: false,
@@ -112,6 +117,7 @@ async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
 
     req.userId = payload.sub;
     req.userRole = payload.role;
+    req.userEmail = payload.email;
   } catch (err: any) {
     return reply.status(401).send({
       success: false,
@@ -283,6 +289,23 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = req.body as any;
       const updated = await vendorService.updateVendorProfile(req.vendorId!, body);
+
+      await AuditService.log({
+        userId: req.userId,
+        userEmail: req.userEmail,
+        action: "VENDOR_PROFILE_UPDATED",
+        entity: "Vendor",
+        entityId: req.vendorId!,
+        details: {
+          storeName: updated.name,
+          phone: updated.phone,
+          momoNetwork: updated.momoNetwork,
+          momoNumber: updated.momoNumber,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
       return reply.send({
         success: true,
         data: { vendor: updated },
@@ -428,6 +451,142 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  /**
+   * GET /vendors/portal/orders
+   * List customer sub-orders partitioned for the authenticated merchant.
+   */
+  app.get(
+    "/portal/orders",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "List vendor's own sub-orders with status filter and customer details",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: "object",
+          properties: {
+            page: { type: "integer", default: 1 },
+            limit: { type: "integer", default: 20 },
+            status: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const query = req.query as { page?: number; limit?: number; status?: string };
+      const page = Math.max(1, Number(query.page) || 1);
+      const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+
+      const data = await vendorService.listVendorOrders(
+        req.vendorId!,
+        page,
+        limit,
+        query.status
+      );
+
+      return reply.send({
+        success: true,
+        data,
+      });
+    }
+  );
+
+  /**
+   * PATCH /vendors/portal/orders/:id/status
+   * Advance dispatch / fulfillment status of a sub-order.
+   */
+  app.patch(
+    "/portal/orders/:id/status",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Update fulfillment dispatch status of a merchant sub-order",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["status"],
+          properties: {
+            status: {
+              type: "string",
+              enum: ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"],
+            },
+            notes: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = req.body as { status: any; notes?: string };
+
+      const updated = await vendorService.updateVendorOrderStatus(
+        req.vendorId!,
+        id,
+        body.status,
+        body.notes,
+        {
+          userId: req.userId,
+          userEmail: req.userEmail,
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+        }
+      );
+
+      return reply.send({
+        success: true,
+        data: { vendorOrder: updated },
+      });
+    }
+  );
+
+  /**
+   * GET /vendors/portal/payouts
+   * Retrieve merchant payouts ledger and 48-hour escrow breakdown.
+   */
+  app.get(
+    "/portal/payouts",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Get merchant payouts ledger and 48-hour escrow settlement metrics",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: "object",
+          properties: {
+            page: { type: "integer", default: 1 },
+            limit: { type: "integer", default: 20 },
+            status: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const query = req.query as { page?: number; limit?: number; status?: string };
+      const page = Math.max(1, Number(query.page) || 1);
+      const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+
+      const data = await vendorService.getVendorPayoutsAndEscrow(
+        req.vendorId!,
+        page,
+        limit,
+        query.status
+      );
+
+      return reply.send({
+        success: true,
+        data,
+      });
+    }
+  );
+
   // ─── ADMIN VENDOR OVERSIGHT & ALERTS ────────────────────────────────────
 
   /**
@@ -477,6 +636,99 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   );
 
   /**
+   * GET /vendors/admin/list
+   * Full list of all registered marketplace merchants with filtering, search, and metrics.
+   */
+  app.get(
+    "/admin/list",
+    {
+      preHandler: [requireAdminAuth],
+      schema: {
+        description: "List all merchants with status filters, product counts, and revenue",
+        tags: ["Admin Vendors"],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: "object",
+          properties: {
+            status: { type: "string", default: "ALL" },
+            search: { type: "string" },
+            page: { type: "integer", default: 1 },
+            limit: { type: "integer", default: 25 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const query = req.query as {
+        status?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+      };
+
+      const page = Math.max(1, Number(query.page) || 1);
+      const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
+      const skip = (page - 1) * limit;
+
+      const where: any = { deletedAt: null };
+
+      if (query.status && query.status !== "ALL") {
+        where.status = query.status;
+      }
+
+      if (query.search?.trim()) {
+        const s = query.search.trim();
+        where.OR = [
+          { name: { contains: s, mode: "insensitive" } },
+          { email: { contains: s, mode: "insensitive" } },
+          { phone: { contains: s, mode: "insensitive" } },
+          { momoNumber: { contains: s, mode: "insensitive" } },
+        ];
+      }
+
+      const [vendors, total] = await Promise.all([
+        prisma.vendor.findMany({
+          where,
+          include: {
+            owner: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                createdAt: true,
+              },
+            },
+            _count: {
+              select: {
+                products: true,
+                vendorOrders: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+        }),
+        prisma.vendor.count({ where }),
+      ]);
+
+      return reply.send({
+        success: true,
+        data: {
+          vendors,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit) || 1,
+          },
+        },
+      });
+    }
+  );
+
+  /**
    * PATCH /vendors/admin/:id/approve
    * Admin approves a vendor store application.
    */
@@ -497,9 +749,26 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
+      const previous = await prisma.vendor.findUnique({ where: { id } });
       const updated = await prisma.vendor.update({
         where: { id },
         data: { status: "ACTIVE" },
+      });
+
+      await AuditService.log({
+        userId: req.userId,
+        userEmail: req.userEmail,
+        action: "MERCHANT_APPROVED",
+        entity: "Vendor",
+        entityId: id,
+        details: {
+          storeName: updated.name,
+          storeSlug: updated.slug,
+          previousStatus: previous?.status,
+          newStatus: "ACTIVE",
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
       });
 
       req.log.info(
@@ -513,4 +782,72 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
       });
     }
   );
+
+  /**
+   * PATCH /vendors/admin/:id/status
+   * Super Admin / Operations Admin updates merchant status or commission rate.
+   */
+  app.patch(
+    "/admin/:id/status",
+    {
+      preHandler: [requireAdminAuth],
+      schema: {
+        description: "Update merchant status or commission rate",
+        tags: ["Admin Vendors"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          properties: {
+            status: { type: "string", enum: ["ACTIVE", "PENDING_APPROVAL", "SUSPENDED"] },
+            commissionRate: { type: "number", minimum: 0, maximum: 100 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = req.body as { status?: "ACTIVE" | "PENDING_APPROVAL" | "SUSPENDED"; commissionRate?: number };
+
+      const previous = await prisma.vendor.findUnique({ where: { id } });
+      if (!previous) {
+        return reply.status(404).send({ success: false, error: { message: "Vendor not found" } });
+      }
+
+      const dataToUpdate: any = {};
+      if (body.status) dataToUpdate.status = body.status;
+      if (body.commissionRate !== undefined) dataToUpdate.commissionRate = body.commissionRate;
+
+      const updated = await prisma.vendor.update({
+        where: { id },
+        data: dataToUpdate,
+      });
+
+      await AuditService.log({
+        userId: req.userId,
+        userEmail: req.userEmail,
+        action: body.status === "SUSPENDED" ? "MERCHANT_SUSPENDED" : "MERCHANT_UPDATED",
+        entity: "Vendor",
+        entityId: id,
+        details: {
+          storeName: updated.name,
+          previousStatus: previous.status,
+          newStatus: updated.status,
+          commissionRate: updated.commissionRate,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      return reply.send({
+        success: true,
+        data: { vendor: updated },
+      });
+    }
+  );
 };
+

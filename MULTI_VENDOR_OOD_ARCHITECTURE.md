@@ -334,9 +334,78 @@ Acts as a clean controller delegating requests to the service layer.
 
 ---
 
+## 📦 7. Domain Design: Sub-Order Partitioning & Independent Fulfillment
+
+In a multi-vendor marketplace, a single customer cart frequently contains products from multiple independent merchants (e.g., pastries from *Sweet Bakes* and phone accessories from *NextDor Direct*).
+
+### The Architectural Invariant: Master Order vs. Sub-Orders
+Passing the raw checkout order directly to merchants would violate tenant isolation and prevent independent delivery logistics. NextDor implements the **Master-Sub Order Decomposition Pattern**:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Master Order (ND-XXXXX)                         │
+│  - Customer reference, total gross amount, checkout shipping address   │
+└──────────────────┬─────────────────────────────────┬───────────────────┘
+                   │ 1:N                             │ 1:N
+┌──────────────────▼─────────────┐   ┌───────────────▼───────────────────┐
+│     VendorOrder (Merchant A)   │   │      VendorOrder (Merchant B)     │
+│ - vendorId: "sweet-bakes"      │   │ - vendorId: "nextdor-direct"      │
+│ - Subtotal: GH₵ 640.00         │   │ - Subtotal: GH₵ 320.00            │
+│ - 10% Commission: -GH₵ 64.00   │   │ - 0% Commission: GH₵ 0.00         │
+│ - Net Earnings: GH₵ 576.00     │   │ - Net Earnings: GH₵ 320.00        │
+│ - Status: PROCESSING           │   │ - Status: SHIPPED                 │
+└────────────────────────────────┘   └───────────────────────────────────┘
+```
+
+### Snapshot Immutability (`OrderItem`)
+`OrderItem` rows store immutable snapshots taken at the exact instant of checkout:
+- `productName`: String snapshot. If the merchant renames the product tomorrow, old receipts remain historically accurate.
+- `unitPrice`: Numeric snapshot. Repricing an active product does not alter completed orders.
+- `productImage`: URL snapshot.
+- `vendorId`: Enables strict tenant filtering without joining across the entire catalog.
+
+### State Machine for Sub-Order Dispatch:
+$$\text{PENDING} \xrightarrow{\text{Accept}} \text{PROCESSING} \xrightarrow{\text{Dispatch}} \text{SHIPPED} \xrightarrow{\text{Delivery}} \text{DELIVERED} \xrightarrow{\text{48h Escrow}} \text{CLEARED / PAID}$$
+
+---
+
+## ⚖️ 8. Financial Engine: 48-Hour Escrow & Automated MoMo Settlement
+
+E-commerce in West Africa requires balancing buyer trust with merchant liquidity. If merchants received immediate payouts before delivery, buyers would face fraud risks; conversely, manual delays hurt small business cash flow.
+
+### The 48-Hour Escrow State Machine
+NextDor solves this with an automated **Escrow Settlement Engine**:
+
+1. **Checkout & Authorization**: Customer pays via Paystack (MTN Mobile Money, Telecel Cash, Card). Funds enter NextDor's platform escrow account.
+2. **Merchant Fulfillment**: Merchant accepts order, prepares items, and dispatches with a rider.
+3. **Delivery Timestamp**: When marked `DELIVERED`, `updateVendorOrderStatus` calculates and writes:
+   $$\text{clearedAt} = \text{now}() + 48 \text{ hours}$$
+4. **Inspection Window**: The customer has a 48-hour window to report missing or damaged goods.
+5. **Automated MoMo Disbursement (`VendorPayout`)**:
+   - Once $\text{now}() \ge \text{clearedAt}$, the sub-order moves from `inEscrow` to `availableForPayout`.
+   - The platform disbursements engine generates a `VendorPayout` row and executes an automated transfer to the merchant's registered MoMo number (e.g. `0241234567` on MTN).
+
+---
+
+## 🎛️ 9. Merchant Console: 4-Tab Reactive Console Architecture
+
+The Merchant Portal ([app/vendor/dashboard/page.tsx](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-frontend/app/vendor/dashboard/page.tsx)) provides four dedicated control planes:
+
+| Tab | Role & Capabilities | API Endpoints |
+|---|---|---|
+| **📦 Inventory & Stock** | Live catalog, inline stock/price editor with OCC version counters, and product publishing modal. | `GET /vendors/portal/products`<br>`PATCH /vendors/portal/products/:id` |
+| **🛍️ Store Orders & Dispatch** | Partitioned sub-orders, customer address snapshots, line items, 90% net earnings calculation, and 1-click dispatch status progression. | `GET /vendors/portal/orders`<br>`PATCH /vendors/portal/orders/:id/status` |
+| **💳 MoMo Payouts & Escrow** | Real-time financial cards (Lifetime Net, In 48h Escrow, Available, Disbursed), escrow educational guide, and MoMo transfer ledger. | `GET /vendors/portal/payouts` |
+| **⚙️ Store Profile & Settings** | Public brand identity (Name, Bio, Phone), MoMo settlement account selection (MTN, Telecel, AT), and Logo/Banner URL live previews. | `PATCH /vendors/portal/me` |
+
+---
+
 ## 🏆 Key Takeaways
 
 1. **Precision Finance**: Minor pesewa integer math avoids JavaScript floating-point errors.
-2. **Absolute Tenant Isolation**: No vendor can access another vendor's inventory.
+2. **Absolute Tenant Isolation**: No vendor can access another vendor's inventory, sub-orders, or payouts.
 3. **Concurrency Safety**: Optimistic locking guarantees race-free stock management.
-4. **Decoupled Architecture**: High maintainability through SOLID and Dependency Inversion.
+4. **Sub-Order Partitioning**: Master orders safely decompose into merchant-isolated line items.
+5. **Automated Escrow Protection**: 48-hour delivery verification window protects buyers while guaranteeing seller MoMo settlement.
+6. **Decoupled Architecture**: High maintainability through SOLID, Dependency Inversion, and Clean Architecture.
+

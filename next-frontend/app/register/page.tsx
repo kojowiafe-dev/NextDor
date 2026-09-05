@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { AuthFormField } from "@/components/account/AuthFormField";
@@ -61,7 +61,7 @@ function PasswordStrength({ password }: { password: string }) {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, user, isAuthenticated, isLoading } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -73,6 +73,32 @@ export default function RegisterPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // If already authenticated, redirect to appropriate portal immediately
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || !user) return;
+
+    const searchRedirect =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("redirect")
+        : null;
+
+    if (user.role === "admin" || user.role === "super_admin") {
+      router.replace("/admin");
+    } else if (user.role === "vendor_owner" || user.role === "vendor_staff") {
+      router.replace("/vendor/dashboard");
+    } else {
+      if (
+        searchRedirect &&
+        !searchRedirect.startsWith("/admin") &&
+        !searchRedirect.startsWith("/vendor")
+      ) {
+        router.replace(searchRedirect);
+      } else {
+        router.replace("/account");
+      }
+    }
+  }, [isLoading, isAuthenticated, user, router]);
 
   function validate(): FormErrors {
     const errs: FormErrors = {};
@@ -98,12 +124,27 @@ export default function RegisterPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await register({ name, email, password, phone: phone || undefined });
+      const registeredUser = await register({ name, email, password, phone: phone || undefined });
       const searchRedirect =
         typeof window !== "undefined"
           ? new URLSearchParams(window.location.search).get("redirect")
           : null;
-      router.push(searchRedirect || "/account");
+
+      if (registeredUser.role === "admin" || registeredUser.role === "super_admin") {
+        router.replace("/admin");
+      } else if (registeredUser.role === "vendor_owner" || registeredUser.role === "vendor_staff") {
+        router.replace("/vendor/dashboard");
+      } else {
+        if (
+          searchRedirect &&
+          !searchRedirect.startsWith("/admin") &&
+          !searchRedirect.startsWith("/vendor")
+        ) {
+          router.replace(searchRedirect);
+        } else {
+          router.replace("/account");
+        }
+      }
     } catch (error) {
       setErrors({
         general: error instanceof Error ? error.message : "An unexpected error occurred.",
@@ -111,6 +152,14 @@ export default function RegisterPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (isLoading || isAuthenticated) {
+    return (
+      <div className="flex min-h-[calc(100vh-200px)] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-[#ff9900]" />
+      </div>
+    );
   }
 
   return (
@@ -126,6 +175,13 @@ export default function RegisterPage() {
             <p className="mt-1 text-sm text-zinc-500">
               Join NextDor and shop quality products delivered across Ghana.
             </p>
+
+            <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50/70 p-3 text-xs text-purple-900">
+              <span className="font-semibold">Looking to sell products?</span> This form is for buyer accounts. To open a merchant store,{" "}
+              <Link href="/vendor/register" className="font-semibold text-purple-700 underline hover:text-purple-900">
+                register as a Merchant here →
+              </Link>
+            </div>
           </div>
 
           {/* Google sign-in placeholder */}

@@ -562,3 +562,28 @@ enum DiscountType {
   FIXED
   PERCENTAGE
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// AUDIT LOGS
+// ═══════════════════════════════════════════════════════════════════
+
+/// Immutable platform audit trail for administrative governance and compliance.
+/// DESIGN: Records "who updated what", tracking actor identity, IP, action type,
+/// entity target, and timestamp.
+model AuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?  @db.Uuid
+  userEmail String?
+  action    String   // e.g. "MERCHANT_APPROVED", "MERCHANT_SUSPENDED", "ADMIN_CREATED", "ADMIN_DEACTIVATED", "COMMISSION_UPDATED"
+  entity    String   // e.g. "Vendor", "User", "Product", "Settings"
+  entityId  String?
+  details   Json?    // Contextual payload or state diff
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

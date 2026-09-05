@@ -124,8 +124,11 @@ Use this reference whenever you need to find, edit, or extend a feature.
 | **Customer Login** | `next-frontend/app/login/page.tsx` | `http://localhost:3000/login` |
 | **Customer Registration** | `next-frontend/app/register/page.tsx` | `http://localhost:3000/register` |
 | **User Account & Orders** | `next-frontend/app/account/page.tsx` | `http://localhost:3000/account` |
-| **Admin WooCommerce Sync UI** | `next-frontend/app/admin/products/page.tsx` | `http://localhost:3000/admin/products` |
-| **Vendor Management Portal** | `next-frontend/app/vendor/dashboard/page.tsx` | `http://localhost:3000/vendor/dashboard` |
+| **Vendor Management Portal** | `next-frontend/app/vendor/dashboard/page.tsx` | `http://localhost:3000/vendor/dashboard`<br>(4 Tabs: Inventory & OCC, Store Orders & Dispatch, MoMo Payouts & 48h Escrow, Store Settings) |
+| **Merchant Onboarding** | `next-frontend/app/vendor/register/page.tsx` | `http://localhost:3000/vendor/register` |
+| **Super Admin Governance** | `next-frontend/app/admin/page.tsx` | `http://localhost:3000/admin` |
+| **Admin Merchant Approvals** | `next-frontend/app/admin/merchants/page.tsx` | `http://localhost:3000/admin/merchants` |
+| **Platform Audit Trail** | `next-frontend/app/admin/audit-logs/page.tsx` | `http://localhost:3000/admin/audit-logs` |
 | **Public Merchant Storefront** | `next-frontend/app/store/[slug]/page.tsx` | `http://localhost:3000/store/sweet-bakes` |
 | **Global Navigation Bar** | `next-frontend/components/Navbar.tsx` | Rendered on all pages |
 | **Global Footer & Socials** | `next-frontend/components/Footer.tsx` | Rendered on all pages |
@@ -152,10 +155,15 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Public Vendor Storefront** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/:slug` |
 | **Self-Serve Vendor Onboarding**| Vendor Service | `src/modules/vendors/vendor.service.ts` | `POST /api/v1/vendors/register` |
 | **Vendor Private Dashboard** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/me` |
+| **Vendor Store Settings** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `PATCH /api/v1/vendors/portal/me` |
 | **Vendor Product Inventory** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/products` |
 | **Vendor Product Creation** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `POST /api/v1/vendors/portal/products` |
 | **Vendor Stock / Price (OCC)** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `PATCH /api/v1/vendors/portal/products/:id` |
-| **Vendor Database Queries** | Vendor Repo | `src/modules/vendors/vendor.repository.ts` | Isolated tenant queries, ACID onboarding |
+| **Vendor Orders & Dispatch** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/orders`<br>`PATCH /api/v1/vendors/portal/orders/:id/status` |
+| **Vendor MoMo Payouts & Escrow**| Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/payouts` |
+| **Admin Merchant Governance** | Vendor Service | `src/modules/vendors/vendor.routes.ts` | `GET /api/v1/vendors/admin/list`<br>`PATCH /api/v1/vendors/admin/:id/approve`<br>`PATCH /api/v1/vendors/admin/:id/status` |
+| **Platform Audit Trail Logs** | Audit Service | `src/modules/audit/audit.routes.ts` | `GET /api/v1/audit/logs` |
+| **Vendor Database Queries** | Vendor Repo | `src/modules/vendors/vendor.repository.ts` | Isolated tenant queries, sub-orders, escrow |
 
 ---
 

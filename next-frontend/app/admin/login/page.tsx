@@ -34,16 +34,15 @@ export default function AdminLoginPage() {
     }
     setIsSubmitting(true);
     try {
-      await login({ email, password });
-      // Role check happens after login — give state time to update
-      // The useEffect above will redirect if admin
-      // If not admin, show access denied
-      setTimeout(() => {
-        setIsSubmitting(false);
-        // Check role from context after state settles
-      }, 100);
+      const loggedUser = await login({ email, password });
+      if (loggedUser.role === "admin" || loggedUser.role === "super_admin") {
+        router.replace("/admin");
+      } else {
+        setAccessDenied(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed.");
+    } finally {
       setIsSubmitting(false);
     }
   }
@@ -54,6 +53,14 @@ export default function AdminLoginPage() {
       setAccessDenied(true);
     }
   }, [isLoading, isAuthenticated, isAdmin, isSubmitting]);
+
+  if (isLoading || (isAuthenticated && isAdmin)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0d1117]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white/10 border-t-[#ff9900]" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0d1117] px-4">

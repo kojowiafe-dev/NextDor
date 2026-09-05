@@ -10,7 +10,7 @@
  */
 
 import { prisma } from "../../lib/prisma.js";
-import type { Prisma, Vendor, Product, VendorStatus } from "@prisma/client";
+import type { Prisma, Vendor, Product, VendorStatus, VendorOrderStatus, PayoutStatus } from "@prisma/client";
 
 export class VendorRepository {
   /**
@@ -217,5 +217,228 @@ export class VendorRepository {
       where: { id: vendorId },
       data,
     });
+  }
+
+  /**
+   * Finds customer sub-orders partitioned strictly for this vendor (Tenant Isolation).
+   */
+  async findVendorOrders(
+    vendorId: string,
+    options: { page: number; limit: number; status?: string }
+  ) {
+    const { page, limit, status } = options;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.VendorOrderWhereInput = {
+      vendorId,
+    };
+
+    if (status && status !== "ALL") {
+      where.status = status as VendorOrderStatus;
+    }
+
+    const [total, orders] = await Promise.all([
+      prisma.vendorOrder.count({ where }),
+      prisma.vendorOrder.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          order: {
+            select: {
+              id: true,
+              number: true,
+              paymentStatus: true,
+              createdAt: true,
+              shippingAddress: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+              items: {
+                where: { vendorId },
+                select: {
+                  id: true,
+                  productName: true,
+                  productImage: true,
+                  unitPrice: true,
+                  quantity: true,
+                  subtotal: true,
+                },
+              },
+            },
+          },
+          payout: {
+            select: {
+              id: true,
+              status: true,
+              paidAt: true,
+              paystackTransferRef: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
+  /**
+   * Finds a specific sub-order owned by this vendor.
+   */
+  async findVendorOrderById(vendorId: string, vendorOrderId: string) {
+    return prisma.vendorOrder.findFirst({
+      where: { id: vendorOrderId, vendorId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            number: true,
+            shippingAddress: true,
+            paymentStatus: true,
+            createdAt: true,
+            user: { select: { name: true, email: true, phone: true } },
+            items: { where: { vendorId } },
+          },
+        },
+        payout: true,
+      },
+    });
+  }
+
+  /**
+   * Updates sub-order fulfillment/dispatch status and initiates 48h escrow clearance upon delivery.
+   */
+  async updateVendorOrderStatus(
+    vendorId: string,
+    vendorOrderId: string,
+    status: VendorOrderStatus,
+    notes?: string
+  ) {
+    const data: Prisma.VendorOrderUpdateInput = {
+      status,
+      notes: notes !== undefined ? notes : undefined,
+    };
+
+    // If status is DELIVERED and clearedAt is not yet set, initiate 48h escrow clearance timer
+    if (status === "DELIVERED") {
+      const existing = await prisma.vendorOrder.findUnique({
+        where: { id: vendorOrderId },
+        select: { clearedAt: true },
+      });
+      if (!existing?.clearedAt) {
+        data.clearedAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48-hour escrow window
+      }
+    }
+
+    return prisma.vendorOrder.update({
+      where: { id: vendorOrderId },
+      data,
+      include: {
+        order: { select: { number: true } },
+      },
+    });
+  }
+
+  /**
+   * Retrieves merchant payouts ledger and calculates live 48-hour escrow breakdown.
+   */
+  async findVendorPayouts(
+    vendorId: string,
+    options: { page: number; limit: number; status?: string }
+  ) {
+    const { page, limit, status } = options;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.VendorPayoutWhereInput = {
+      vendorId,
+    };
+
+    if (status && status !== "ALL") {
+      where.status = status as PayoutStatus;
+    }
+
+    const now = new Date();
+
+    const [total, payouts, earningsAgg, inEscrowAgg, availableAgg, paidOutAgg] = await Promise.all([
+      prisma.vendorPayout.count({ where }),
+      prisma.vendorPayout.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          vendorOrders: {
+            select: {
+              id: true,
+              subtotal: true,
+              commissionAmount: true,
+              vendorEarnings: true,
+              status: true,
+              order: { select: { number: true } },
+            },
+          },
+        },
+      }),
+      // Lifetime net earnings (non-cancelled sub-orders)
+      prisma.vendorOrder.aggregate({
+        where: { vendorId, status: { not: "CANCELLED" } },
+        _sum: { vendorEarnings: true, subtotal: true },
+      }),
+      // In 48h escrow (delivered but clearedAt > now)
+      prisma.vendorOrder.aggregate({
+        where: {
+          vendorId,
+          status: "DELIVERED",
+          clearedAt: { gt: now },
+          payoutId: null,
+        },
+        _sum: { vendorEarnings: true },
+        _count: { id: true },
+      }),
+      // Available for payout (clearedAt <= now and payoutId is null)
+      prisma.vendorOrder.aggregate({
+        where: {
+          vendorId,
+          status: "DELIVERED",
+          clearedAt: { lte: now },
+          payoutId: null,
+        },
+        _sum: { vendorEarnings: true },
+        _count: { id: true },
+      }),
+      // Total already paid out
+      prisma.vendorPayout.aggregate({
+        where: { vendorId, status: "PAID" },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      payouts,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+      escrowSummary: {
+        lifetimeGrossSales: Number(earningsAgg._sum.subtotal || 0),
+        lifetimeNetEarnings: Number(earningsAgg._sum.vendorEarnings || 0),
+        inEscrowAmount: Number(inEscrowAgg._sum.vendorEarnings || 0),
+        inEscrowOrdersCount: inEscrowAgg._count.id || 0,
+        availableForPayoutAmount: Number(availableAgg._sum.vendorEarnings || 0),
+        availableOrdersCount: availableAgg._count.id || 0,
+        totalPaidOut: Number(paidOutAgg._sum.amount || 0),
+      },
+    };
   }
 }

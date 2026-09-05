@@ -19,8 +19,9 @@ import {
   NotFoundError,
 } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
+import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
-import type { UserRole } from "@prisma/client";
+import type { UserRole, VendorOrderStatus, PayoutStatus } from "@prisma/client";
 
 function slugify(text: string): string {
   return text
@@ -142,7 +143,7 @@ export class VendorService {
         description: dto.storeDescription?.trim() || null,
         email: dto.email.toLowerCase().trim(),
         phone: dto.phone?.trim() || null,
-        status: "ACTIVE",
+        status: "PENDING_APPROVAL",
         commissionRate: 10.0,
         payoutMethod: "MOMO",
         momoNumber: dto.momoNumber?.trim() || null,
@@ -150,7 +151,26 @@ export class VendorService {
       },
     });
 
-    logger.info({ vendorId: vendor.id, slug: vendor.slug }, "Marketplace vendor registered successfully");
+    logger.info({ vendorId: vendor.id, slug: vendor.slug }, "Marketplace vendor registered successfully (pending admin approval)");
+
+    // Record registration in platform Audit Trail
+    await AuditService.log({
+      userId: user.id,
+      userEmail: user.email,
+      action: "VENDOR_REGISTERED",
+      entity: "Vendor",
+      entityId: vendor.id,
+      details: {
+        storeName: vendor.name,
+        slug: vendor.slug,
+        ownerEmail: user.email,
+        phone: user.phone,
+        momoNetwork: vendor.momoNetwork,
+        momoNumber: vendor.momoNumber,
+        status: "PENDING_APPROVAL",
+      },
+      ipAddress: "Self-Serve Onboarding",
+    });
 
     const tokens = await authService._issueTokens(user.id);
     return {
@@ -337,5 +357,70 @@ export class VendorService {
       logoUrl: data.logoUrl?.trim(),
       bannerUrl: data.bannerUrl?.trim(),
     });
+  }
+
+  /**
+   * List customer sub-orders for this vendor (Tenant-isolated).
+   */
+  async listVendorOrders(vendorId: string, page = 1, limit = 20, status?: string) {
+    return this.vendorRepo.findVendorOrders(vendorId, { page, limit, status });
+  }
+
+  /**
+   * Update sub-order dispatch status (e.g. PROCESSING -> SHIPPED -> DELIVERED).
+   * Automatically initiates 48h escrow clearance timer when marked DELIVERED.
+   * Emits an immutable audit log entry.
+   */
+  async updateVendorOrderStatus(
+    vendorId: string,
+    vendorOrderId: string,
+    status: VendorOrderStatus,
+    notes?: string,
+    auditContext?: {
+      userId?: string;
+      userEmail?: string;
+      ipAddress?: string;
+      userAgent?: string;
+    }
+  ) {
+    const existing = await this.vendorRepo.findVendorOrderById(vendorId, vendorOrderId);
+    if (!existing) {
+      throw new NotFoundError("Sub-order not found or does not belong to your store.");
+    }
+
+    const previousStatus = existing.status;
+    const updated = await this.vendorRepo.updateVendorOrderStatus(vendorId, vendorOrderId, status, notes);
+
+    // Record in immutable Audit Trail
+    await AuditService.log({
+      userId: auditContext?.userId,
+      userEmail: auditContext?.userEmail,
+      action: "ORDER_DISPATCH_UPDATED",
+      entity: "VendorOrder",
+      entityId: vendorOrderId,
+      details: {
+        orderNumber: existing.order.number,
+        previousStatus,
+        newStatus: status,
+        notes: notes || null,
+        clearedAt: updated.clearedAt,
+      },
+      ipAddress: auditContext?.ipAddress,
+      userAgent: auditContext?.userAgent,
+    });
+
+    logger.info(
+      { vendorOrderId, vendorId, previousStatus, newStatus: status },
+      "Merchant updated sub-order dispatch status"
+    );
+
+    return updated;
+  }
+
+  /**
+   * Get vendor payout ledger and 48-hour escrow settlement breakdown.
+   */
+  async getVendorPayoutsAndEscrow(vendorId: string, page = 1, limit = 20, status?: string) {
+    return this.vendorRepo.findVendorPayouts(vendorId, { page, limit, status });
   }
 }

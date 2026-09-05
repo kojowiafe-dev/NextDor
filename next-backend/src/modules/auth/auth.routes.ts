@@ -39,6 +39,8 @@ declare module "fastify" {
 import { AuthService, authService } from "./auth.service.js";
 import { registerSchema, loginSchema, forgotPasswordSchema } from "@nextdor/shared";
 import { prisma } from "../../lib/prisma.js";
+import bcrypt from "bcryptjs";
+import { AuditService } from "../audit/audit.service.js";
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 
@@ -335,4 +337,268 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ success: true, data: { user } });
     },
   );
+
+  // ─── SUPER ADMIN: ADMINISTRATOR MANAGEMENT ──────────────────────────────
+
+  /**
+   * GET /auth/admins
+   * Super Admin lists all platform administrators and staff.
+   */
+  app.get(
+    "/admins",
+    {
+      schema: {
+        description: "List all administrators (Super Admin only)",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (payload.role !== "SUPER_ADMIN") {
+        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
+      }
+
+      const admins = await prisma.user.findMany({
+        where: {
+          role: { in: ["SUPER_ADMIN", "ADMIN"] },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      return reply.send({ success: true, data: { admins } });
+    }
+  );
+
+  /**
+   * POST /auth/admins
+   * Super Admin invites or creates a new Operations Admin.
+   */
+  app.post(
+    "/admins",
+    {
+      schema: {
+        description: "Create an Operations Admin account (Super Admin only)",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          required: ["name", "email", "password"],
+          properties: {
+            name: { type: "string", minLength: 2 },
+            email: { type: "string", format: "email" },
+            password: { type: "string", minLength: 8 },
+            phone: { type: "string" },
+            role: { type: "string", enum: ["ADMIN"], default: "ADMIN" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (payload.role !== "SUPER_ADMIN") {
+        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
+      }
+
+      const body = req.body as { name: string; email: string; password: string; phone?: string; role?: string };
+      const normalizedEmail = body.email.toLowerCase().trim();
+
+      const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing) {
+        return reply.status(409).send({ success: false, error: { message: "An account with this email already exists" } });
+      }
+
+      const passwordHash = await bcrypt.hash(body.password, 12);
+      const newAdmin = await prisma.user.create({
+        data: {
+          name: body.name.trim(),
+          email: normalizedEmail,
+          passwordHash,
+          phone: body.phone?.trim() || null,
+          role: "ADMIN",
+          status: "ACTIVE",
+          emailVerified: true,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          role: true,
+          status: true,
+          createdAt: true,
+        },
+      });
+
+      await AuditService.log({
+        userId: payload.sub,
+        userEmail: payload.email,
+        action: "ADMIN_CREATED",
+        entity: "User",
+        entityId: newAdmin.id,
+        details: {
+          adminName: newAdmin.name,
+          adminEmail: newAdmin.email,
+          role: newAdmin.role,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      return reply.status(201).send({ success: true, data: { admin: newAdmin } });
+    }
+  );
+
+  /**
+   * PATCH /auth/admins/:id/status
+   * Super Admin updates an Operations Admin status (ACTIVE / SUSPENDED).
+   */
+  app.patch(
+    "/admins/:id/status",
+    {
+      schema: {
+        description: "Update administrator status (Super Admin only)",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["status"],
+          properties: {
+            status: { type: "string", enum: ["ACTIVE", "SUSPENDED"] },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (payload.role !== "SUPER_ADMIN") {
+        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
+      }
+
+      const { id } = req.params as { id: string };
+      const body = req.body as { status: "ACTIVE" | "SUSPENDED" };
+
+      if (id === payload.sub) {
+        return reply.status(400).send({ success: false, error: { message: "You cannot change your own account status" } });
+      }
+
+      const target = await prisma.user.findUnique({ where: { id } });
+      if (!target) {
+        return reply.status(404).send({ success: false, error: { message: "Administrator not found" } });
+      }
+
+      if (target.role === "SUPER_ADMIN") {
+        return reply.status(400).send({ success: false, error: { message: "Cannot modify status of another Super Admin" } });
+      }
+
+      const updated = await prisma.user.update({
+        where: { id },
+        data: { status: body.status },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          status: true,
+          updatedAt: true,
+        },
+      });
+
+      await AuditService.log({
+        userId: payload.sub,
+        userEmail: payload.email,
+        action: body.status === "SUSPENDED" ? "ADMIN_DEACTIVATED" : "ADMIN_REACTIVATED",
+        entity: "User",
+        entityId: id,
+        details: {
+          targetEmail: target.email,
+          previousStatus: target.status,
+          newStatus: body.status,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      return reply.send({ success: true, data: { admin: updated } });
+    }
+  );
+
+  /**
+   * GET /auth/audit-logs
+   * Super Admin retrieves chronological audit trail ("who updated what").
+   */
+  app.get(
+    "/audit-logs",
+    {
+      schema: {
+        description: "List platform audit logs (Super Admin only)",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: "object",
+          properties: {
+            action: { type: "string" },
+            entity: { type: "string" },
+            search: { type: "string" },
+            page: { type: "integer", default: 1 },
+            limit: { type: "integer", default: 25 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (payload.role !== "SUPER_ADMIN") {
+        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
+      }
+
+      const query = req.query as {
+        action?: string;
+        entity?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+      };
+
+      const result = await AuditService.listLogs(query);
+      return reply.send({ success: true, data: result });
+    }
+  );
 };
+

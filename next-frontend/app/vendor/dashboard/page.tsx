@@ -7,6 +7,9 @@ import { useAuth } from "@/context/AuthContext";
 import {
   Store,
   Package,
+  ShoppingBag,
+  CreditCard,
+  Settings,
   TrendingUp,
   AlertTriangle,
   Plus,
@@ -24,19 +27,36 @@ import {
   ShieldAlert,
   EyeOff,
   Eye,
+  Truck,
+  Check,
+  ChevronRight,
+  ArrowUpRight,
+  HelpCircle,
+  MapPin,
+  User,
+  Calendar,
+  Wallet,
+  Building2,
+  FileText,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+
+type DashboardTab = "inventory" | "orders" | "payouts" | "settings";
 
 interface VendorInfo {
   id: string;
   name: string;
   slug: string;
   description?: string | null;
+  phone?: string | null;
+  email?: string | null;
   status: string;
   commissionRate: string | number;
   payoutMethod: string;
   momoNumber?: string | null;
   momoNetwork?: string | null;
+  logoUrl?: string | null;
+  bannerUrl?: string | null;
 }
 
 interface VendorStats {
@@ -61,15 +81,96 @@ interface VendorProduct {
   categories?: { id: string; name: string; slug: string }[];
 }
 
+interface VendorOrderItem {
+  id: string;
+  productName: string;
+  productImage: string | null;
+  unitPrice: number | string;
+  quantity: number;
+  subtotal: number | string;
+}
+
+interface VendorOrder {
+  id: string;
+  orderId: string;
+  vendorId: string;
+  subtotal: number | string;
+  commissionAmount: number | string;
+  vendorEarnings: number | string;
+  status: "PENDING" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+  notes?: string | null;
+  clearedAt?: string | null;
+  createdAt: string;
+  order: {
+    id: string;
+    number: string;
+    paymentStatus: string;
+    createdAt: string;
+    shippingAddress: any;
+    user?: {
+      name: string;
+      email: string;
+      phone?: string | null;
+    } | null;
+    items: VendorOrderItem[];
+  };
+  payout?: {
+    id: string;
+    status: string;
+    paidAt?: string | null;
+    paystackTransferRef?: string | null;
+  } | null;
+}
+
+interface EscrowSummary {
+  lifetimeGrossSales: number;
+  lifetimeNetEarnings: number;
+  inEscrowAmount: number;
+  inEscrowOrdersCount: number;
+  availableForPayoutAmount: number;
+  availableOrdersCount: number;
+  totalPaidOut: number;
+}
+
+interface VendorPayout {
+  id: string;
+  vendorId: string;
+  amount: number | string;
+  currency: string;
+  status: "PENDING" | "PROCESSING" | "PAID" | "FAILED";
+  paystackTransferRef?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  vendorOrders?: {
+    id: string;
+    subtotal: number | string;
+    commissionAmount: number | string;
+    vendorEarnings: number | string;
+    status: string;
+    order: { number: string };
+  }[];
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
 export default function VendorDashboardPage() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, token: authToken, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<DashboardTab>("inventory");
+
+  // Core Data
   const [vendor, setVendor] = useState<VendorInfo | null>(null);
   const [stats, setStats] = useState<VendorStats | null>(null);
   const [products, setProducts] = useState<VendorProduct[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [orders, setOrders] = useState<VendorOrder[]>([]);
+  const [payouts, setPayouts] = useState<VendorPayout[]>([]);
+  const [escrowSummary, setEscrowSummary] = useState<EscrowSummary | null>(null);
+
+  // Loading & Error States
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [isNotVendor, setIsNotVendor] = useState(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
@@ -77,7 +178,7 @@ export default function VendorDashboardPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState<string>("");
   const [editStock, setEditStock] = useState<string>("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   // Add product modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -86,80 +187,107 @@ export default function VendorDashboardPage() {
   const [newProdPrice, setNewProdPrice] = useState("");
   const [newProdStock, setNewProdStock] = useState("10");
   const [newProdImage, setNewProdImage] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
 
-  // Token storage helper: retrieves vendor token from localStorage
-  async function getValidToken(): Promise<string | null> {
-    return typeof window !== "undefined" ? localStorage.getItem("vendor_token") : null;
-  }
+  // Orders Tab Filters & Actions
+  const [selectedOrderStatus, setSelectedOrderStatus] = useState<string>("ALL");
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
-  // Demo testing helper: explicitly logs in as sample merchant on demand
-  async function handleDemoLogin() {
-    setIsLoading(true);
-    setErrorNotice(null);
-    try {
-      const loginRes = await fetch(`${API_BASE}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "baker@sweetbakes.com",
-          password: "Baker@NextDor2026!",
-        }),
-      });
-      const loginJson = await loginRes.json();
-      if (loginJson.success && loginJson.data?.accessToken) {
-        localStorage.setItem("vendor_token", loginJson.data.accessToken);
-        await loadVendorData();
-      } else {
-        setErrorNotice("Could not authenticate demo vendor account. Ensure backend is running.");
-      }
-    } catch (err: any) {
-      setErrorNotice(`Demo login failed: ${err.message}`);
-    } finally {
-      setIsLoading(false);
+  // Store Settings Form State
+  const [settingName, setSettingName] = useState("");
+  const [settingDesc, setSettingDesc] = useState("");
+  const [settingPhone, setSettingPhone] = useState("");
+  const [settingMomoNet, setSettingMomoNet] = useState("MTN");
+  const [settingMomoNum, setSettingMomoNum] = useState("");
+  const [settingLogo, setSettingLogo] = useState("");
+  const [settingBanner, setSettingBanner] = useState("");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Token storage helper: checks AuthContext, then localStorage
+  function getValidToken(): string | null {
+    if (authToken) return authToken;
+    if (typeof window !== "undefined") {
+      return (
+        localStorage.getItem("nextdor-token") ||
+        localStorage.getItem("vendor_token") ||
+        null
+      );
     }
+    return null;
   }
 
   function handleVendorSignOut() {
     logout();
     if (typeof window !== "undefined") {
       localStorage.removeItem("vendor_token");
+      localStorage.removeItem("nextdor-token");
+      localStorage.removeItem("nextdor-auth");
     }
     setVendor(null);
     setProducts([]);
+    setOrders([]);
+    setPayouts([]);
     setStats(null);
-    router.push("/login");
+    router.replace("/login?redirect=/vendor/dashboard");
   }
 
   async function loadVendorData() {
-    setIsLoading(true);
+    setIsDataLoading(true);
     setErrorNotice(null);
+    setIsNotVendor(false);
     try {
-      const token = await getValidToken();
+      const token = getValidToken();
       if (!token) {
-        setVendor(null);
-        setProducts([]);
-        setStats(null);
-        setIsLoading(false);
+        router.replace("/login?redirect=/vendor/dashboard");
         return;
       }
 
-      // 1. Fetch dashboard stats
+      // 1. Fetch dashboard overview & stats
       const dashRes = await fetch(`${API_BASE}/vendors/portal/me`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
       const dashJson = await dashRes.json();
 
-      if (dashJson.success && dashJson.data) {
-        setVendor(dashJson.data.vendor);
-        setStats(dashJson.data.stats);
-      } else {
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("vendor_token");
+      if (
+        dashRes.status === 403 ||
+        dashJson.error?.code === "NO_VENDOR_STORE" ||
+        dashJson.error?.code === "FORBIDDEN"
+      ) {
+        if (user && (user.role === "admin" || user.role === "super_admin")) {
+          router.replace("/admin");
+          return;
         }
-        setVendor(null);
+        setIsNotVendor(true);
+        setIsDataLoading(false);
         return;
+      }
+
+      if (dashRes.status === 401) {
+        handleVendorSignOut();
+        return;
+      }
+
+      if (dashJson.success && dashJson.data?.vendor) {
+        const v = dashJson.data.vendor;
+        setVendor(v);
+        setStats(dashJson.data.stats);
+        setIsNotVendor(false);
+
+        // Pre-fill settings form
+        setSettingName(v.name || "");
+        setSettingDesc(v.description || "");
+        setSettingPhone(v.phone || "");
+        setSettingMomoNet(v.momoNetwork || "MTN");
+        setSettingMomoNum(v.momoNumber || "");
+        setSettingLogo(v.logoUrl || "");
+        setSettingBanner(v.bannerUrl || "");
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem("vendor_token", token);
+        }
+      } else {
+        setErrorNotice(dashJson.error?.message || "Failed to load store information.");
       }
 
       // 2. Fetch vendor products with OCC versions
@@ -168,21 +296,53 @@ export default function VendorDashboardPage() {
         cache: "no-store",
       });
       const prodJson = await prodRes.json();
-
       if (prodJson.success && prodJson.data?.products) {
         setProducts(prodJson.data.products);
+      }
+
+      // 3. Fetch vendor sub-orders
+      const ordersRes = await fetch(`${API_BASE}/vendors/portal/orders?limit=50`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const ordersJson = await ordersRes.json();
+      if (ordersJson.success && ordersJson.data?.orders) {
+        setOrders(ordersJson.data.orders);
+      }
+
+      // 4. Fetch vendor payouts & escrow breakdown
+      const payoutsRes = await fetch(`${API_BASE}/vendors/portal/payouts?limit=50`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const payoutsJson = await payoutsRes.json();
+      if (payoutsJson.success && payoutsJson.data) {
+        setPayouts(payoutsJson.data.payouts || []);
+        if (payoutsJson.data.escrowSummary) {
+          setEscrowSummary(payoutsJson.data.escrowSummary);
+        }
       }
     } catch (err: any) {
       setErrorNotice(`Failed to connect to marketplace API: ${err.message}`);
     } finally {
-      setIsLoading(false);
+      setIsDataLoading(false);
     }
   }
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      router.replace("/login?redirect=/vendor/dashboard");
+      return;
+    }
+    if (user && (user.role === "admin" || user.role === "super_admin") && !user.vendorId) {
+      router.replace("/admin");
+      return;
+    }
     loadVendorData();
-  }, []);
+  }, [authLoading, isAuthenticated, authToken, user]);
 
+  // Product Inline Edit with OCC
   function startEditing(product: VendorProduct) {
     setEditingId(product.id);
     setEditPrice(String(product.price));
@@ -192,12 +352,12 @@ export default function VendorDashboardPage() {
   }
 
   async function saveProductChanges(product: VendorProduct) {
-    setIsSaving(true);
+    setIsSavingProduct(true);
     setErrorNotice(null);
     setSuccessNotice(null);
 
     try {
-      const token = await getValidToken();
+      const token = getValidToken();
       const res = await fetch(`${API_BASE}/vendors/portal/products/${product.id}`, {
         method: "PATCH",
         headers: {
@@ -205,7 +365,7 @@ export default function VendorDashboardPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          version: product.version, // Required for Optimistic Concurrency Control
+          version: product.version,
           price: parseFloat(editPrice),
           stockQty: parseInt(editStock, 10),
         }),
@@ -227,24 +387,24 @@ export default function VendorDashboardPage() {
 
       setSuccessNotice(`Successfully updated ${product.name} (OCC v${json.data.product.version})!`);
       setEditingId(null);
-      // Update local product version and values
       setProducts((prev) =>
         prev.map((p) => (p.id === product.id ? json.data.product : p))
       );
     } catch (err: any) {
       setErrorNotice(`Network error: ${err.message}`);
     } finally {
-      setIsSaving(false);
+      setIsSavingProduct(false);
     }
   }
 
+  // Create Product Modal
   async function handleCreateProduct(e: React.FormEvent) {
     e.preventDefault();
-    setIsCreating(true);
+    setIsCreatingProduct(true);
     setErrorNotice(null);
 
     try {
-      const token = await getValidToken();
+      const token = getValidToken();
       const res = await fetch(`${API_BASE}/vendors/portal/products`, {
         method: "POST",
         headers: {
@@ -277,42 +437,182 @@ export default function VendorDashboardPage() {
     } catch (err: any) {
       setErrorNotice(`Error creating product: ${err.message}`);
     } finally {
-      setIsCreating(false);
+      setIsCreatingProduct(false);
     }
   }
 
-  if (isLoading) {
+  // Update Order Dispatch Status
+  async function handleUpdateOrderStatus(orderId: string, newStatus: string, notes?: string) {
+    setUpdatingOrderId(orderId);
+    setErrorNotice(null);
+    setSuccessNotice(null);
+
+    try {
+      const token = getValidToken();
+      const res = await fetch(`${API_BASE}/vendors/portal/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          notes,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setErrorNotice(json.error?.message || "Failed to update order dispatch status.");
+        return;
+      }
+
+      setSuccessNotice(
+        `Order status successfully updated to ${newStatus}${
+          newStatus === "DELIVERED" ? " • 48-Hour Escrow Protection Timer Started!" : ""
+        }`
+      );
+
+      // Refresh orders and escrow metrics
+      await loadVendorData();
+    } catch (err: any) {
+      setErrorNotice(`Network error: ${err.message}`);
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  }
+
+  // Save Store Settings
+  async function handleSaveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    setErrorNotice(null);
+    setSuccessNotice(null);
+
+    try {
+      const token = getValidToken();
+      const res = await fetch(`${API_BASE}/vendors/portal/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: settingName,
+          description: settingDesc,
+          phone: settingPhone,
+          momoNetwork: settingMomoNet,
+          momoNumber: settingMomoNum,
+          logoUrl: settingLogo || undefined,
+          bannerUrl: settingBanner || undefined,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setErrorNotice(json.error?.message || "Failed to save store settings.");
+        return;
+      }
+
+      setVendor(json.data.vendor);
+      setSuccessNotice("Store profile & Mobile Money payout settings updated successfully!");
+    } catch (err: any) {
+      setErrorNotice(`Error updating settings: ${err.message}`);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }
+
+  // Filtered orders list
+  const filteredOrders = orders.filter((o) => {
+    if (selectedOrderStatus === "ALL") return true;
+    return o.status === selectedOrderStatus;
+  });
+
+  if (authLoading || (isDataLoading && !vendor && !isNotVendor)) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center bg-zinc-50">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center bg-zinc-50 gap-3">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-200 border-t-purple-600" />
+        <p className="text-xs font-medium text-zinc-500">Loading your merchant dashboard...</p>
+      </div>
+    );
+  }
+
+  if (isNotVendor) {
+    if (user && (user.role === "admin" || user.role === "super_admin")) {
+      router.replace("/admin");
+      return (
+        <div className="flex min-h-[60vh] flex-col items-center justify-center bg-zinc-50 gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-200 border-t-[#ff9900]" />
+          <p className="text-xs font-medium text-zinc-500">Redirecting to Admin Portal...</p>
+        </div>
+      );
+    }
+    return (
+      <div className="flex min-h-[65vh] flex-col items-center justify-center bg-zinc-50 px-4 py-16 text-center">
+        <div className="mx-auto max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+            <Store className="h-7 w-7" />
+          </div>
+          <h2 className="text-xl font-bold text-zinc-900">Merchant Store Not Found</h2>
+          <p className="mt-2 text-sm text-zinc-600">
+            You are signed in as <span className="font-semibold text-zinc-900">{user?.email}</span> (Customer Account).
+          </p>
+          <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
+            Your account does not have an active merchant store registered. To start selling on NextDor, register your store below or sign in with your vendor credentials.
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            <Link
+              href="/vendor/register"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 transition"
+            >
+              Open a Merchant Store
+            </Link>
+            <button
+              type="button"
+              onClick={handleVendorSignOut}
+              className="inline-flex w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition"
+            >
+              Sign In with Merchant Account
+            </button>
+            <Link
+              href="/"
+              className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline pt-1"
+            >
+              ← Return to Customer Storefront
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!vendor) {
     return (
-      <div className="flex min-h-[65vh] flex-col items-center justify-center bg-zinc-50 px-4 py-16 text-center">
-        <div className="mx-auto max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-50 text-purple-600">
-            <Store className="h-7 w-7" />
-          </div>
-          <h2 className="text-xl font-bold text-zinc-900">Vendor Portal Sign In</h2>
-          <p className="mt-2 text-sm text-zinc-500">
-            You are currently signed out. Please sign in with your vendor account to manage your store products and orders.
+      <div className="flex min-h-[60vh] flex-col items-center justify-center bg-zinc-50 px-4 py-12 text-center">
+        <div className="mx-auto max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <AlertCircle className="mx-auto h-8 w-8 text-amber-500" />
+          <h2 className="mt-3 text-lg font-bold text-zinc-900">Store Data Unavailable</h2>
+          <p className="mt-2 text-xs text-zinc-500">
+            {errorNotice || "Could not retrieve store information. Please check your network connection."}
           </p>
-          <div className="mt-6 flex flex-col gap-3">
-            <Link
-              href="/login?redirect=/vendor/dashboard"
-              className="inline-flex w-full items-center justify-center rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 transition"
-            >
-              Sign In to Merchant Account
-            </Link>
+          <div className="mt-5 flex items-center justify-center gap-3">
             <button
               type="button"
-              onClick={handleDemoLogin}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition"
+              onClick={loadVendorData}
+              className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 transition"
             >
-              Load Demo Merchant (Sweet Bakes)
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Retry</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleVendorSignOut}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition"
+            >
+              <span>Sign In Again</span>
             </button>
           </div>
         </div>
@@ -323,11 +623,15 @@ export default function VendorDashboardPage() {
   return (
     <div className="min-h-screen bg-zinc-50 pb-16">
       {/* Top Header */}
-      <header className="border-b border-zinc-200 bg-white">
+      <header className="border-b border-zinc-200 bg-white sticky top-0 z-30 shadow-xs">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm">
-              <Store className="h-5 w-5" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm overflow-hidden font-bold">
+              {vendor.logoUrl ? (
+                <img src={vendor.logoUrl} alt={vendor.name} className="h-full w-full object-cover" />
+              ) : (
+                <Store className="h-5 w-5" />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -373,9 +677,10 @@ export default function VendorDashboardPage() {
                 className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800"
               >
                 <Lock className="h-3.5 w-3.5 text-amber-600" />
-                <span>Storefront Offline (Pending Approval)</span>
+                <span>Storefront Offline (Pending Review)</span>
               </div>
             ) : null}
+
             <button
               onClick={() => setShowAddModal(true)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
@@ -383,6 +688,7 @@ export default function VendorDashboardPage() {
               <Plus className="h-4 w-4" />
               <span>Add New Product</span>
             </button>
+
             <button
               type="button"
               onClick={handleVendorSignOut}
@@ -393,10 +699,74 @@ export default function VendorDashboardPage() {
             </button>
           </div>
         </div>
+
+        {/* 4-Tab Navigation Bar */}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-1 border-t border-zinc-100 pt-1">
+            <button
+              onClick={() => setActiveTab("inventory")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+                activeTab === "inventory"
+                  ? "border-purple-600 text-purple-700"
+                  : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+              }`}
+            >
+              <Package className="h-4 w-4" />
+              <span>Inventory & Stock</span>
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 font-bold">
+                {products.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("orders")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+                activeTab === "orders"
+                  ? "border-purple-600 text-purple-700"
+                  : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+              }`}
+            >
+              <ShoppingBag className="h-4 w-4" />
+              <span>Store Orders & Dispatch</span>
+              <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700 font-bold">
+                {orders.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("payouts")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+                activeTab === "payouts"
+                  ? "border-purple-600 text-purple-700"
+                  : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+              }`}
+            >
+              <CreditCard className="h-4 w-4" />
+              <span>MoMo Payouts & 48h Escrow</span>
+              {escrowSummary?.inEscrowAmount ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-800 font-bold">
+                  {formatPrice(escrowSummary.inEscrowAmount, "GHS")}
+                </span>
+              ) : null}
+            </button>
+
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+                activeTab === "settings"
+                  ? "border-purple-600 text-purple-700"
+                  : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+              }`}
+            >
+              <Settings className="h-4 w-4" />
+              <span>Store Profile & Settings</span>
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-        {/* Alerts */}
+        {/* Global Notices */}
         {errorNotice && (
           <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
@@ -411,7 +781,7 @@ export default function VendorDashboardPage() {
           </div>
         )}
 
-        {/* Guided Staging Alert Banner (Approach A) */}
+        {/* Guided Staging Alert Banner (when Pending) */}
         {vendor?.status === "PENDING_APPROVAL" && (
           <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 p-5 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -425,14 +795,14 @@ export default function VendorDashboardPage() {
                       Guided Staging Mode — Store Under Compliance Review
                     </h3>
                     <span className="rounded-md bg-amber-200/80 px-2 py-0.5 text-[11px] font-bold text-amber-900">
-                      Hidden From Public
+                      Catalog Staged Offline
                     </span>
                   </div>
                   <p className="text-xs text-amber-900 leading-relaxed max-w-3xl">
-                    Your merchant application is currently pending admin verification. <strong>Under our Guided Staging policy, your public store page and catalog are completely hidden from shoppers and marketplace search</strong> to ensure buyer safety.
+                    Your merchant application is currently pending admin verification. <strong>Under our Guided Staging policy, your public store page and catalog are safely hidden from shoppers</strong> to ensure buyer safety while you prepare your store.
                   </p>
                   <p className="text-xs text-amber-800/90 font-medium">
-                    ✨ <strong>You have full staging access:</strong> Add your products, set pricing, and verify stock below. The moment an administrator approves your account on the Admin Portal, your storefront and staged products will automatically go live to customers!
+                    ✨ <strong>You have full operational access:</strong> Add products, test dispatch workflows, and configure MoMo payout lines below. The moment an admin approves your account on the Admin Portal, your storefront and staged products will automatically go live!
                   </p>
                 </div>
               </div>
@@ -449,230 +819,836 @@ export default function VendorDashboardPage() {
           </div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                Total Products
-              </span>
-              <Package className="h-4 w-4 text-purple-600" />
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* TAB 1: INVENTORY & STOCK                                           */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === "inventory" && (
+          <div className="space-y-6">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Total Products
+                  </span>
+                  <Package className="h-4 w-4 text-purple-600" />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-zinc-900">{stats?.totalProducts ?? products.length}</p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {vendor?.status === "PENDING_APPROVAL" ? "Staged (Goes live upon approval)" : "Active in marketplace"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    In Stock
+                  </span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-emerald-600">{stats?.inStock ?? 0}</p>
+                <p className="mt-1 text-xs text-zinc-400">Available for customer checkout</p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Low Stock Alerts
+                  </span>
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-amber-600">{stats?.lowStock ?? 0}</p>
+                <p className="mt-1 text-xs text-zinc-400">Items with ≤ 3 units remaining</p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Payout Mobile Money
+                  </span>
+                  <Smartphone className="h-4 w-4 text-purple-600" />
+                </div>
+                <p className="mt-2 text-lg font-bold text-zinc-900">
+                  {vendor?.momoNumber || "Not configured"}
+                </p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {vendor?.momoNetwork || "MTN"} MoMo • Automated 48h Escrow
+                </p>
+              </div>
             </div>
-            <p className="mt-2 text-2xl font-bold text-zinc-900">{stats?.totalProducts ?? 0}</p>
-            <p className="mt-1 text-xs text-zinc-400">
-              {vendor?.status === "PENDING_APPROVAL" ? "Staged (Goes live upon approval)" : "Published in NextDor catalog"}
-            </p>
-          </div>
 
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                In Stock
-              </span>
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            </div>
-            <p className="mt-2 text-2xl font-bold text-emerald-600">{stats?.inStock ?? 0}</p>
-            <p className="mt-1 text-xs text-zinc-400">
-              {vendor?.status === "PENDING_APPROVAL" ? "Staged inventory ready for release" : "Available for checkout"}
-            </p>
-          </div>
+            {/* Products Table with OCC */}
+            <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 px-6 py-4">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900">Store Inventory & Real-Time Stock</h2>
+                  <p className="text-xs text-zinc-500">
+                    Protected by Optimistic Concurrency Control (OCC) to prevent lost updates across multiple store managers.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={loadVendorData}
+                    disabled={isDataLoading}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isDataLoading ? "animate-spin" : ""}`} />
+                    <span>Refresh</span>
+                  </button>
+                  <button
+                    onClick={() => setShowAddModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Add Product</span>
+                  </button>
+                </div>
+              </div>
 
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                Low Stock Alerts
-              </span>
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-            </div>
-            <p className="mt-2 text-2xl font-bold text-amber-600">{stats?.lowStock ?? 0}</p>
-            <p className="mt-1 text-xs text-zinc-400">Items with ≤ 3 stock remaining</p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                Payout Mobile Money
-              </span>
-              <Smartphone className="h-4 w-4 text-purple-600" />
-            </div>
-            <p className="mt-2 text-lg font-bold text-zinc-900">
-              {vendor?.momoNumber || "Not configured"}
-            </p>
-            <p className="mt-1 text-xs text-zinc-400">
-              {vendor?.momoNetwork || "MTN"} MoMo • Automated 48h Escrow
-            </p>
-          </div>
-        </div>
-
-        {/* Inventory Table with OCC Management */}
-        <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 px-6 py-4">
-            <div>
-              <h2 className="text-base font-semibold text-zinc-900">Store Inventory & Real-Time Stock</h2>
-              <p className="text-xs text-zinc-500">
-                Protected by Optimistic Concurrency Control (OCC) to prevent lost updates across concurrent store managers.
-              </p>
-            </div>
-            <button
-              onClick={loadVendorData}
-              disabled={isLoading}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-zinc-100 bg-zinc-50/50 text-xs font-semibold text-zinc-500">
-                  <th className="px-6 py-3.5">Product</th>
-                  <th className="px-6 py-3.5">Price (GHS)</th>
-                  <th className="px-6 py-3.5">Stock Quantity</th>
-                  <th className="px-6 py-3.5">Stock Status</th>
-                  <th className="px-6 py-3.5">Storefront Visibility</th>
-                  <th className="px-6 py-3.5 text-center">OCC Version</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {isLoading && products.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-zinc-400">
-                      Loading merchant inventory...
-                    </td>
-                  </tr>
-                ) : products.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-zinc-500">
-                      No products found. Click "Add New Product" to stock your store!
-                    </td>
-                  </tr>
-                ) : (
-                  products.map((prod) => {
-                    const isEditing = editingId === prod.id;
-                    const primaryImg = prod.images?.[0]?.url;
-
-                    return (
-                      <tr key={prod.id} className="hover:bg-zinc-50/70 transition">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-100 border border-zinc-200/60 flex items-center justify-center font-bold text-zinc-400 text-xs">
-                              {primaryImg ? (
-                                <img src={primaryImg} alt={prod.name} className="h-full w-full object-cover" />
-                              ) : (
-                                prod.name.charAt(0)
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-zinc-900">{prod.name}</p>
-                              <p className="text-xs text-zinc-400 line-clamp-1">{prod.description}</p>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editPrice}
-                              onChange={(e) => setEditPrice(e.target.value)}
-                              className="w-24 rounded-lg border border-zinc-300 px-2 py-1 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
-                            />
-                          ) : (
-                            <span className="font-bold text-zinc-900">
-                              {formatPrice(Number(prod.price), "GHS")}
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              min="0"
-                              value={editStock}
-                              onChange={(e) => setEditStock(e.target.value)}
-                              className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
-                            />
-                          ) : (
-                            <span className="font-medium text-zinc-700">
-                              {prod.stockQty !== null ? `${prod.stockQty} units` : "Unlimited"}
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              prod.stockStatus === "IN_STOCK"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : prod.stockStatus === "LOW_STOCK"
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : "bg-red-50 text-red-700 border border-red-200"
-                            }`}
-                          >
-                            {prod.stockStatus.replace("_", " ")}
-                          </span>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {vendor?.status === "PENDING_APPROVAL" ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
-                              <EyeOff className="h-3 w-3 text-amber-600" />
-                              <span>Staged (Offline)</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
-                              <Eye className="h-3 w-3 text-emerald-600" />
-                              <span>Live on Storefront</span>
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono font-medium text-zinc-600 border border-zinc-200">
-                            v{prod.version}
-                          </span>
-                        </td>
-
-                        <td className="px-6 py-4 text-right">
-                          {isEditing ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => saveProductChanges(prod)}
-                                disabled={isSaving}
-                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                              >
-                                <Save className="h-3.5 w-3.5" />
-                                <span>Save</span>
-                              </button>
-                              <button
-                                onClick={() => setEditingId(null)}
-                                className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => startEditing(prod)}
-                              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition"
-                            >
-                              Edit Stock / Price
-                            </button>
-                          )}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50/50 text-xs font-semibold text-zinc-500">
+                      <th className="px-6 py-3.5">Product</th>
+                      <th className="px-6 py-3.5">Price (GHS)</th>
+                      <th className="px-6 py-3.5">Stock Quantity</th>
+                      <th className="px-6 py-3.5">Stock Status</th>
+                      <th className="px-6 py-3.5">Storefront Visibility</th>
+                      <th className="px-6 py-3.5 text-center">OCC Version</th>
+                      <th className="px-6 py-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {isDataLoading && products.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-zinc-400">
+                          Loading merchant inventory...
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    ) : products.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-zinc-500">
+                          No products found. Click "Add New Product" to stock your store!
+                        </td>
+                      </tr>
+                    ) : (
+                      products.map((prod) => {
+                        const isEditing = editingId === prod.id;
+                        const primaryImg = prod.images?.[0]?.url;
+
+                        return (
+                          <tr key={prod.id} className="hover:bg-zinc-50/70 transition">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-100 border border-zinc-200/60 flex items-center justify-center font-bold text-zinc-400 text-xs">
+                                  {primaryImg ? (
+                                    <img src={primaryImg} alt={prod.name} className="h-full w-full object-cover" />
+                                  ) : (
+                                    prod.name.charAt(0)
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-zinc-900">{prod.name}</p>
+                                  <p className="text-xs text-zinc-400 line-clamp-1">{prod.description}</p>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editPrice}
+                                  onChange={(e) => setEditPrice(e.target.value)}
+                                  className="w-24 rounded-lg border border-zinc-300 px-2 py-1 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
+                                />
+                              ) : (
+                                <span className="font-bold text-zinc-900">
+                                  {formatPrice(Number(prod.price), "GHS")}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="px-6 py-4">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={editStock}
+                                  onChange={(e) => setEditStock(e.target.value)}
+                                  className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
+                                />
+                              ) : (
+                                <span className="font-medium text-zinc-700">
+                                  {prod.stockQty !== null ? `${prod.stockQty} units` : "Unlimited"}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                  prod.stockStatus === "IN_STOCK"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : prod.stockStatus === "LOW_STOCK"
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                    : "bg-red-50 text-red-700 border border-red-200"
+                                }`}
+                              >
+                                {prod.stockStatus.replace("_", " ")}
+                              </span>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              {vendor?.status === "PENDING_APPROVAL" ? (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                                  <EyeOff className="h-3 w-3 text-amber-600" />
+                                  <span>Staged (Offline)</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                                  <Eye className="h-3 w-3 text-emerald-600" />
+                                  <span>Live on Storefront</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="px-6 py-4 text-center">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono font-medium text-zinc-600 border border-zinc-200">
+                                v{prod.version}
+                              </span>
+                            </td>
+
+                            <td className="px-6 py-4 text-right">
+                              {isEditing ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => saveProductChanges(prod)}
+                                    disabled={isSavingProduct}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                  >
+                                    <Save className="h-3.5 w-3.5" />
+                                    <span>Save</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingId(null)}
+                                    className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => startEditing(prod)}
+                                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition"
+                                >
+                                  Edit Stock / Price
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* TAB 2: STORE ORDERS & DISPATCH                                     */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === "orders" && (
+          <div className="space-y-6">
+            {/* Orders Header & Filter Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-900">Customer Orders & Dispatch Pipeline</h2>
+                <p className="text-xs text-zinc-500">
+                  Partitioned sub-orders assigned to your store. Manage packaging, rider dispatch, and delivery confirmation.
+                </p>
+              </div>
+
+              {/* Status Filter Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                {(["ALL", "PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"] as const).map(
+                  (st) => (
+                    <button
+                      key={st}
+                      onClick={() => setSelectedOrderStatus(st)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        selectedOrderStatus === st
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                      }`}
+                    >
+                      {st === "ALL" ? "All Orders" : st}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={loadVendorData}
+                  disabled={isDataLoading}
+                  className="rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-600 hover:bg-zinc-50"
+                  title="Refresh orders"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isDataLoading ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Orders Cards List */}
+            {filteredOrders.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center">
+                <ShoppingBag className="mx-auto h-10 w-10 text-zinc-400" />
+                <h3 className="mt-3 text-base font-bold text-zinc-900">No Orders Found</h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {selectedOrderStatus === "ALL"
+                    ? "Your store has not received any customer orders yet."
+                    : `No orders found with status '${selectedOrderStatus}'.`}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredOrders.map((vo) => {
+                  const isUpdating = updatingOrderId === vo.id;
+                  const addr = vo.order.shippingAddress || {};
+                  const isCleared = vo.clearedAt && new Date(vo.clearedAt) <= new Date();
+
+                  return (
+                    <div
+                      key={vo.id}
+                      className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm space-y-4 transition hover:border-zinc-300"
+                    >
+                      {/* Sub-order Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-100 pb-4 gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                            <ShoppingBag className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm text-zinc-900">
+                                Order {vo.order.number}
+                              </span>
+                              <span
+                                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                  vo.status === "DELIVERED"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : vo.status === "SHIPPED"
+                                    ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                    : vo.status === "PROCESSING"
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                    : vo.status === "PENDING"
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                    : "bg-red-50 text-red-700 border border-red-200"
+                                }`}
+                              >
+                                {vo.status}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-1.5">
+                              <Calendar className="h-3 w-3" />
+                              <span>Placed {new Date(vo.createdAt).toLocaleString()}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Financial Net Split Pill */}
+                        <div className="flex items-center gap-4 text-right">
+                          <div>
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                              Your Net Earnings (90%)
+                            </span>
+                            <span className="text-base font-extrabold text-emerald-600">
+                              {formatPrice(Number(vo.vendorEarnings), "GHS")}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Middle Details Grid: Customer & Delivery Address */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-zinc-50/70 rounded-xl p-4 border border-zinc-100">
+                        <div>
+                          <p className="font-bold text-zinc-900 flex items-center gap-1.5 mb-1.5">
+                            <User className="h-3.5 w-3.5 text-zinc-500" />
+                            <span>Customer Information</span>
+                          </p>
+                          <p className="text-zinc-700 font-medium">{vo.order.user?.name || addr.fullName || "Customer"}</p>
+                          <p className="text-zinc-500">{vo.order.user?.email || addr.email || "No email"}</p>
+                          <p className="text-zinc-500">{vo.order.user?.phone || addr.phone || "No phone"}</p>
+                        </div>
+
+                        <div>
+                          <p className="font-bold text-zinc-900 flex items-center gap-1.5 mb-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+                            <span>Delivery Destination</span>
+                          </p>
+                          <p className="text-zinc-700">{addr.street || "Delivery address specified"}</p>
+                          <p className="text-zinc-500">{[addr.city, addr.region, "Ghana"].filter(Boolean).join(", ")}</p>
+                        </div>
+                      </div>
+
+                      {/* Items Purchased in this Sub-Order */}
+                      <div>
+                        <p className="text-xs font-bold text-zinc-800 mb-2">Items to Prepare & Dispatch:</p>
+                        <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-100 overflow-hidden">
+                          {vo.order.items.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between p-3 bg-white text-xs">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-zinc-100 border border-zinc-200">
+                                  {item.productImage ? (
+                                    <img src={item.productImage} alt={item.productName} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-zinc-400 font-bold">
+                                      {item.productName.charAt(0)}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-zinc-900">{item.productName}</p>
+                                  <p className="text-zinc-500">
+                                    Qty: <span className="font-bold text-zinc-800">{item.quantity}</span> × {formatPrice(Number(item.unitPrice), "GHS")}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="font-bold text-zinc-900">
+                                {formatPrice(Number(item.subtotal), "GHS")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Bottom Footer: Commission & Dispatch Status Actions */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-3 border-t border-zinc-100 gap-3">
+                        <div className="text-xs text-zinc-500 space-y-0.5">
+                          <p>
+                            Subtotal: <span className="font-semibold text-zinc-800">{formatPrice(Number(vo.subtotal), "GHS")}</span> • Platform Commission (10%):{" "}
+                            <span className="text-red-500 font-semibold">-{formatPrice(Number(vo.commissionAmount), "GHS")}</span>
+                          </p>
+                          {vo.notes && (
+                            <p className="text-zinc-600 italic">
+                              Note: "{vo.notes}"
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Dispatch Action Buttons */}
+                        <div className="flex items-center gap-2">
+                          {vo.status === "PENDING" && (
+                            <button
+                              onClick={() => handleUpdateOrderStatus(vo.id, "PROCESSING", "Order accepted by merchant kitchen")}
+                              disabled={isUpdating}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              <span>Accept & Prepare</span>
+                            </button>
+                          )}
+
+                          {vo.status === "PROCESSING" && (
+                            <button
+                              onClick={() => handleUpdateOrderStatus(vo.id, "SHIPPED", "Dispatched with courier")}
+                              disabled={isUpdating}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+                            >
+                              <Truck className="h-3.5 w-3.5" />
+                              <span>Dispatch & Ship Order</span>
+                            </button>
+                          )}
+
+                          {vo.status === "SHIPPED" && (
+                            <button
+                              onClick={() => handleUpdateOrderStatus(vo.id, "DELIVERED", "Confirmed delivered to customer")}
+                              disabled={isUpdating}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition shadow-xs"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>Confirm Delivery (Start 48h Escrow)</span>
+                            </button>
+                          )}
+
+                          {vo.status === "DELIVERED" && (
+                            <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
+                              <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                              <span>
+                                {isCleared
+                                  ? "48h Escrow Cleared • Ready for MoMo Payout"
+                                  : `In 48h Escrow (Clears ${vo.clearedAt ? new Date(vo.clearedAt).toLocaleDateString() : "in 48h"})`}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* TAB 3: MOMO PAYOUTS & 48H ESCROW                                   */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === "payouts" && (
+          <div className="space-y-6">
+            {/* Escrow & Earnings Breakdown Cards */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Lifetime Net Earnings
+                  </span>
+                  <TrendingUp className="h-4 w-4 text-purple-600" />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-zinc-900">
+                  {formatPrice(escrowSummary?.lifetimeNetEarnings ?? 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-zinc-400">Total 90% revenue across all completed orders</p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                    In 48h Escrow Protection
+                  </span>
+                  <Clock className="h-4 w-4 text-amber-600 animate-pulse" />
+                </div>
+                <p className="mt-2 text-2xl font-extrabold text-amber-900">
+                  {formatPrice(escrowSummary?.inEscrowAmount ?? 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-amber-800">
+                  {escrowSummary?.inEscrowOrdersCount ?? 0} orders in delivery verification window
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                    Available for Payout
+                  </span>
+                  <Wallet className="h-4 w-4 text-emerald-600" />
+                </div>
+                <p className="mt-2 text-2xl font-extrabold text-emerald-900">
+                  {formatPrice(escrowSummary?.availableForPayoutAmount ?? 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-emerald-800">
+                  Cleared funds ready for next MoMo settlement cycle
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Total Disbursed via MoMo
+                  </span>
+                  <Smartphone className="h-4 w-4 text-purple-600" />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-zinc-900">
+                  {formatPrice(escrowSummary?.totalPaidOut ?? 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Paid directly to {vendor?.momoNetwork || "MTN"} {vendor?.momoNumber || ""}
+                </p>
+              </div>
+            </div>
+
+            {/* Educational Escrow Architecture Banner */}
+            <div className="rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-50 via-white to-purple-50 p-6 shadow-xs">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-600 text-white shadow-sm">
+                  <ShieldAlert className="h-6 w-6" />
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-900">
+                      How NextDor's 48-Hour Escrow Settlement Protection Works
+                    </h3>
+                    <p className="text-xs text-zinc-600 mt-1 leading-relaxed">
+                      To protect both Ghanaian buyers and marketplace sellers, customer payments are held in an automated escrow account when an order is placed. Here is how your money moves:
+                    </p>
+                  </div>
+
+                  {/* 3-Step Flow Diagram */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                    <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Step 1</span>
+                      <p className="font-semibold text-xs text-zinc-900 mt-1">Delivery Confirmation</p>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        You dispatch and deliver the item. Marking the order as DELIVERED initiates the 48-hour escrow safety clock.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Step 2</span>
+                      <p className="font-semibold text-xs text-amber-950 mt-1">48-Hour Inspection Window</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        The shopper has 48 hours to inspect goods. This completely prevents fraudulent chargebacks and builds buyer trust.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Step 3</span>
+                      <p className="font-semibold text-xs text-emerald-950 mt-1">Automated MoMo Disbursement</p>
+                      <p className="text-[11px] text-emerald-800 mt-0.5">
+                        After 48 hours pass, funds unlock automatically and are transferred directly to your Mobile Money account.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payouts Ledger Table */}
+            <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
+                <div>
+                  <h3 className="text-base font-semibold text-zinc-900">Mobile Money Settlement History</h3>
+                  <p className="text-xs text-zinc-500">Record of electronic transfers sent to your registered Mobile Money wallet.</p>
+                </div>
+                <button
+                  onClick={loadVendorData}
+                  disabled={isDataLoading}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isDataLoading ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50/50 text-xs font-semibold text-zinc-500">
+                      <th className="px-6 py-3.5">Disbursement Date</th>
+                      <th className="px-6 py-3.5">Net Amount (GHS)</th>
+                      <th className="px-6 py-3.5">MoMo Destination</th>
+                      <th className="px-6 py-3.5">Settlement Status</th>
+                      <th className="px-6 py-3.5">Transfer Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {payouts.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-zinc-400 text-xs">
+                          No mobile money payouts have been disbursed yet. Delivered orders will appear here once their 48-hour escrow clears!
+                        </td>
+                      </tr>
+                    ) : (
+                      payouts.map((po) => (
+                        <tr key={po.id} className="hover:bg-zinc-50/70 transition">
+                          <td className="px-6 py-4 text-xs font-medium text-zinc-700">
+                            {new Date(po.paidAt || po.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 font-bold text-emerald-600">
+                            {formatPrice(Number(po.amount), "GHS")}
+                          </td>
+                          <td className="px-6 py-4 text-xs text-zinc-700">
+                            <span className="font-semibold text-zinc-900">{vendor.momoNetwork || "MTN"}</span> • {vendor.momoNumber || "Registered line"}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                po.status === "PAID"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : po.status === "PROCESSING"
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : "bg-red-50 text-red-700 border border-red-200"
+                              }`}
+                            >
+                              {po.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-zinc-500">
+                            {po.paystackTransferRef || "Automated Escrow Clearance"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* TAB 4: STORE PROFILE & SETTINGS                                    */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === "settings" && (
+          <div className="max-w-4xl space-y-6">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className="border-b border-zinc-100 pb-4 mb-6">
+                <h2 className="text-base font-bold text-zinc-900">Store Profile & Payout Settings</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Manage your public storefront branding, contact details, and Mobile Money payout lines.
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="space-y-6">
+                {/* 1. Store Details */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                    <Store className="h-4 w-4" />
+                    <span>Store Identity</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700">Store Display Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={settingName}
+                        onChange={(e) => setSettingName(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700">Business Phone *</label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="+233241234567"
+                        value={settingPhone}
+                        onChange={(e) => setSettingPhone(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-700">Store Bio / Description</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Tell customers about your products, specialties, and location..."
+                      value={settingDesc}
+                      onChange={(e) => setSettingDesc(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Mobile Money Settlement */}
+                <div className="space-y-4 pt-4 border-t border-zinc-100">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                    <Smartphone className="h-4 w-4" />
+                    <span>Mobile Money Settlement Account</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700">Mobile Money Network *</label>
+                      <select
+                        value={settingMomoNet}
+                        onChange={(e) => setSettingMomoNet(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none bg-white"
+                      >
+                        <option value="MTN">MTN Mobile Money (MoMo)</option>
+                        <option value="TELECEL">Telecel Cash (formerly Vodafone)</option>
+                        <option value="AT">AT Money (AirtelTigo)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700">MoMo Phone Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="0241234567"
+                        value={settingMomoNum}
+                        onChange={(e) => setSettingMomoNum(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 italic">
+                    Note: Cleared escrow funds will be disbursed automatically to this registered Ghanaian Mobile Money wallet.
+                  </p>
+                </div>
+
+                {/* 3. Visual Assets (Logo & Banner) */}
+                <div className="space-y-4 pt-4 border-t border-zinc-100">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                    <Layers className="h-4 w-4" />
+                    <span>Visual Assets & Storefront Branding</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700">Store Logo Image URL</label>
+                      <input
+                        type="url"
+                        placeholder="https://images.unsplash.com/..."
+                        value={settingLogo}
+                        onChange={(e) => setSettingLogo(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                      />
+                      {settingLogo && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <img
+                            src={settingLogo}
+                            alt="Logo preview"
+                            className="h-12 w-12 rounded-xl object-cover border border-zinc-200"
+                          />
+                          <span className="text-[11px] text-zinc-500">Logo preview</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700">Storefront Banner URL</label>
+                      <input
+                        type="url"
+                        placeholder="https://images.unsplash.com/..."
+                        value={settingBanner}
+                        onChange={(e) => setSettingBanner(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                      />
+                      {settingBanner && (
+                        <div className="mt-2">
+                          <img
+                            src={settingBanner}
+                            alt="Banner preview"
+                            className="h-16 w-full rounded-xl object-cover border border-zinc-200"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Commission Platform Rate Info */}
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-xs text-zinc-600 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-zinc-900">NextDor Marketplace Commission:</span>{" "}
+                    Standard {vendor.commissionRate || 10}% fee deducted only upon successful customer checkout.
+                  </div>
+                  <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-bold text-purple-700">
+                    {vendor.commissionRate || 10}% Fixed
+                  </span>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex items-center justify-end pt-4 border-t border-zinc-100">
+                  <button
+                    type="submit"
+                    disabled={isSavingSettings}
+                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>{isSavingSettings ? "Saving Settings..." : "Save Store Settings"}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Add Product Modal */}
@@ -693,7 +1669,7 @@ export default function VendorDashboardPage() {
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2.5">
                 <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                 <p>
-                  <strong>Staging Mode Active:</strong> This product will be saved to your store catalog immediately, but will remain hidden from the public marketplace until your merchant account is approved by an admin.
+                  <strong>Staging Mode Active:</strong> This product will be saved to your store catalog immediately, but will remain safely hidden from the public marketplace until your merchant application is approved by an administrator.
                 </p>
               </div>
             )}
@@ -772,16 +1748,34 @@ export default function VendorDashboardPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isCreating}
+                  disabled={isCreatingProduct}
                   className="rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
                 >
-                  {isCreating ? "Publishing..." : "Publish Product"}
+                  {isCreatingProduct ? "Publishing..." : "Publish Product"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Merchant Back-Office Footer */}
+      <footer className="mt-16 border-t border-zinc-200 bg-white py-6 text-center text-xs text-zinc-500">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>NextDor Merchant Portal • Dedicated Seller Console</span>
+          <div className="flex items-center gap-4">
+            <Link href="/" className="hover:text-purple-600 transition">
+              Customer Storefront
+            </Link>
+            <Link href="/contact" className="hover:text-purple-600 transition">
+              Merchant Support
+            </Link>
+            <Link href="/vendor/register" className="hover:text-purple-600 transition">
+              Merchant Terms
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

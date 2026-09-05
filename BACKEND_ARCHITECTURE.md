@@ -99,15 +99,16 @@ NextDor/
 │   │   ├── server.ts       # Entry point (listen)
 │   │   ├── config/         # Environment config (zod-validated)
 │   │   ├── modules/        # Feature modules (vertical slices)
-│   │   │   ├── auth/
-│   │   │   ├── users/
-│   │   │   ├── products/
-│   │   │   ├── orders/
-│   │   │   ├── payments/
-│   │   │   ├── reviews/
-│   │   │   ├── cart/
-│   │   │   ├── coupons/
-│   │   │   └── admin/
+│   │   │   ├── auth/       # JWT tokens, refresh family rotation, RBAC
+│   │   │   ├── audit/      # Tamper-proof platform audit trail
+│   │   │   ├── users/      # Profile & addresses
+│   │   │   ├── products/   # Catalog, categories, OCC locking
+│   │   │   ├── vendors/    # Merchant onboarding, sub-orders, 48h escrow, payouts
+│   │   │   ├── orders/     # Checkout, master orders
+│   │   │   ├── payments/   # Paystack gateway & webhooks
+│   │   │   ├── reviews/    # Product ratings & moderation
+│   │   │   ├── sync/       # Asynchronous WooCommerce worker
+│   │   │   └── admin/      # Platform governance & merchant approvals
 │   │   ├── lib/
 │   │   │   ├── prisma.ts
 │   │   │   ├── redis.ts
@@ -453,6 +454,89 @@ model Coupon {
 }
 
 enum DiscountType { FIXED PERCENTAGE }
+
+// ─── Multi-Vendor Marketplace & Settlements ────────────────────────
+
+model Vendor {
+  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  slug                  String        @unique
+  description           String?
+  logoUrl               String?
+  bannerUrl             String?
+  phone                 String?
+  email                 String?
+  status                VendorStatus  @default(PENDING_APPROVAL)
+  commissionRate        Decimal       @default(10.00) @db.Decimal(5, 2)
+  payoutMethod          PayoutMethod  @default(MOMO)
+  momoNumber            String?
+  momoNetwork           String?       // "MTN" | "TELECEL" | "AT"
+  ownerId               String        @unique @db.Uuid
+  owner                 User          @relation(fields: [ownerId], references: [id])
+  products              Product[]
+  vendorOrders          VendorOrder[]
+  payouts               VendorPayout[]
+}
+
+enum VendorStatus { PENDING_APPROVAL ACTIVE SUSPENDED }
+enum PayoutMethod { MOMO BANK }
+
+model VendorOrder {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId          String            @db.Uuid
+  vendorId         String            @db.Uuid
+  subtotal         Decimal           @db.Decimal(12, 2)
+  commissionAmount Decimal           @db.Decimal(12, 2)
+  vendorEarnings   Decimal           @db.Decimal(12, 2)
+  status           VendorOrderStatus @default(PENDING)
+  notes            String?
+  clearedAt        DateTime?         // 48h escrow clearance timestamp
+  payoutId         String?           @db.Uuid
+  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor           Vendor            @relation(fields: [vendorId], references: [id])
+  payout           VendorPayout?     @relation(fields: [payoutId], references: [id])
+
+  @@index([orderId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+enum VendorOrderStatus { PENDING PROCESSING SHIPPED DELIVERED CANCELLED }
+
+model VendorPayout {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId            String        @db.Uuid
+  amount              Decimal       @db.Decimal(12, 2)
+  currency            String        @default("GHS")
+  status              PayoutStatus  @default(PENDING)
+  paystackTransferRef String?       @unique
+  paidAt              DateTime?
+  vendor              Vendor        @relation(fields: [vendorId], references: [id])
+  vendorOrders        VendorOrder[]
+
+  @@index([vendorId])
+}
+
+enum PayoutStatus { PENDING PROCESSING PAID FAILED }
+
+// ─── Platform Governance & Tamper-Proof Audit Trail ────────────────
+
+model AuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?  @db.Uuid
+  userEmail String?
+  action    String   // "VENDOR_REGISTERED", "MERCHANT_APPROVED", "ORDER_DISPATCH_UPDATED", "VENDOR_PROFILE_UPDATED"
+  entity    String   // "Vendor", "VendorOrder", "User"
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
 ```
 
 ---
