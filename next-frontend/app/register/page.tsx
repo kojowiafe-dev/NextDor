@@ -99,7 +99,11 @@ export default function RegisterPage() {
     setIsSubmitting(true);
     try {
       await register({ name, email, password, phone: phone || undefined });
-      router.push("/account");
+      const searchRedirect =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("redirect")
+          : null;
+      router.push(searchRedirect || "/account");
     } catch (error) {
       setErrors({
         general: error instanceof Error ? error.message : "An unexpected error occurred.",

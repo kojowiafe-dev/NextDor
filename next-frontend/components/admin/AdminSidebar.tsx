@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -50,8 +51,14 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
           {!collapsed && (
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-white">NextDor</p>
-              <span className="rounded bg-[#ff9900]/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#ff9900]">
-                Admin
+              <span
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                  user?.role === "super_admin"
+                    ? "bg-[#ff9900]/20 text-[#ff9900]"
+                    : "bg-blue-500/20 text-blue-400"
+                }`}
+              >
+                {user?.role === "super_admin" ? "Super Admin" : "Operations"}
               </span>
             </div>
           )}
@@ -104,10 +111,22 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-white">{user?.name}</p>
-              <p className="truncate text-[10px] text-zinc-500">{user?.email}</p>
+              <p className="truncate text-[10px] text-zinc-400">
+                {user?.role === "super_admin" ? "Platform Root (Super Admin)" : "Operations Administrator"}
+              </p>
             </div>
           </div>
         )}
+        <Link
+          href="/"
+          title={collapsed ? "Back to Storefront" : undefined}
+          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/5 hover:text-white ${
+            collapsed ? "justify-center" : ""
+          }`}
+        >
+          <ExternalLink className="h-4 w-4 shrink-0 text-[#ff9900]" />
+          {!collapsed && "Back to Storefront"}
+        </Link>
         <button
           type="button"
           onClick={logout}

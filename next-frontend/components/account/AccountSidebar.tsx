@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
@@ -10,6 +10,8 @@ import {
   Heart,
   Lock,
   LogOut,
+  ShieldCheck,
+  Store,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -23,7 +25,8 @@ const navItems = [
 ];
 
 export function AccountSidebar() {
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { user, isAdmin, isVendor, logout } = useAuth();
   const pathname = usePathname();
 
   return (
@@ -38,6 +41,41 @@ export function AccountSidebar() {
           <p className="truncate text-xs text-zinc-500">{user?.email}</p>
         </div>
       </div>
+
+      {/* Management Portal Shortcut */}
+      {isAdmin && (
+        <div className="border-b border-zinc-100 bg-amber-50/60 p-3">
+          <Link
+            href="/admin"
+            className="flex items-center justify-between rounded-lg bg-amber-500/15 border border-amber-300/60 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-500/25 transition"
+          >
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-amber-600" />
+              <span>Admin Portal</span>
+            </div>
+            <span className="rounded bg-[#ff9900] px-1.5 py-0.5 text-[10px] font-bold text-zinc-900 uppercase">
+              Admin
+            </span>
+          </Link>
+        </div>
+      )}
+
+      {isVendor && !isAdmin && (
+        <div className="border-b border-zinc-100 bg-purple-50/60 p-3">
+          <Link
+            href="/vendor/dashboard"
+            className="flex items-center justify-between rounded-lg bg-purple-500/15 border border-purple-300/60 px-3 py-2 text-xs font-bold text-purple-900 hover:bg-purple-500/25 transition"
+          >
+            <div className="flex items-center gap-2">
+              <Store className="h-4 w-4 text-purple-600" />
+              <span>Vendor Portal</span>
+            </div>
+            <span className="rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
+              Merchant
+            </span>
+          </Link>
+        </div>
+      )}
 
       {/* Nav links */}
       <nav className="flex flex-col gap-0.5 p-3">
@@ -67,7 +105,10 @@ export function AccountSidebar() {
       <div className="border-t border-zinc-100 p-3">
         <button
           type="button"
-          onClick={logout}
+          onClick={() => {
+            logout();
+            router.push("/login");
+          }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-red-50 hover:text-red-600"
         >
           <LogOut className="h-4 w-4 shrink-0 text-zinc-400" />
@@ -87,6 +128,7 @@ const mobileNavItems = [
 ];
 
 export function AccountBottomNav() {
+  const router = useRouter();
   const { logout } = useAuth();
   const pathname = usePathname();
 
@@ -111,7 +153,10 @@ export function AccountBottomNav() {
         })}
         <button
           type="button"
-          onClick={logout}
+          onClick={() => {
+            logout();
+            router.push("/login");
+          }}
           className="flex flex-col items-center gap-1 px-3 py-3 text-xs font-medium text-zinc-500 hover:text-red-600"
         >
           <LogOut className="h-5 w-5" />

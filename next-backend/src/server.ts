@@ -79,6 +79,14 @@ async function main() {
     process.exit(1);
   });
 
+  // Pre-warm database connection to prevent cold-start latency on first request
+  try {
+    await prisma.$connect();
+    logger.info("⚡ Database connection pool established (Neon Serverless)");
+  } catch (err) {
+    logger.warn({ err }, "Initial database pool warm-up deferred — will connect on demand");
+  }
+
   // Start listening
   try {
     const address = await app.listen({ port: config.PORT, host: config.HOST });

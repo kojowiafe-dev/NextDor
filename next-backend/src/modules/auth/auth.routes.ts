@@ -36,8 +36,9 @@ declare module "fastify" {
     clearCookie(name: string, options?: any): this;
   }
 }
-import { AuthService } from "./auth.service.js";
+import { AuthService, authService } from "./auth.service.js";
 import { registerSchema, loginSchema, forgotPasswordSchema } from "@nextdor/shared";
+import { prisma } from "../../lib/prisma.js";
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 
@@ -82,18 +83,31 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = registerSchema.parse(req.body);
 
-      const { user, tokens } = await AuthService.register(body);
+      try {
+        const { user, tokens } = await authService.register(body);
 
-      reply
-        .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
-        .status(201)
-        .send({
-          success: true,
-          data: {
-            user,
-            accessToken: tokens.accessToken,
-          },
-        });
+        req.log.info(
+          { ip: req.ip, userId: user.id, email: user.email, userAgent: req.headers["user-agent"] },
+          "security: user registered successfully"
+        );
+
+        reply
+          .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
+          .status(201)
+          .send({
+            success: true,
+            data: {
+              user,
+              accessToken: tokens.accessToken,
+            },
+          });
+      } catch (err: any) {
+        req.log.warn(
+          { ip: req.ip, email: body.email, err: err.message, userAgent: req.headers["user-agent"] },
+          "security: registration failed"
+        );
+        throw err;
+      }
     },
   );
 
@@ -126,17 +140,30 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = loginSchema.parse(req.body);
 
-      const { user, tokens } = await AuthService.login(body);
+      try {
+        const { user, tokens } = await authService.login(body);
 
-      reply
-        .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
-        .send({
-          success: true,
-          data: {
-            user,
-            accessToken: tokens.accessToken,
-          },
-        });
+        req.log.info(
+          { ip: req.ip, userId: user.id, email: user.email, role: user.role, userAgent: req.headers["user-agent"] },
+          "security: user logged in successfully"
+        );
+
+        reply
+          .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
+          .send({
+            success: true,
+            data: {
+              user,
+              accessToken: tokens.accessToken,
+            },
+          });
+      } catch (err: any) {
+        req.log.warn(
+          { ip: req.ip, email: body.email, err: err.message, userAgent: req.headers["user-agent"] },
+          "security: failed login attempt"
+        );
+        throw err;
+      }
     },
   );
 
@@ -167,7 +194,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const tokens = await AuthService.refresh(rawToken);
+      const tokens = await authService.refresh(rawToken);
+
+      req.log.info({ ip: req.ip }, "security: session token refreshed");
 
       reply
         .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
@@ -198,8 +227,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const rawToken = req.cookies[REFRESH_COOKIE_NAME];
 
       if (rawToken) {
-        await AuthService.logout(rawToken);
+        await authService.logout(rawToken);
       }
+
+      req.log.info({ ip: req.ip }, "security: user logged out, session terminated");
 
       // Clear the cookie by setting maxAge to 0
       reply
@@ -281,12 +312,18 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const token = authHeader.slice(7);
       const payload = AuthService.verifyAccessToken(token);
 
-      const user = await import("../../lib/prisma.js").then(({ prisma }) =>
-        prisma.user.findUnique({
-          where: { id: payload.sub },
-          select: { id: true, email: true, name: true, phone: true, role: true },
-        }),
-      );
+      const user = await prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          role: true,
+          vendorId: true,
+          status: true,
+        },
+      });
 
       if (!user) {
         return reply.status(401).send({

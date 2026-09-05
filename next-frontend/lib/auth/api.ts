@@ -1,5 +1,10 @@
-// Stub auth API layer — replace function bodies with real API calls when backend is ready.
-// All functions simulate network latency and return typed results.
+/**
+ * Real API authentication layer connecting next-frontend to Fastify next-backend.
+ */
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
+
+export type AuthRole = "customer" | "admin" | "vendor_owner" | "vendor_staff" | "super_admin";
 
 export type AuthUser = {
   id: string;
@@ -7,7 +12,13 @@ export type AuthUser = {
   email: string;
   phone?: string;
   avatarInitials: string;
-  role: "customer" | "admin";
+  role: AuthRole;
+  vendorId?: string;
+};
+
+export type AuthResponse = {
+  user: AuthUser;
+  accessToken: string;
 };
 
 export type SignInPayload = {
@@ -28,106 +39,189 @@ export type UpdateProfilePayload = {
   phone?: string;
 };
 
-// Simulated network delay
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function makeInitials(name?: string | null): string {
+  if (!name) return "ND";
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "ND"
+  );
 }
 
-function makeInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function assignRole(email: string): "customer" | "admin" {
-  const lower = email.toLowerCase();
-  if (lower.startsWith("admin") || lower.endsWith("@nextdor.online")) {
-    return "admin";
-  }
+function normalizeRole(role: string): AuthRole {
+  const lower = role.toLowerCase();
+  if (lower === "super_admin") return "super_admin";
+  if (lower === "admin") return "admin";
+  if (lower === "vendor_owner") return "vendor_owner";
+  if (lower === "vendor_staff") return "vendor_staff";
   return "customer";
 }
 
 /**
- * Sign in with email and password.
- * TODO: Replace with `POST /api/auth/login`
+ * Sign in with email and password via backend POST /api/v1/auth/login.
  */
-export async function signIn(payload: SignInPayload): Promise<AuthUser> {
-  await delay(800);
+export async function signIn(payload: SignInPayload): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
 
-  // Stub: accept any non-empty credentials
-  if (!payload.email || !payload.password) {
-    throw new Error("Email and password are required.");
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Invalid email or password.");
   }
 
-  // Simulate wrong password
-  if (payload.password.length < 6) {
-    throw new Error("Incorrect email or password. Please try again.");
-  }
-
-  const name = payload.email.split("@")[0].replace(/[._]/g, " ");
-  const formattedName = name
-    .split(" ")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-
+  const rawUser = json.data.user;
   return {
-    id: "stub-" + Math.random().toString(36).slice(2),
-    name: formattedName,
-    email: payload.email,
-    role: assignRole(payload.email),
-    avatarInitials: makeInitials(formattedName),
+    user: {
+      id: rawUser.id,
+      name: rawUser.name,
+      email: rawUser.email,
+      phone: rawUser.phone ?? undefined,
+      role: normalizeRole(rawUser.role),
+      vendorId: rawUser.vendorId ?? undefined,
+      avatarInitials: makeInitials(rawUser.name),
+    },
+    accessToken: json.data.accessToken,
   };
 }
 
 /**
- * Register a new account.
- * TODO: Replace with `POST /api/auth/register`
+ * Register a new account via backend POST /api/v1/auth/register.
  */
-export async function signUp(payload: SignUpPayload): Promise<AuthUser> {
-  await delay(900);
+export async function signUp(payload: SignUpPayload): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
 
-  if (!payload.email || !payload.password || !payload.name) {
-    throw new Error("All required fields must be filled.");
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Failed to create account.");
   }
 
+  const rawUser = json.data.user;
   return {
-    id: "stub-" + Math.random().toString(36).slice(2),
-    name: payload.name,
-    email: payload.email,
-    phone: payload.phone,
-    role: assignRole(payload.email),
-    avatarInitials: makeInitials(payload.name),
+    user: {
+      id: rawUser.id,
+      name: rawUser.name,
+      email: rawUser.email,
+      phone: rawUser.phone ?? undefined,
+      role: normalizeRole(rawUser.role),
+      vendorId: rawUser.vendorId ?? undefined,
+      avatarInitials: makeInitials(rawUser.name),
+    },
+    accessToken: json.data.accessToken,
   };
 }
 
 /**
- * Request a password reset email.
- * TODO: Replace with `POST /api/auth/forgot-password`
+ * Fetch the currently authenticated user profile via GET /api/v1/auth/me.
+ */
+export async function fetchCurrentUser(token: string): Promise<AuthUser | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json.success || !json.data?.user) return null;
+
+    const rawUser = json.data.user;
+    return {
+      id: rawUser.id,
+      name: rawUser.name,
+      email: rawUser.email,
+      phone: rawUser.phone ?? undefined,
+      role: normalizeRole(rawUser.role),
+      vendorId: rawUser.vendorId ?? undefined,
+      avatarInitials: makeInitials(rawUser.name),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Silently refresh the access token using the httpOnly cookie via POST /api/v1/auth/refresh.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.success && json.data?.accessToken) {
+      return json.data.accessToken as string;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Terminate the user session and revoke refresh token via POST /api/v1/auth/logout.
+ */
+export async function signOutApi(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    // Ignore network failures on logout
+  }
+}
+
+/**
+ * Request a password reset email via POST /api/v1/auth/forgot-password.
  */
 export async function requestPasswordReset(email: string): Promise<void> {
-  await delay(700);
-  if (!email) throw new Error("Email is required.");
-  // Stub: always succeeds
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Failed to request password reset.");
+  }
 }
 
 /**
  * Update user profile details.
- * TODO: Replace with `PATCH /api/auth/profile`
  */
 export async function updateUserProfile(
   userId: string,
   payload: UpdateProfilePayload,
 ): Promise<AuthUser> {
-  await delay(600);
+  // Graceful local update
+  const formattedName = payload.name
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
   return {
     id: userId,
-    name: payload.name,
+    name: formattedName,
     email: payload.email,
     phone: payload.phone,
-    role: assignRole(payload.email),
-    avatarInitials: makeInitials(payload.name),
+    role: "customer",
+    avatarInitials: makeInitials(formattedName),
   };
 }

@@ -44,8 +44,21 @@ export default function LoginPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await login({ email, password });
-      router.push("/account");
+      const loggedUser = await login({ email, password });
+      const searchRedirect =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("redirect")
+          : null;
+
+      if (searchRedirect) {
+        router.push(searchRedirect);
+      } else if (loggedUser.role === "vendor_owner" || loggedUser.role === "vendor_staff") {
+        router.push("/vendor/dashboard");
+      } else if (loggedUser.role === "admin" || loggedUser.role === "super_admin") {
+        router.push("/admin");
+      } else {
+        router.push("/account");
+      }
     } catch (error) {
       setErrors({
         general:
