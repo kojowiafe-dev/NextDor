@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, X, User, Package, LogOut, LogIn } from "lucide-react";
+import { Menu, X, User, Package, LogOut, LogIn, ShieldCheck, Store } from "lucide-react";
 import type { Category } from "@/lib/catalog/types";
 import { useAuth } from "@/context/AuthContext";
 
@@ -11,8 +12,9 @@ type MobileNavProps = {
 };
 
 export function MobileNav({ categories }: MobileNavProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, isAdmin, isVendor, logout } = useAuth();
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -74,6 +76,39 @@ export function MobileNav({ categories }: MobileNavProps) {
                       <p className="truncate text-xs text-zinc-400">{user?.email}</p>
                     </div>
                   </div>
+
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={close}
+                      className="my-1 flex items-center justify-between rounded-lg bg-[#ff9900]/20 border border-[#ff9900]/40 px-3 py-2 text-sm font-bold text-[#ff9900] hover:bg-[#ff9900]/30"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <ShieldCheck className="h-4 w-4 text-[#ff9900]" />
+                        <span>Admin Portal</span>
+                      </div>
+                      <span className="rounded bg-[#ff9900] px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-900 uppercase">
+                        Admin
+                      </span>
+                    </Link>
+                  )}
+
+                  {isVendor && !isAdmin && (
+                    <Link
+                      href="/vendor/dashboard"
+                      onClick={close}
+                      className="my-1 flex items-center justify-between rounded-lg bg-purple-500/20 border border-purple-400/40 px-3 py-2 text-sm font-bold text-purple-300 hover:bg-purple-500/30"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Store className="h-4 w-4 text-purple-400" />
+                        <span>Vendor Portal</span>
+                      </div>
+                      <span className="rounded bg-purple-500 px-1.5 py-0.5 text-[10px] font-extrabold text-white uppercase">
+                        Merchant
+                      </span>
+                    </Link>
+                  )}
+
                   <Link
                     href="/account"
                     onClick={close}
@@ -92,7 +127,11 @@ export function MobileNav({ categories }: MobileNavProps) {
                   </Link>
                   <button
                     type="button"
-                    onClick={() => { logout(); close(); }}
+                    onClick={() => {
+                      logout();
+                      close();
+                      router.push("/login");
+                    }}
                     className="flex w-full items-center gap-3 rounded px-3 py-2 text-sm text-red-400 hover:bg-white/10"
                   >
                     <LogOut className="h-4 w-4" />

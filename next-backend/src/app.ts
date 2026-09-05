@@ -22,6 +22,9 @@ import { logger } from "./lib/logger.js";
 import { isAppError } from "./lib/errors.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
+import { syncRoutes } from "./modules/sync/sync.routes.js";
+import { productRoutes } from "./modules/products/product.routes.js";
+import { vendorRoutes } from "./modules/vendors/vendor.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -47,6 +50,25 @@ export async function buildApp() {
       },
     },
   });
+
+  // Gracefully handle empty JSON bodies (e.g. POST requests with Content-Type: application/json but no body)
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_req, body: string, done) => {
+      if (!body || body.trim() === "") {
+        done(null, {});
+        return;
+      }
+      try {
+        const json = JSON.parse(body);
+        done(null, json);
+      } catch (err: any) {
+        err.statusCode = 400;
+        done(err, undefined);
+      }
+    },
+  );
 
   // ── Plugins (order matters — each can depend on the previous) ────────────
 
@@ -151,6 +173,18 @@ export async function buildApp() {
       });
     }
 
+    // Fastify client errors (e.g. 400 Bad Request, 415 Unsupported Media, etc.)
+    if (error.statusCode && error.statusCode < 500) {
+      req.log.warn({ err: error }, "Client request error");
+      return reply.status(error.statusCode).send({
+        success: false,
+        error: {
+          code: error.code ?? "BAD_REQUEST",
+          message: error.message,
+        },
+      });
+    }
+
     // Unknown / programming error — log full stack, return generic 500
     // SECURITY: Never send the real error.message to clients for 500s —
     // it might reveal implementation details or file paths.
@@ -180,10 +214,11 @@ export async function buildApp() {
   // Health check (no auth — used by load balancer / Docker health checks)
   await app.register(healthRoutes, { prefix: "/health" });
 
-  // All API routes will be registered under /api/v1 in Phase 2+
+  // All API routes registered under /api/v1
   await app.register(authRoutes,    { prefix: "/api/v1/auth" });
-  // await app.register(productRoutes, { prefix: "/api/v1/products" });
-  // ... etc.
+  await app.register(syncRoutes,    { prefix: "/api/v1/sync" });
+  await app.register(productRoutes, { prefix: "/api/v1/products" });
+  await app.register(vendorRoutes,  { prefix: "/api/v1/vendors" });
 
   return app;
 }

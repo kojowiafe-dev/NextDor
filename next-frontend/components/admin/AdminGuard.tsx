@@ -9,7 +9,7 @@ type AdminGuardProps = {
 };
 
 export function AdminGuard({ children }: AdminGuardProps) {
-  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isVendor, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -19,9 +19,13 @@ export function AdminGuard({ children }: AdminGuardProps) {
       return;
     }
     if (!isAdmin) {
-      router.replace("/");
+      if (isVendor) {
+        router.replace("/vendor/dashboard");
+      } else {
+        router.replace("/");
+      }
     }
-  }, [isLoading, isAuthenticated, isAdmin, router]);
+  }, [isLoading, isAuthenticated, isAdmin, isVendor, router]);
 
   if (isLoading) {
     return (

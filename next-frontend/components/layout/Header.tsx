@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { MapPin, ShoppingCart, User, ChevronDown, LogOut, Package, Settings } from "lucide-react";
+import { MapPin, ShoppingCart, User, ChevronDown, LogOut, Package, Settings, ShieldCheck, Store } from "lucide-react";
 import type { Category } from "@/lib/catalog/types";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -14,7 +15,8 @@ type HeaderProps = {
 };
 
 function AccountDropdown() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const router = useRouter();
+  const { user, isAuthenticated, isAdmin, isVendor, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -68,11 +70,44 @@ function AccountDropdown() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl bg-white py-1 shadow-xl ring-1 ring-zinc-100">
+        <div className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl bg-white py-1 shadow-xl ring-1 ring-zinc-100">
           <div className="border-b border-zinc-100 px-4 py-3">
             <p className="truncate font-semibold text-zinc-900 text-sm">{user?.name}</p>
             <p className="truncate text-xs text-zinc-500">{user?.email}</p>
           </div>
+
+          {isAdmin && (
+            <div className="border-b border-zinc-100 bg-amber-50/70 p-2">
+              <Link
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-500/25 transition"
+              >
+                <ShieldCheck className="h-4 w-4 text-amber-600" />
+                <span>Admin Portal</span>
+                <span className="ml-auto rounded bg-[#ff9900] px-1.5 py-0.5 text-[10px] font-bold text-zinc-900 uppercase">
+                  Admin
+                </span>
+              </Link>
+            </div>
+          )}
+
+          {isVendor && !isAdmin && (
+            <div className="border-b border-zinc-100 bg-purple-50/70 p-2">
+              <Link
+                href="/vendor/dashboard"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg bg-purple-500/15 px-3 py-2 text-xs font-bold text-purple-900 hover:bg-purple-500/25 transition"
+              >
+                <Store className="h-4 w-4 text-purple-600" />
+                <span>Vendor Portal</span>
+                <span className="ml-auto rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
+                  Merchant
+                </span>
+              </Link>
+            </div>
+          )}
+
           {[
             { label: "My Account", href: "/account", icon: User },
             { label: "My Orders", href: "/account/orders", icon: Package },
@@ -91,7 +126,11 @@ function AccountDropdown() {
           <div className="border-t border-zinc-100 mt-1">
             <button
               type="button"
-              onClick={() => { logout(); setOpen(false); }}
+              onClick={() => {
+                logout();
+                setOpen(false);
+                router.push("/login");
+              }}
               className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-700 hover:bg-red-50 hover:text-red-600"
             >
               <LogOut className="h-4 w-4 text-zinc-400" />
@@ -106,6 +145,7 @@ function AccountDropdown() {
 
 export function Header({ categories }: HeaderProps) {
   const { itemCount } = useCart();
+  const { isAdmin, isVendor } = useAuth();
 
   return (
     <header className="bg-[#131921] text-white">
@@ -129,7 +169,27 @@ export function Header({ categories }: HeaderProps) {
 
         <SearchBar className="hidden md:flex" />
 
-        <div className="ml-auto flex items-center gap-4 text-sm">
+        <div className="ml-auto flex items-center gap-3 text-sm">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="hidden items-center gap-1.5 rounded-lg bg-[#ff9900]/15 border border-[#ff9900]/40 px-2.5 py-1.5 text-xs font-bold text-[#ff9900] hover:bg-[#ff9900]/25 transition md:flex"
+            >
+              <ShieldCheck className="h-4 w-4 text-[#ff9900]" />
+              <span>Admin Portal</span>
+            </Link>
+          )}
+
+          {isVendor && !isAdmin && (
+            <Link
+              href="/vendor/dashboard"
+              className="hidden items-center gap-1.5 rounded-lg bg-purple-500/20 border border-purple-400/40 px-2.5 py-1.5 text-xs font-bold text-purple-300 hover:bg-purple-500/30 transition md:flex"
+            >
+              <Store className="h-4 w-4 text-purple-400" />
+              <span>Vendor Portal</span>
+            </Link>
+          )}
+
           <AccountDropdown />
 
           <Link
