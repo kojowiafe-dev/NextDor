@@ -247,7 +247,7 @@ export class OrderRepository {
         skip,
         take: limit,
         include: {
-          items: { select: { productName: true, quantity: true } },
+          items: { select: { productName: true, quantity: true, unitPrice: true } },
           user: { select: { name: true, email: true } },
         },
       }),

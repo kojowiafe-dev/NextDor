@@ -78,6 +78,9 @@ export async function signIn(payload: SignInPayload): Promise<AuthResponse> {
   }
 
   const rawUser = json.data.user;
+  if (typeof window !== "undefined" && json.data.refreshToken) {
+    localStorage.setItem("nextdor-refresh-token", json.data.refreshToken);
+  }
   return {
     user: {
       id: rawUser.id,
@@ -109,6 +112,9 @@ export async function signUp(payload: SignUpPayload): Promise<AuthResponse> {
   }
 
   const rawUser = json.data.user;
+  if (typeof window !== "undefined" && json.data.refreshToken) {
+    localStorage.setItem("nextdor-refresh-token", json.data.refreshToken);
+  }
   return {
     user: {
       id: rawUser.id,
@@ -153,18 +159,27 @@ export async function fetchCurrentUser(token: string): Promise<AuthUser | null> 
 }
 
 /**
- * Silently refresh the access token using the httpOnly cookie via POST /api/v1/auth/refresh.
+ * Silently refresh the access token using cookie or fallback stored token via POST /api/v1/auth/refresh.
  */
 export async function refreshAccessToken(): Promise<string | null> {
   try {
+    const storedRefresh = typeof window !== "undefined" ? localStorage.getItem("nextdor-refresh-token") : null;
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(storedRefresh ? { "x-refresh-token": storedRefresh } : {}),
+      },
       credentials: "include",
+      body: JSON.stringify({ refreshToken: storedRefresh || undefined }),
     });
 
     if (!res.ok) return null;
     const json = await res.json();
     if (json.success && json.data?.accessToken) {
+      if (json.data.refreshToken && typeof window !== "undefined") {
+        localStorage.setItem("nextdor-refresh-token", json.data.refreshToken);
+      }
       return json.data.accessToken as string;
     }
     return null;
@@ -178,9 +193,18 @@ export async function refreshAccessToken(): Promise<string | null> {
  */
 export async function signOutApi(): Promise<void> {
   try {
+    const storedRefresh = typeof window !== "undefined" ? localStorage.getItem("nextdor-refresh-token") : null;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("nextdor-refresh-token");
+    }
     await fetch(`${API_BASE}/auth/logout`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(storedRefresh ? { "x-refresh-token": storedRefresh } : {}),
+      },
       credentials: "include",
+      body: JSON.stringify({ refreshToken: storedRefresh || undefined }),
     });
   } catch {
     // Ignore network failures on logout

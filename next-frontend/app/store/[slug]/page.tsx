@@ -34,7 +34,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v
 async function getVendorData(slug: string): Promise<{ vendor: VendorDetails; products: ProductItem[] } | null> {
   try {
     const res = await fetch(`${API_BASE}/vendors/${slug}`, {
-      cache: "no-store",
+      next: { revalidate: 60 },
     });
     if (!res.ok) return null;
     const json = await res.json();
@@ -196,7 +196,7 @@ export default async function VendorStorefrontPage({
                       </div>
 
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           prod.stockStatus === "IN_STOCK"
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : "bg-red-50 text-red-700 border border-red-200"

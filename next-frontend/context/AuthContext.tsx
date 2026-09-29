@@ -38,6 +38,27 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const STORAGE_KEY = "nextdor-auth";
 const TOKEN_KEY = "nextdor-token";
 
+function isJwtExpired(jwtToken: string): boolean {
+  try {
+    const parts = jwtToken.split(".");
+    if (parts.length !== 3) return false;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const parsed = JSON.parse(jsonPayload);
+    if (typeof parsed.exp !== "number") return false;
+    // Expired if current time is past exp minus a 30s buffer
+    return Date.now() >= (parsed.exp - 30) * 1000;
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -59,36 +80,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setToken(storedToken);
           }
 
-          // Verify token validity against backend GET /auth/me
-          const freshUser = await fetchCurrentUser(storedToken);
-          if (freshUser) {
-            if (isMounted) {
-              setUser(freshUser);
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(freshUser));
+          const expired = isJwtExpired(storedToken);
+
+          if (!expired) {
+            // Token is still active and valid — verify quietly in background
+            try {
+              const freshUser = await fetchCurrentUser(storedToken);
+              if (freshUser && isMounted) {
+                setUser(freshUser);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(freshUser));
+              }
+            } catch {
+              // Network blip / transient timeout — preserve authenticated session
             }
           } else {
-            // Access token might be expired — attempt silent cookie refresh
-            const newAccessToken = await refreshAccessToken();
-            if (newAccessToken) {
-              const refreshedUser = await fetchCurrentUser(newAccessToken);
-              if (refreshedUser && isMounted) {
-                setUser(refreshedUser);
-                setToken(newAccessToken);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshedUser));
-                localStorage.setItem(TOKEN_KEY, newAccessToken);
-                if (refreshedUser.role === "vendor_owner" || refreshedUser.role === "vendor_staff" || refreshedUser.vendorId) {
-                  localStorage.setItem("vendor_token", newAccessToken);
+            // Access token expired — attempt silent refresh
+            try {
+              const newAccessToken = await refreshAccessToken();
+              if (newAccessToken) {
+                const refreshedUser = await fetchCurrentUser(newAccessToken);
+                if (refreshedUser && isMounted) {
+                  setUser(refreshedUser);
+                  setToken(newAccessToken);
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshedUser));
+                  localStorage.setItem(TOKEN_KEY, newAccessToken);
+                  if (refreshedUser.role === "vendor_owner" || refreshedUser.role === "vendor_staff" || refreshedUser.vendorId) {
+                    localStorage.setItem("vendor_token", newAccessToken);
+                  }
+                }
+              } else {
+                // Refresh failed — both access and refresh tokens expired
+                if (isMounted) {
+                  setUser(null);
+                  setToken(null);
+                  localStorage.removeItem(STORAGE_KEY);
+                  localStorage.removeItem(TOKEN_KEY);
+                  localStorage.removeItem("vendor_token");
+                  localStorage.removeItem("nextdor-refresh-token");
                 }
               }
-            } else {
-              // Session expired completely
-              if (isMounted) {
-                setUser(null);
-                setToken(null);
-                localStorage.removeItem(STORAGE_KEY);
-                localStorage.removeItem(TOKEN_KEY);
-                localStorage.removeItem("vendor_token");
-              }
+            } catch {
+              // Refresh endpoint error
             }
           }
         }
@@ -146,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem("vendor_token");
+      localStorage.removeItem("nextdor-refresh-token");
     }
 
     await signOutApi();

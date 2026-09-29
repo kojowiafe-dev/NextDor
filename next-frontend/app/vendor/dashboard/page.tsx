@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { createSWRCache } from "@/lib/cache/clientCache";
 import {
   Store,
   Package,
@@ -153,6 +154,17 @@ interface VendorPayout {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
+interface VendorPortalSnapshot {
+  vendor: VendorInfo;
+  stats: VendorStats | null;
+  products: VendorProduct[];
+  orders: VendorOrder[];
+  payouts: VendorPayout[];
+  escrowSummary: EscrowSummary | null;
+}
+
+const vendorPortalCache = createSWRCache<VendorPortalSnapshot>("nextdor_vendor_portal", 3 * 60_000);
+
 export default function VendorDashboardPage() {
   const router = useRouter();
   const { user, token: authToken, isAuthenticated, isLoading: authLoading, logout } = useAuth();
@@ -217,6 +229,7 @@ export default function VendorDashboardPage() {
   }
 
   function handleVendorSignOut() {
+    vendorPortalCache.invalidateAll();
     logout();
     if (typeof window !== "undefined") {
       localStorage.removeItem("vendor_token");
@@ -231,21 +244,49 @@ export default function VendorDashboardPage() {
     router.replace("/login?redirect=/vendor/dashboard");
   }
 
-  async function loadVendorData() {
-    setIsDataLoading(true);
+  function handleManualRefresh() {
+    vendorPortalCache.invalidateAll();
+    loadVendorData(true);
+  }
+
+  async function loadVendorData(forceRefresh = false) {
     setErrorNotice(null);
     setIsNotVendor(false);
-    try {
-      const token = getValidToken();
-      if (!token) {
-        router.replace("/login?redirect=/vendor/dashboard");
-        return;
-      }
 
+    const token = getValidToken();
+    if (!token) {
+      router.replace("/login?redirect=/vendor/dashboard");
+      return;
+    }
+
+    // 1. INSTANT: serve from cache if available
+    const { data: cached, isStale, hasData } = vendorPortalCache.getEntry();
+    if (hasData && !forceRefresh) {
+      setVendor(cached!.vendor);
+      setStats(cached!.stats);
+      setProducts(cached!.products);
+      setOrders(cached!.orders);
+      setPayouts(cached!.payouts);
+      setEscrowSummary(cached!.escrowSummary);
+
+      setSettingName(cached!.vendor.name || "");
+      setSettingDesc(cached!.vendor.description || "");
+      setSettingPhone(cached!.vendor.phone || "");
+      setSettingMomoNet(cached!.vendor.momoNetwork || "MTN");
+      setSettingMomoNum(cached!.vendor.momoNumber || "");
+      setSettingLogo(cached!.vendor.logoUrl || "");
+      setSettingBanner(cached!.vendor.bannerUrl || "");
+
+      setIsDataLoading(false);
+      if (!isStale) return; // Completely fresh — background fetch skipped
+    } else if (!hasData) {
+      setIsDataLoading(true);
+    }
+
+    try {
       // 1. Fetch dashboard overview & stats
       const dashRes = await fetch(`${API_BASE}/vendors/portal/me`, {
         headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
       });
       const dashJson = await dashRes.json();
 
@@ -268,10 +309,15 @@ export default function VendorDashboardPage() {
         return;
       }
 
+      let freshVendor: VendorInfo | null = null;
+      let freshStats: VendorStats | null = null;
+
       if (dashJson.success && dashJson.data?.vendor) {
         const v = dashJson.data.vendor;
+        freshVendor = v;
+        freshStats = dashJson.data.stats || null;
         setVendor(v);
-        setStats(dashJson.data.stats);
+        setStats(freshStats);
         setIsNotVendor(false);
 
         // Pre-fill settings form
@@ -290,40 +336,63 @@ export default function VendorDashboardPage() {
         setErrorNotice(dashJson.error?.message || "Failed to load store information.");
       }
 
-      // 2. Fetch vendor products with OCC versions
-      const prodRes = await fetch(`${API_BASE}/vendors/portal/products?limit=50`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const prodJson = await prodRes.json();
+      // 2. Fetch products, orders, and payouts concurrently
+      const [prodRes, ordersRes, payoutsRes] = await Promise.all([
+        fetch(`${API_BASE}/vendors/portal/products?limit=50`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE}/vendors/portal/orders?limit=50`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE}/vendors/portal/payouts?limit=50`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      const [prodJson, ordersJson, payoutsJson] = await Promise.all([
+        prodRes.json(),
+        ordersRes.json(),
+        payoutsRes.json(),
+      ]);
+
+      let freshProducts: VendorProduct[] = [];
+      let freshOrders: VendorOrder[] = [];
+      let freshPayouts: VendorPayout[] = [];
+      let freshEscrow: EscrowSummary | null = null;
+
       if (prodJson.success && prodJson.data?.products) {
-        setProducts(prodJson.data.products);
+        freshProducts = prodJson.data.products;
+        setProducts(freshProducts);
       }
 
-      // 3. Fetch vendor sub-orders
-      const ordersRes = await fetch(`${API_BASE}/vendors/portal/orders?limit=50`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const ordersJson = await ordersRes.json();
       if (ordersJson.success && ordersJson.data?.orders) {
-        setOrders(ordersJson.data.orders);
+        freshOrders = ordersJson.data.orders;
+        setOrders(freshOrders);
       }
 
-      // 4. Fetch vendor payouts & escrow breakdown
-      const payoutsRes = await fetch(`${API_BASE}/vendors/portal/payouts?limit=50`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const payoutsJson = await payoutsRes.json();
       if (payoutsJson.success && payoutsJson.data) {
-        setPayouts(payoutsJson.data.payouts || []);
+        freshPayouts = payoutsJson.data.payouts || [];
+        setPayouts(freshPayouts);
         if (payoutsJson.data.escrowSummary) {
-          setEscrowSummary(payoutsJson.data.escrowSummary);
+          freshEscrow = payoutsJson.data.escrowSummary;
+          setEscrowSummary(freshEscrow);
         }
       }
+
+      if (freshVendor) {
+        vendorPortalCache.set({
+          vendor: freshVendor,
+          stats: freshStats,
+          products: freshProducts,
+          orders: freshOrders,
+          payouts: freshPayouts,
+          escrowSummary: freshEscrow,
+        });
+      }
     } catch (err: any) {
-      setErrorNotice(`Failed to connect to marketplace API: ${err.message}`);
+      if (!hasData) {
+        setErrorNotice(`Failed to connect to marketplace API: ${err.message}`);
+      }
     } finally {
       setIsDataLoading(false);
     }
@@ -387,6 +456,7 @@ export default function VendorDashboardPage() {
 
       setSuccessNotice(`Successfully updated ${product.name} (OCC v${json.data.product.version})!`);
       setEditingId(null);
+      vendorPortalCache.invalidateAll();
       setProducts((prev) =>
         prev.map((p) => (p.id === product.id ? json.data.product : p))
       );
@@ -433,7 +503,8 @@ export default function VendorDashboardPage() {
       setNewProdDesc("");
       setNewProdPrice("");
       setNewProdImage("");
-      loadVendorData();
+      vendorPortalCache.invalidateAll();
+      loadVendorData(true);
     } catch (err: any) {
       setErrorNotice(`Error creating product: ${err.message}`);
     } finally {
@@ -475,7 +546,8 @@ export default function VendorDashboardPage() {
       );
 
       // Refresh orders and escrow metrics
-      await loadVendorData();
+      vendorPortalCache.invalidateAll();
+      await loadVendorData(true);
     } catch (err: any) {
       setErrorNotice(`Network error: ${err.message}`);
     } finally {
@@ -517,6 +589,7 @@ export default function VendorDashboardPage() {
       }
 
       setVendor(json.data.vendor);
+      vendorPortalCache.invalidateAll();
       setSuccessNotice("Store profile & Mobile Money payout settings updated successfully!");
     } catch (err: any) {
       setErrorNotice(`Error updating settings: ${err.message}`);
@@ -601,7 +674,7 @@ export default function VendorDashboardPage() {
           <div className="mt-5 flex items-center justify-center gap-3">
             <button
               type="button"
-              onClick={loadVendorData}
+              onClick={handleManualRefresh}
               className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 transition"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -888,7 +961,7 @@ export default function VendorDashboardPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={loadVendorData}
+                    onClick={handleManualRefresh}
                     disabled={isDataLoading}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                   >
@@ -988,7 +1061,7 @@ export default function VendorDashboardPage() {
 
                             <td className="px-6 py-4">
                               <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                                   prod.stockStatus === "IN_STOCK"
                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                     : prod.stockStatus === "LOW_STOCK"
@@ -1090,7 +1163,7 @@ export default function VendorDashboardPage() {
                   )
                 )}
                 <button
-                  onClick={loadVendorData}
+                  onClick={handleManualRefresh}
                   disabled={isDataLoading}
                   className="rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-600 hover:bg-zinc-50"
                   title="Refresh orders"
@@ -1412,7 +1485,7 @@ export default function VendorDashboardPage() {
                   <p className="text-xs text-zinc-500">Record of electronic transfers sent to your registered Mobile Money wallet.</p>
                 </div>
                 <button
-                  onClick={loadVendorData}
+                  onClick={handleManualRefresh}
                   disabled={isDataLoading}
                   className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                 >

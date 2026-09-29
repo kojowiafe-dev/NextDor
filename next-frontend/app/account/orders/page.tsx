@@ -6,6 +6,12 @@ import Link from "next/link";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { useAuth } from "@/context/AuthContext";
 import { fetchMyOrders, type Order } from "@/lib/orders/api";
+import { createSWRCache } from "@/lib/cache/clientCache";
+
+export type OrdersPageCache = { orders: Order[]; meta: { total: number; pages: number } };
+// Cache user order pages with 2-min SWR TTL
+export const ordersCache = createSWRCache<OrdersPageCache>("nextdor_my_orders", 2 * 60_000);
+
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
@@ -89,12 +95,27 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const LIMIT = 10;
 
-  const load = async (p: number) => {
+  const load = async (p: number, forceRefresh = false) => {
     if (!token) return;
-    setLoading(true);
     setError(null);
+
+    const subKey = String(p);
+    const { data: cached, isStale, hasData } = ordersCache.getEntry(subKey);
+
+    if (hasData && !forceRefresh) {
+      setOrders(cached!.orders);
+      setTotal(cached!.meta.total);
+      setPages(cached!.meta.pages);
+      setPage(p);
+      setLoading(false);
+      if (!isStale) return; // Completely fresh — background fetch skipped
+    } else if (!hasData) {
+      setLoading(true);
+    }
+
     try {
       const res = await fetchMyOrders(token, p, LIMIT);
+      ordersCache.set({ orders: res.orders, meta: res.meta }, subKey);
       setOrders(res.orders);
       setTotal(res.meta.total);
       setPages(res.meta.pages);
@@ -124,7 +145,7 @@ export default function OrdersPage() {
             )}
           </div>
           <button
-            onClick={() => load(page)}
+            onClick={() => { ordersCache.invalidateAll(); load(page, true); }}
             disabled={loading}
             className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-50"
           >

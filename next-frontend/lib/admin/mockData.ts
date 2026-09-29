@@ -3,12 +3,13 @@
 
 export type AdminOrder = {
   id: string;
+  dbId?: string;
   customer: { name: string; email: string };
   date: string;
   items: { name: string; quantity: number; price: number }[];
   total: number;
   currency: string;
-  status: "processing" | "shipped" | "delivered" | "cancelled";
+  status: "processing" | "shipped" | "delivered" | "cancelled" | "pending" | "confirmed" | "refunded";
   shippingAddress: {
     street: string;
     city: string;

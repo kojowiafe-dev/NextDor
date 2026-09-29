@@ -52,6 +52,7 @@ NextDor is a hybrid e-commerce ecosystem specifically tailored for the Ghanaian 
 ```
 
 - **Frontend:** Next.js 14 (App Router), React 18, TypeScript, TailwindCSS utilities.
+- **Frontend Performance & Caching:** Multi-Tier SWR (Stale-While-Revalidate) Cache Engine (`lib/cache/clientCache.ts`), sub-key parameterization, and in-flight request deduplication. Detailed in [FRONTEND_CACHING_ARCHITECTURE.md](file:///home/kojowiafe/Desktop/NextDor/FRONTEND_CACHING_ARCHITECTURE.md).
 - **Backend:** Node.js 20+, Fastify, TypeScript, Prisma ORM, Pino logger.
 - **Database:** Serverless Cloud PostgreSQL hosted on Neon (AWS `us-east-2`).
 - **Security:** Argon2 / Bcrypt password hashing, JWT Access Tokens, RFC 6749 Opaque Refresh Token Family Rotation, Helmet security headers, IP Rate Limiting.
@@ -96,9 +97,13 @@ NextDor/
 │   │   ├── layout.tsx & page.tsx     # Root layout and homepage
 │   │   └── globals.css               # Global theme tokens
 │   ├── components/                   # Reusable UI components (Navbar, Footer, Modals)
-│   └── lib/utils.ts                  # Price formatters (GH₵) and date helpers
+│   ├── lib/
+│   │   ├── cache/clientCache.ts      # Multi-Tier SWR Cache Factory & Request Deduplication
+│   │   └── utils.ts                  # Price formatters (GH₵) and date helpers
+│   └── globals.css
 │
 ├── packages/shared/                  # Shared TypeScript interfaces across front & back
+├── FRONTEND_CACHING_ARCHITECTURE.md  # Client-side SWR caching & deduplication specification
 ├── MULTI_VENDOR_OOD_ARCHITECTURE.md  # Deep-dive code and SOLID explanation
 └── PROJECT_OVERVIEW.md               # This master document
 ```

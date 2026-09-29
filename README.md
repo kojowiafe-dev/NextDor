@@ -9,8 +9,9 @@ NextDor is an enterprise-grade, high-performance Ghanaian E-Commerce and Multi-V
 | Document | Purpose |
 | :--- | :--- |
 | 🗺️ **[Master Project Overview & Navigation Map](file:///c:/Users/User/OneDrive/Desktop/NextDor/PROJECT_OVERVIEW.md)** | **Start here!** Full sitemap, "If I want this, where do I go?" cheat sheet, frontend/backend routing index, and environment setup. |
-| 🏛️ **[Multi-Vendor OOD Architecture](file:///c:/Users/User/OneDrive/Desktop/NextDor/MULTI_VENDOR_OOD_ARCHITECTURE.md)** | Comprehensive function-by-function, line-by-line architectural breakdown, SOLID principles, and Optimistic Concurrency Control (OCC). |
-| ⚙️ **[Backend Architecture & Database Design](file:///c:/Users/User/OneDrive/Desktop/NextDor/BACKEND_ARCHITECTURE.md)** | Complete database ERD, 14 models, security specifications, and RFC 7240 async sync mechanics. |
+| 🏛️ **[Multi-Vendor OOD Architecture](file:///home/kojowiafe/Desktop/NextDor/MULTI_VENDOR_OOD_ARCHITECTURE.md)** | Comprehensive function-by-function, line-by-line architectural breakdown, SOLID principles, and Optimistic Concurrency Control (OCC). |
+| ⚡ **[Frontend Caching & Performance Architecture](file:///home/kojowiafe/Desktop/NextDor/FRONTEND_CACHING_ARCHITECTURE.md)** | Client-side SWR caching engine, in-flight request deduplication, navigation latency elimination, and audit. |
+| ⚙️ **[Backend Architecture & Database Design](file:///home/kojowiafe/Desktop/NextDor/BACKEND_ARCHITECTURE.md)** | Complete database ERD, 14 models, security specifications, and RFC 7240 async sync mechanics. |
 
 ---
 

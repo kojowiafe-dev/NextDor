@@ -88,9 +88,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           <p className="text-sm text-zinc-600">
             {product.inStock ? (
-              <span className="font-medium text-green-700">In Stock</span>
+              <span className="font-medium text-green-700 whitespace-nowrap">In Stock</span>
             ) : (
-              <span className="font-medium text-red-600">Out of Stock</span>
+              <span className="font-medium text-red-600 whitespace-nowrap">Out of Stock</span>
             )}
           </p>
 

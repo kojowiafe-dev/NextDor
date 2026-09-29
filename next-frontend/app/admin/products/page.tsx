@@ -47,9 +47,9 @@ export interface ProductItem {
 }
 
 const stockConfig = {
-  IN_STOCK: { label: "In Stock", classes: "bg-green-100 text-green-700" },
-  LOW_STOCK: { label: "Low Stock", classes: "bg-amber-100 text-amber-700" },
-  OUT_OF_STOCK: { label: "Out of Stock", classes: "bg-red-100 text-red-700" },
+  IN_STOCK: { label: "In Stock", classes: "bg-green-100 text-green-700 whitespace-nowrap" },
+  LOW_STOCK: { label: "Low Stock", classes: "bg-amber-100 text-amber-700 whitespace-nowrap" },
+  OUT_OF_STOCK: { label: "Out of Stock", classes: "bg-red-100 text-red-700 whitespace-nowrap" },
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
@@ -384,7 +384,7 @@ export default function AdminProductsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${stock.classes}`}>
+                      <span className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${stock.classes}`}>
                         {stock.label}
                       </span>
                     </td>
@@ -432,7 +432,7 @@ export default function AdminProductsPage() {
                   <p className="truncate font-semibold text-zinc-900 text-sm">{product.name}</p>
                   <p className="mt-0.5 text-xs text-zinc-500 truncate">{product.vendor?.name || "Nextdor Direct"}</p>
                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${stock.classes}`}>
+                    <span className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${stock.classes}`}>
                       {stock.label}
                     </span>
                     <span className="text-xs font-semibold text-zinc-900">

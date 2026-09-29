@@ -17,8 +17,9 @@ import {
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { createSWRCache } from "@/lib/cache/clientCache";
 
-interface AdminUser {
+export interface AdminUser {
   id: string;
   name: string;
   email: string;
@@ -27,6 +28,8 @@ interface AdminUser {
   status: "ACTIVE" | "SUSPENDED";
   createdAt: string;
 }
+
+const adminsCache = createSWRCache<AdminUser[]>("nextdor_admin_team", 5 * 60_000);
 
 export default function AdminTeamPage() {
   const { token, user, isSuperAdmin } = useAuth();
@@ -53,21 +56,65 @@ export default function AdminTeamPage() {
     }
   }, [isSuperAdmin, router]);
 
-  async function loadAdmins() {
+  async function loadAdmins(forceRefresh = false) {
     if (!token) return;
-    setIsLoading(true);
+
+    // 1. INSTANT: serve from cache if available
+    const { data: cached, isStale, hasData } = adminsCache.getEntry();
+    if (hasData && !forceRefresh) {
+      setAdmins(cached!);
+      setIsLoading(false);
+      if (!isStale) return; // Fresh, skip network
+    } else if (!hasData) {
+      setIsLoading(true);
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/auth/admins`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const adminUsers = await adminsCache.fetchDedupe(undefined, async () => {
+        try {
+          const res = await fetch(`${API_BASE}/auth/admins`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (res.status === 401 || res.status === 403) {
+            if (!hasData) {
+              setNotice({ type: "error", message: "Admin authorization required or session expired." });
+            }
+            return null;
+          }
+
+          if (!res.ok) {
+            if (!hasData) {
+              setNotice({ type: "error", message: `Failed to load admin team (HTTP ${res.status}).` });
+            }
+            return null;
+          }
+
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data?.admins)) {
+            return json.data.admins;
+          }
+
+          if (!hasData) {
+            setNotice({ type: "error", message: json.error?.message || "Failed to load admin team." });
+          }
+          return null;
+        } catch (fetchErr: any) {
+          console.error("Network error loading admins:", fetchErr);
+          if (!hasData) {
+            setNotice({ type: "error", message: "Failed to connect to backend server." });
+          }
+          return null;
+        }
       });
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data?.admins)) {
-        setAdmins(json.data.admins);
-      } else {
-        setNotice({ type: "error", message: json.error?.message || "Failed to load admin team." });
+
+      if (adminUsers) {
+        setAdmins(adminUsers);
       }
-    } catch {
-      setNotice({ type: "error", message: "Failed to connect to backend server." });
+    } catch (err: any) {
+      if (!hasData) {
+        setNotice({ type: "error", message: err?.message || "Failed to connect to backend server." });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -100,7 +147,8 @@ export default function AdminTeamPage() {
         setEmail("");
         setPhone("");
         setPassword("");
-        await loadAdmins();
+        adminsCache.invalidateAll();
+        await loadAdmins(true);
       } else {
         setNotice({ type: "error", message: json.error?.message || "Could not create administrator." });
       }
@@ -126,7 +174,8 @@ export default function AdminTeamPage() {
       const json = await res.json();
       if (res.ok && json.success) {
         setNotice({ type: "success", message: `Admin account status updated to ${newStatus}.` });
-        await loadAdmins();
+        adminsCache.invalidateAll();
+        await loadAdmins(true);
       } else {
         setNotice({ type: "error", message: json.error?.message || "Status change failed." });
       }
@@ -144,7 +193,7 @@ export default function AdminTeamPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={loadAdmins}
+            onClick={() => { adminsCache.invalidateAll(); loadAdmins(true); }}
             disabled={isLoading}
             className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-60"
           >

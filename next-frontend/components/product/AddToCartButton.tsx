@@ -30,7 +30,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
         type="button"
         onClick={handleClick}
         disabled={!product.inStock}
-        className="w-full rounded-lg bg-[#ff9900] px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f08804] disabled:cursor-not-allowed disabled:bg-zinc-300"
+        className="w-full whitespace-nowrap rounded-lg bg-[#ff9900] px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f08804] disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
         {product.inStock ? "Add to Cart" : "Out of Stock"}
       </button>

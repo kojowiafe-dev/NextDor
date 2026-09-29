@@ -18,6 +18,10 @@ import {
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { useAuth } from "@/context/AuthContext";
 import { fetchOrderByNumber, cancelOrder, type Order, type StatusHistoryEntry } from "@/lib/orders/api";
+import { createSWRCache } from "@/lib/cache/clientCache";
+import { ordersCache } from "@/app/account/orders/page";
+
+const orderDetailCache = createSWRCache<Order>("nextdor_order_detail", 2 * 60_000);
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -180,15 +184,27 @@ export default function OrderDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
-  const load = async () => {
+  const load = async (forceRefresh = false) => {
     if (!token) return;
-    setLoading(true);
     setError(null);
+
+    const { data: cached, isStale, hasData } = orderDetailCache.getEntry(number);
+    if (hasData && !forceRefresh) {
+      setOrder(cached);
+      setLoading(false);
+      if (!isStale) return; // Completely fresh — background fetch skipped
+    } else if (!hasData) {
+      setLoading(true);
+    }
+
     try {
       const data = await fetchOrderByNumber(number, token);
+      orderDetailCache.set(data, number);
       setOrder(data);
     } catch (e: any) {
-      setError(e.message ?? "Order not found");
+      if (!hasData) {
+        setError(e.message ?? "Order not found");
+      }
     } finally {
       setLoading(false);
     }
@@ -205,7 +221,9 @@ export default function OrderDetailPage({
     setCancelling(true);
     try {
       await cancelOrder(number, token);
-      await load(); // refresh
+      orderDetailCache.invalidate(number);
+      ordersCache.invalidateAll(); // order status changed — orders list must update
+      await load(true); // force fresh reload
     } catch (e: any) {
       alert(e.message ?? "Failed to cancel order");
     } finally {
@@ -242,7 +260,7 @@ export default function OrderDetailPage({
           <XCircle className="mx-auto mb-2 h-10 w-10 text-red-400" />
           <p className="font-semibold text-red-700">{error}</p>
           <button
-            onClick={load}
+            onClick={() => load(true)}
             className="mt-3 text-sm text-red-600 underline hover:no-underline"
           >
             Try again

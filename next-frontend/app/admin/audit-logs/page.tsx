@@ -16,8 +16,9 @@ import {
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { createSWRCache } from "@/lib/cache/clientCache";
 
-interface AuditLogEntry {
+export interface AuditLogEntry {
   id: string;
   userId?: string | null;
   userEmail?: string | null;
@@ -42,6 +43,10 @@ const actionBadgeConfig: Record<string, { label: string; classes: string }> = {
   COMMISSION_UPDATED: { label: "Commission Updated", classes: "bg-purple-100 text-purple-800 border-purple-200" },
 };
 
+// Audit log cache — 1-min TTL (security events should be near-real-time).
+// Cache key is per-filter so switching action tabs fetches fresh data per tab.
+const auditLogsCache = createSWRCache<AuditLogEntry[]>("nextdor_admin_audit_logs", 60_000);
+
 export default function AdminAuditLogsPage() {
   const { token, isSuperAdmin } = useAuth();
   const router = useRouter();
@@ -59,9 +64,21 @@ export default function AdminAuditLogsPage() {
     }
   }, [isSuperAdmin, router]);
 
-  async function loadLogs() {
+  async function loadLogs(forceRefresh = false) {
     if (!token) return;
-    setIsLoading(true);
+
+    const cacheKey = search.trim() ? `${actionFilter}__${search.trim().toLowerCase()}` : actionFilter;
+
+    // 1. INSTANT: render cached data if available
+    const { data: cached, isStale, hasData } = auditLogsCache.getEntry(cacheKey);
+    if (hasData && !forceRefresh) {
+      setLogs(cached!);
+      setIsLoading(false);
+      if (!isStale) return; // Completely fresh — background fetch skipped
+    } else if (!hasData) {
+      setIsLoading(true); // First load for this filter — show spinner
+    }
+
     try {
       const res = await fetch(
         `${API_BASE}/auth/audit-logs?action=${actionFilter}&search=${encodeURIComponent(search)}&limit=50`,
@@ -69,6 +86,7 @@ export default function AdminAuditLogsPage() {
       );
       const json = await res.json();
       if (json.success && Array.isArray(json.data?.logs)) {
+        auditLogsCache.set(json.data.logs, cacheKey);
         setLogs(json.data.logs);
       }
     } catch (err) {
@@ -94,7 +112,7 @@ export default function AdminAuditLogsPage() {
       actions={
         <button
           type="button"
-          onClick={loadLogs}
+          onClick={() => { auditLogsCache.invalidateAll(); loadLogs(true); }}
           disabled={isLoading}
           className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-60"
         >

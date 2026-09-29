@@ -18,8 +18,9 @@ import {
 } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
+import { createSWRCache } from "@/lib/cache/clientCache";
 
-interface MerchantItem {
+export interface MerchantItem {
   id: string;
   name: string;
   slug: string;
@@ -50,6 +51,8 @@ const statusConfig: Record<string, { label: string; classes: string }> = {
   SUSPENDED: { label: "Suspended", classes: "bg-red-100 text-red-800 border-red-200" },
 };
 
+const merchantsCache = createSWRCache<MerchantItem[]>("nextdor_admin_merchants", 3 * 60_000);
+
 export default function AdminMerchantsPage() {
   const { token, isSuperAdmin } = useAuth();
   const [merchants, setMerchants] = useState<MerchantItem[]>([]);
@@ -65,20 +68,68 @@ export default function AdminMerchantsPage() {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
-  async function loadMerchants() {
+  async function loadMerchants(forceRefresh = false) {
     if (!token) return;
-    setIsLoading(true);
+
+    const cacheKey = search.trim() ? `${statusFilter}__${search.trim().toLowerCase()}` : statusFilter;
+
+    // 1. INSTANT: serve from cache if available
+    const { data: cached, isStale, hasData } = merchantsCache.getEntry(cacheKey);
+    if (hasData && !forceRefresh) {
+      setMerchants(cached!);
+      setIsLoading(false);
+      if (!isStale) return; // Completely fresh — background fetch skipped
+    } else if (!hasData) {
+      setIsLoading(true); // First load for this filter — show spinner
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/vendors/admin/list?status=${statusFilter}&search=${encodeURIComponent(search)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const vendors = await merchantsCache.fetchDedupe(cacheKey, async () => {
+        try {
+          const res = await fetch(`${API_BASE}/vendors/admin/list?status=${statusFilter}&search=${encodeURIComponent(search)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (res.status === 401 || res.status === 403) {
+            if (!hasData) {
+              setNotice({ type: "error", message: "Admin authorization required or session expired. Please log in again." });
+            }
+            return null;
+          }
+
+          if (!res.ok) {
+            if (!hasData) {
+              setNotice({ type: "error", message: `Failed to load merchants (HTTP ${res.status}).` });
+            }
+            return null;
+          }
+
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data?.vendors)) {
+            return json.data.vendors;
+          }
+
+          if (!hasData) {
+            setNotice({ type: "error", message: json.error?.message || "Failed to load merchants." });
+          }
+          return null;
+        } catch (fetchErr: any) {
+          console.error("Network error loading merchants:", fetchErr);
+          if (!hasData) {
+            setNotice({ type: "error", message: "Failed to connect to backend server." });
+          }
+          return null;
+        }
       });
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data?.vendors)) {
-        setMerchants(json.data.vendors);
+
+      if (vendors) {
+        setMerchants(vendors);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load merchants:", err);
-      setNotice({ type: "error", message: "Failed to connect to backend server." });
+      if (!hasData) {
+        setNotice({ type: "error", message: "Failed to connect to backend server." });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -106,7 +157,8 @@ export default function AdminMerchantsPage() {
           type: "success",
           message: `Merchant status updated to ${newStatus.replace("_", " ")}.`,
         });
-        await loadMerchants();
+        merchantsCache.invalidateAll(); // status changed — clear all filter caches
+        await loadMerchants(true);
       } else {
         setNotice({ type: "error", message: json.error?.message || "Status update failed." });
       }
@@ -142,7 +194,8 @@ export default function AdminMerchantsPage() {
           message: `Commission for "${editingMerchant.name}" set to ${rate}%.`,
         });
         setEditingMerchant(null);
-        await loadMerchants();
+        merchantsCache.invalidateAll(); // commission changed — clear cache
+        await loadMerchants(true);
       } else {
         setNotice({ type: "error", message: json.error?.message || "Failed to update commission rate." });
       }
@@ -153,6 +206,12 @@ export default function AdminMerchantsPage() {
 
   const pendingCount = merchants.filter((m) => m.status === "PENDING_APPROVAL").length;
 
+  // ── Refresh button handler: force fresh fetch regardless of TTL ──
+  function handleManualRefresh() {
+    merchantsCache.invalidateAll();
+    loadMerchants(true);
+  }
+
   return (
     <AdminLayout
       title="Merchant Management"
@@ -160,7 +219,7 @@ export default function AdminMerchantsPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={loadMerchants}
+            onClick={handleManualRefresh}
             disabled={isLoading}
             className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-60"
           >

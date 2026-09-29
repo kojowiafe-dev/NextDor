@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { RefreshCw } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import {
   REVENUE_DATA,
@@ -8,6 +10,17 @@ import {
   SALES_BY_CATEGORY,
 } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
+import { createSWRCache } from "@/lib/cache/clientCache";
+
+export interface AnalyticsSnapshot {
+  revenueData: number[];
+  ordersByStatus: typeof ORDERS_BY_STATUS;
+  topProducts: typeof TOP_PRODUCTS;
+  salesByCategory: typeof SALES_BY_CATEGORY;
+  conversionRate: string;
+}
+
+export const adminAnalyticsCache = createSWRCache<AnalyticsSnapshot>("nextdor_admin_analytics", 5 * 60_000);
 
 // ─── 30-day Revenue Line Chart ───────────────────────────────────────────────
 
@@ -101,18 +114,58 @@ function OrdersBarChart({ data }: { data: typeof ORDERS_BY_STATUS }) {
 // ─── Analytics Page ───────────────────────────────────────────────────────────
 
 export default function AdminAnalyticsPage() {
-  const totalRevenue = REVENUE_DATA.reduce((s, v) => s + v, 0);
-  const avgDaily = totalRevenue / REVENUE_DATA.length;
+  const [data, setData] = useState<AnalyticsSnapshot>({
+    revenueData: REVENUE_DATA,
+    ordersByStatus: ORDERS_BY_STATUS,
+    topProducts: TOP_PRODUCTS,
+    salesByCategory: SALES_BY_CATEGORY,
+    conversionRate: "3.8%",
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  function loadAnalytics(forceRefresh = false) {
+    const { data: cached, isStale, hasData } = adminAnalyticsCache.getEntry();
+    if (hasData && !forceRefresh) {
+      setData(cached!);
+      if (!isStale) return;
+    }
+
+    // Cache initial snapshot
+    adminAnalyticsCache.set(data);
+  }
+
+  useEffect(() => {
+    loadAnalytics();
+  }, []);
+
+  const totalRevenue = data.revenueData.reduce((s, v) => s + v, 0);
+  const avgDaily = totalRevenue / data.revenueData.length;
 
   return (
-    <AdminLayout title="Analytics">
+    <AdminLayout
+      title="Analytics"
+      actions={
+        <button
+          type="button"
+          onClick={() => {
+            adminAnalyticsCache.invalidateAll();
+            loadAnalytics(true);
+          }}
+          disabled={isLoading}
+          className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 text-zinc-500 ${isLoading ? "animate-spin text-[#ff9900]" : ""}`} />
+          <span>Refresh</span>
+        </button>
+      }
+    >
       {/* Summary KPIs */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
           { label: "Total Revenue (30d)", value: formatPrice(totalRevenue, "GHS") },
           { label: "Avg Daily Revenue", value: formatPrice(avgDaily, "GHS") },
-          { label: "Total Orders", value: String(Object.values(ORDERS_BY_STATUS).reduce((s, v) => s + v, 0)) },
-          { label: "Conversion Rate", value: "3.8%" },
+          { label: "Total Orders", value: String(Object.values(data.ordersByStatus).reduce((s, v) => s + v, 0)) },
+          { label: "Conversion Rate", value: data.conversionRate },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-zinc-100">
             <p className="text-xs text-zinc-500">{label}</p>
@@ -126,20 +179,20 @@ export default function AdminAnalyticsPage() {
         <div className="lg:col-span-2 rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 font-semibold text-zinc-900">Revenue — Last 30 Days</h2>
           <p className="mb-4 text-xs text-zinc-500">Daily revenue in GHS</p>
-          <RevenueLineChart data={REVENUE_DATA} />
+          <RevenueLineChart data={data.revenueData} />
         </div>
 
         {/* Orders by status */}
         <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-4 font-semibold text-zinc-900">Orders by Status</h2>
-          <OrdersBarChart data={ORDERS_BY_STATUS} />
+          <OrdersBarChart data={data.ordersByStatus} />
         </div>
 
         {/* Top products */}
         <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-4 font-semibold text-zinc-900">Top Products by Revenue</h2>
           <ol className="space-y-3">
-            {TOP_PRODUCTS.map((p, i) => (
+            {data.topProducts.map((p, i) => (
               <li key={p.name} className="flex items-center gap-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-500">
                   {i + 1}
@@ -159,7 +212,7 @@ export default function AdminAnalyticsPage() {
         <div className="lg:col-span-2 rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-4 font-semibold text-zinc-900">Sales by Category</h2>
           <div className="space-y-4">
-            {SALES_BY_CATEGORY.map((cat) => {
+            {data.salesByCategory.map((cat) => {
               const max = Math.max(...SALES_BY_CATEGORY.map((c) => c.revenue));
               const pct = (cat.revenue / max) * 100;
               return (

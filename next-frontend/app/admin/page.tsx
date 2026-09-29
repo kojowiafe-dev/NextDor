@@ -20,13 +20,25 @@ import {
   Activity,
   AlertCircle,
   FileText,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { StatCard } from "@/components/admin/StatCard";
 import { useAuth } from "@/context/AuthContext";
-import { MOCK_ORDERS, WEEKLY_REVENUE } from "@/lib/admin/mockData";
+import { MOCK_ORDERS, WEEKLY_REVENUE, type AdminOrder } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
+import { createSWRCache } from "@/lib/cache/clientCache";
+import { adminOrdersCache } from "@/lib/cache/adminCache";
+
+export interface VendorAlert {
+  pendingVendors: Array<{ id: string; name: string; slug: string; email?: string | null; createdAt: string }>;
+  activeCount: number;
+  totalCount: number;
+}
+
+const vendorAlertsCache = createSWRCache<VendorAlert>("nextdor_admin_vendor_alerts", 2 * 60_000);
+
 
 // ─── Mini SVG Line Chart ────────────────────────────────────────────────────
 
@@ -108,8 +120,11 @@ function RevenueChart({ data }: { data: number[] }) {
 const statusConfig: Record<string, { label: string; classes: string }> = {
   delivered: { label: "Delivered", classes: "bg-green-100 text-green-700" },
   processing: { label: "Processing", classes: "bg-blue-100 text-blue-700" },
+  pending: { label: "Pending", classes: "bg-amber-100 text-amber-700" },
+  confirmed: { label: "Confirmed", classes: "bg-blue-100 text-blue-700" },
   shipped: { label: "Shipped", classes: "bg-amber-100 text-amber-700" },
   cancelled: { label: "Cancelled", classes: "bg-red-100 text-red-700" },
+  refunded: { label: "Refunded", classes: "bg-zinc-100 text-zinc-700" },
 };
 
 // ─── Dashboard Page ──────────────────────────────────────────────────────────
@@ -121,31 +136,107 @@ export default function AdminDashboardPage() {
     activeCount: 1,
     totalCount: 1,
   });
+  const [orders, setOrders] = useState<AdminOrder[]>(() => {
+    return adminOrdersCache.get("all_orders") ?? MOCK_ORDERS;
+  });
   const [isApproving, setIsApproving] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
-  async function fetchAlerts() {
+  async function fetchAlerts(forceRefresh = false) {
+    if (!token) return;
+
+    // 1. INSTANT: serve from cache if available
+    const { data: cached, isStale, hasData } = vendorAlertsCache.getEntry();
+    if (hasData && !forceRefresh) {
+      setPendingVendors(cached!.pendingVendors);
+      setVendorStats({ activeCount: cached!.activeCount, totalCount: cached!.totalCount });
+      if (!isStale) return; // Fresh, skip network
+    } else if (!hasData) {
+      setIsLoading(true);
+    }
+
+    try {
+      const alertData = await vendorAlertsCache.fetchDedupe(undefined, async () => {
+        try {
+          const res = await fetch(`${API_BASE}/vendors/admin/alerts`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return null;
+          const json = await res.json();
+          if (json.success && json.data) {
+            return {
+              pendingVendors: json.data.pendingVendors || [],
+              activeCount: json.data.activeCount,
+              totalCount: json.data.totalCount,
+            };
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      });
+
+      if (alertData) {
+        setPendingVendors(alertData.pendingVendors);
+        setVendorStats({ activeCount: alertData.activeCount, totalCount: alertData.totalCount });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function loadDashboardOrders(forceRefresh = false) {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/vendors/admin/alerts`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (json.success && json.data) {
-        setPendingVendors(json.data.pendingVendors || []);
-        setVendorStats({
-          activeCount: json.data.activeCount,
-          totalCount: json.data.totalCount,
-        });
+      const { data: cachedOrders, isStale, hasData } = adminOrdersCache.getEntry("all_orders");
+      if (hasData && !forceRefresh) {
+        setOrders(cachedOrders!);
+        if (!isStale) return;
       }
+
+      const liveOrders = await adminOrdersCache.fetchDedupe("all_orders", async () => {
+        const res = await fetch(`${API_BASE}/admin/orders?limit=100`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return MOCK_ORDERS;
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          return json.data.map((o: any): AdminOrder => ({
+            id: o.number || o.id,
+            dbId: o.id,
+            customer: {
+              name: o.user?.name || o.shippingAddress?.recipientName || "Customer",
+              email: o.user?.email || "guest@nextdor.com",
+            },
+            date: new Date(o.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            items: (o.items || []).map((it: any) => ({
+              name: it.productName,
+              quantity: it.quantity,
+              price: Number(it.unitPrice || 0),
+            })),
+            total: Number(o.total),
+            currency: o.currency || "GHS",
+            status: (o.status?.toLowerCase() as any) || "processing",
+            shippingAddress: {
+              street: o.shippingAddress?.street || "",
+              city: o.shippingAddress?.city || "",
+              region: o.shippingAddress?.region || "",
+            },
+          }));
+        }
+        return MOCK_ORDERS;
+      });
+      if (liveOrders) setOrders(liveOrders);
     } catch {
-      // Graceful fallback
+      // Fallback silently to existing orders state
     }
   }
 
   useEffect(() => {
     fetchAlerts();
+    loadDashboardOrders();
   }, [token]);
 
   async function handleApprove(id: string) {
@@ -156,7 +247,8 @@ export default function AdminDashboardPage() {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
       });
-      await fetchAlerts();
+      vendorAlertsCache.invalidateAll(); // vendor approved — pending list changed
+      await fetchAlerts(true);
     } catch (err) {
       console.error("Failed to approve vendor:", err);
     } finally {
@@ -164,14 +256,32 @@ export default function AdminDashboardPage() {
     }
   }
 
-  const recentOrders = MOCK_ORDERS.slice(0, 5);
-  const totalRevenue = MOCK_ORDERS.reduce((s, o) => s + o.total, 0);
-  const pipelineOrders = MOCK_ORDERS.filter((o) => o.status === "processing" || o.status === "shipped");
+  const recentOrders = orders.slice(0, 5);
+  const totalRevenue = orders.reduce((s, o) => s + o.total, 0);
+  const pipelineOrders = orders.filter((o) => o.status === "processing" || o.status === "pending" || o.status === "confirmed" || o.status === "shipped");
   const platformFee = totalRevenue * 0.10; // 10% platform cut
   const escrowHold = totalRevenue * 0.90; // 90% escrow reserve held for merchants
 
   return (
-    <AdminLayout title={isSuperAdmin ? "Super Admin Command" : "Operations Console"}>
+    <AdminLayout
+      title={isSuperAdmin ? "Super Admin Command" : "Operations Console"}
+      actions={
+        <button
+          type="button"
+          onClick={() => {
+            vendorAlertsCache.invalidateAll();
+            adminOrdersCache.invalidateAll();
+            fetchAlerts(true);
+            loadDashboardOrders(true);
+          }}
+          disabled={isLoading}
+          className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 text-zinc-500 ${isLoading ? "animate-spin text-[#ff9900]" : ""}`} />
+          <span>Refresh</span>
+        </button>
+      }
+    >
       {/* ─── Role Banner: Super Admin vs Operations Admin ─── */}
       <div className="mb-6">
         {isSuperAdmin ? (
@@ -379,7 +489,7 @@ export default function AdminDashboardPage() {
             />
             <StatCard
               title="Monthly Orders"
-              value={String(MOCK_ORDERS.length)}
+              value={String(orders.length)}
               trend="8% vs last month"
               trendDirection="up"
               icon={ShoppingBag}
@@ -514,7 +624,7 @@ export default function AdminDashboardPage() {
                 <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Active</span>
               </div>
               <p className="mt-2 text-2xl font-bold text-amber-900">
-                {MOCK_ORDERS.filter((o) => o.status === "shipped").length} Orders
+                {orders.filter((o) => o.status === "shipped").length} Orders
               </p>
               <p className="mt-1 text-xs text-amber-700">Dispatched with delivery riders across Greater Accra & regions.</p>
             </div>
@@ -525,7 +635,7 @@ export default function AdminDashboardPage() {
                 <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Settled</span>
               </div>
               <p className="mt-2 text-2xl font-bold text-emerald-900">
-                {MOCK_ORDERS.filter((o) => o.status === "delivered").length} Orders
+                {orders.filter((o) => o.status === "delivered").length} Orders
               </p>
               <p className="mt-1 text-xs text-emerald-700">Successfully received by customers; awaiting 48h settlement.</p>
             </div>
@@ -566,7 +676,7 @@ export default function AdminDashboardPage() {
           </div>
           <ul className="space-y-3">
             {recentOrders.map((order) => {
-              const cfg = statusConfig[order.status];
+              const cfg = statusConfig[order.status] || statusConfig.processing;
               return (
                 <li key={order.id}>
                   <Link
@@ -575,7 +685,7 @@ export default function AdminDashboardPage() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-zinc-900">
-                        {order.customer.name}
+                        {order.customer?.name || "Customer"}
                       </p>
                       <p className="text-xs text-zinc-500">{order.id}</p>
                     </div>
@@ -583,7 +693,7 @@ export default function AdminDashboardPage() {
                       <p className="text-sm font-semibold text-zinc-900">
                         {formatPrice(order.total, order.currency)}
                       </p>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.classes}`}>
+                      <span className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${cfg.classes}`}>
                         {cfg.label}
                       </span>
                     </div>

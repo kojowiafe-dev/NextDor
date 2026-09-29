@@ -49,8 +49,8 @@ function refreshCookieOptions(maxAgeMs: number) {
   return {
     httpOnly: true,                          // Not readable by JS
     secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-    sameSite: "strict" as const,             // CSRF protection
-    path: "/api/v1/auth",                    // Only sent to auth routes
+    sameSite: (process.env.NODE_ENV === "production" ? "strict" : "lax") as any, // "lax" in dev so cross-port localhost works
+    path: "/",                               // Send to all routes so refresh is never missed
     maxAge: maxAgeMs,                        // 30 days in ms
   };
 }
@@ -101,6 +101,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
             data: {
               user,
               accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
             },
           });
       } catch (err: any) {
@@ -157,6 +158,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
             data: {
               user,
               accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
             },
           });
       } catch (err: any) {
@@ -182,12 +184,15 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     "/refresh",
     {
       schema: {
-        description: "Refresh access token using the httpOnly cookie",
+        description: "Refresh access token using the httpOnly cookie or fallback token",
         tags: ["Auth"],
       },
     },
     async (req, reply) => {
-      const rawToken = req.cookies[REFRESH_COOKIE_NAME];
+      const rawToken =
+        req.cookies[REFRESH_COOKIE_NAME] ||
+        (req.body as any)?.refreshToken ||
+        (req.headers["x-refresh-token"] as string);
 
       if (!rawToken) {
         return reply.status(401).send({
@@ -204,7 +209,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
         .send({
           success: true,
-          data: { accessToken: tokens.accessToken },
+          data: {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+          },
         });
     },
   );
@@ -226,7 +234,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const rawToken = req.cookies[REFRESH_COOKIE_NAME];
+      const rawToken =
+        req.cookies[REFRESH_COOKIE_NAME] ||
+        (req.body as any)?.refreshToken ||
+        (req.headers["x-refresh-token"] as string);
 
       if (rawToken) {
         await authService.logout(rawToken);
