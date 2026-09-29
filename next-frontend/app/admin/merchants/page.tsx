@@ -443,7 +443,7 @@ export default function AdminMerchantsPage() {
                   required
                 />
                 <p className="mt-1 text-[11px] text-zinc-400">
-                  Standard platform rate is 10.0%. NextDor Direct flagship is 0%.
+                  Standard platform rate is 10.0%. Nextdor Direct flagship is 0%.
                 </p>
               </div>
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">

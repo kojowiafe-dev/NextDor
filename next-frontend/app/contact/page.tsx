@@ -5,7 +5,7 @@ import { MapPin, Phone, Mail, Clock } from "lucide-react";
 export const metadata: Metadata = {
   title: "Contact Us",
   description:
-    "Get in touch with the NextDor team. We're here to help with orders, deliveries, and anything else.",
+    "Get in touch with the Nextdor team. We're here to help with orders, deliveries, and anything else.",
 };
 
 const contactDetails = [

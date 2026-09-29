@@ -10,12 +10,13 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: {
-    default: "NextDor — Style, Convenience, and Comfort",
-    template: "%s | NextDor",
+    default: "Nextdor — Style, Convenience, and Comfort",
+    template: "%s | Nextdor",
   },
   description:
-    "Shop electronics, laptops, beauty, bakery and more at NextDor. Quality products delivered across Ghana.",
+    "Shop electronics, laptops, beauty, bakery and more at Nextdor. Quality products delivered across Ghana.",
 };
+
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

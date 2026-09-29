@@ -5,7 +5,7 @@ import { Truck, Clock, MapPin, AlertCircle } from "lucide-react";
 export const metadata: Metadata = {
   title: "Shipping Information",
   description:
-    "Learn about NextDor delivery zones, timelines, and shipping costs across Ghana.",
+    "Learn about Nextdor delivery zones, timelines, and shipping costs across Ghana.",
 };
 
 const zones = [

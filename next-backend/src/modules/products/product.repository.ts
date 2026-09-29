@@ -160,4 +160,32 @@ export class ProductRepository {
       },
     });
   }
+
+  /**
+   * Finds a single product by its primary key ID.
+   */
+  async findById(id: string): Promise<any | null> {
+    return prisma.product.findUnique({
+      where: { id },
+      select: { id: true, name: true, slug: true, deletedAt: true },
+    });
+  }
+
+  /**
+   * Soft-deletes a product by setting deletedAt timestamp.
+   *
+   * DESIGN DECISION: Soft-delete vs Hard-delete
+   * ─────────────────────────────────────────────
+   * We keep the row in the database for audit / order history integrity.
+   * Orders reference product IDs — a hard delete would break those foreign
+   * key lookups and make historical order views show "Unknown Product".
+   * The catalog query already filters `deletedAt: null`, so soft-deleted
+   * products are invisiblee to customers immediately.
+   */
+  async softDelete(id: string): Promise<void> {
+    await prisma.product.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  }
 }

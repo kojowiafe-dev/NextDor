@@ -63,7 +63,7 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-white">NextDor</p>
+              <p className="truncate text-sm font-bold text-white">Nextdor</p>
               <span
                 className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
                   user?.role === "super_admin"

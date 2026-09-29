@@ -113,7 +113,7 @@ export default function AdminAuditLogsPage() {
             <div>
               <h2 className="text-base font-bold text-zinc-900">Immutable Governance Audit Trail</h2>
               <p className="mt-0.5 text-xs text-zinc-500 max-w-2xl leading-relaxed">
-                Chronological record of <strong>who updated what</strong> across the NextDor platform. Captures merchant approvals, administrative staff creation, policy overrides, and security events with IP addresses and before/after payloads.
+                Chronological record of <strong>who updated what</strong> across the Nextdor platform. Captures merchant approvals, administrative staff creation, policy overrides, and security events with IP addresses and before/after payloads.
               </p>
             </div>
           </div>

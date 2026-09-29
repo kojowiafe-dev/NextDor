@@ -14,21 +14,29 @@ export class UserRepository {
   /**
    * Helper to gracefully handle serverless cold starts (Neon / Prisma connection pool timeouts).
    */
-  private async withRetry<T>(op: () => Promise<T>): Promise<T> {
-    try {
-      return await op();
-    } catch (err: any) {
-      if (
-        err?.message?.includes("connection pool") ||
-        err?.message?.includes("Can't reach database server") ||
-        err?.name === "PrismaClientInitializationError"
-      ) {
-        logger.warn("Database connection cold start detected — retrying query in 1.5s...");
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+  private async withRetry<T>(op: () => Promise<T>, maxAttempts = 4): Promise<T> {
+    const isColdStartError = (err: any) =>
+      err?.message?.includes("connection pool") ||
+      err?.message?.includes("Can't reach database server") ||
+      err?.name === "PrismaClientInitializationError";
+
+    let lastErr: any;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
         return await op();
+      } catch (err: any) {
+        if (!isColdStartError(err)) throw err; // non-retryable error — rethrow immediately
+
+        lastErr = err;
+        const delayMs = Math.min(2000 * 2 ** (attempt - 1), 8000); // 2s, 4s, 8s, 8s
+        logger.warn(
+          { attempt, maxAttempts, delayMs },
+          `Database cold start — retrying in ${delayMs / 1000}s... (attempt ${attempt}/${maxAttempts})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
-      throw err;
     }
+    throw lastErr;
   }
 
   /**

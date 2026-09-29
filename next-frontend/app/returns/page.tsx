@@ -5,7 +5,7 @@ import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
 export const metadata: Metadata = {
   title: "Returns & Refunds",
   description:
-    "NextDor's hassle-free returns and refund policy. Learn what qualifies, how to initiate a return, and when to expect your refund.",
+    "Nextdor's hassle-free returns and refund policy. Learn what qualifies, how to initiate a return, and when to expect your refund.",
 };
 
 const steps = [
@@ -149,7 +149,7 @@ export default function ReturnsPage() {
                 ["Mobile Money (MoMo)", "1 – 2 business days"],
                 ["Credit / Debit Card", "3 – 5 business days"],
                 ["Bank Transfer", "3 – 7 business days"],
-                ["NextDor Store Credit", "Instant"],
+                ["Nextdor Store Credit", "Instant"],
               ].map(([method, timeline]) => (
                 <tr key={method} className="hover:bg-zinc-50/50">
                   <td className="py-3 font-medium text-zinc-900">{method}</td>

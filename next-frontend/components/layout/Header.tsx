@@ -116,7 +116,7 @@ function AccountDropdown() {
                 className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs font-medium text-purple-900 hover:bg-purple-100/70 transition"
               >
                 <Store className="h-4 w-4 text-purple-600" />
-                <span>Sell on NextDor</span>
+                <span>Sell on Nextdor</span>
               </Link>
             </div>
           )}

@@ -60,7 +60,7 @@ export default function VendorRegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!agreeTerms) {
-      setErrorMsg("Please accept the NextDor Merchant Terms of Service.");
+      setErrorMsg("Please accept the Nextdor Merchant Terms of Service.");
       return;
     }
 
@@ -159,7 +159,7 @@ export default function VendorRegisterPage() {
             <span>Multi-Vendor Merchant Registration</span>
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
-            Open Your Store on NextDor
+            Open Your Store on Nextdor
           </h1>
           <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
             Sell directly to thousands of customers across Ghana. Enjoy automated 48-hour Mobile Money payouts, zero setup fees, and built-in dispatch logistics.
@@ -367,7 +367,7 @@ export default function VendorRegisterPage() {
                   className="mt-0.5 h-4 w-4 rounded border-white/20 bg-zinc-900 accent-purple-600"
                 />
                 <span className="text-[11px] leading-relaxed">
-                  I agree to the <Link href="/returns" className="text-purple-400 hover:underline">NextDor Merchant Terms</Link> and understand the platform applies a standard 10% commission on completed orders.
+                  I agree to the <Link href="/returns" className="text-purple-400 hover:underline">Nextdor Merchant Terms</Link> and understand the platform applies a standard 10% commission on completed orders.
                 </span>
               </label>
 
@@ -401,7 +401,7 @@ export default function VendorRegisterPage() {
       {/* Merchant Registration Footer */}
       <footer className="mt-16 border-t border-white/10 py-8 text-center text-xs text-zinc-500">
         <div className="mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span>NextDor Merchant Onboarding • Multi-Vendor Infrastructure</span>
+          <span>Nextdor Merchant Onboarding • Multi-Vendor Infrastructure</span>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:text-zinc-300 transition">
               Customer Storefront

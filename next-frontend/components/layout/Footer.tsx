@@ -74,7 +74,7 @@ export function Footer() {
         </p>
         <p className="mt-1">Style, Convenience, and Comfort — Nextdor to You</p>
         <p className="mt-2">
-          &copy; {new Date().getFullYear()} NextDor. All rights reserved.
+          &copy; {new Date().getFullYear()} Nextdor. All rights reserved.
         </p>
       </div>
     </footer>

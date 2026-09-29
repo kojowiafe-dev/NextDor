@@ -15,6 +15,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ProductRepository } from "./product.repository.js";
 import { ProductService } from "./product.service.js";
+import { AuthService } from "../auth/auth.service.js";
 
 export const productRoutes: FastifyPluginAsync = async (app) => {
   // Instantiate Repository and inject into Service (Dependency Inversion)
@@ -104,6 +105,54 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({
         success: true,
         data: { product },
+      });
+    }
+  );
+
+  /**
+   * DELETE /products/:id
+   * Soft-deletes a product by its primary key ID.
+   * Requires ADMIN or SUPER_ADMIN role.
+   */
+  app.delete(
+    "/:id",
+    {
+      schema: {
+        description: "Soft-delete a product by ID (Admin only)",
+        tags: ["Products"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: {
+            id: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "Authentication required" },
+        });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: "FORBIDDEN", message: "Admin privileges required" },
+        });
+      }
+
+      const { id } = req.params as { id: string };
+      await productService.deleteProduct(id);
+
+      return reply.send({
+        success: true,
+        data: { message: "Product deleted successfully" },
       });
     }
   );

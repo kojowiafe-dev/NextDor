@@ -54,7 +54,7 @@ function generateMockReviews(productId: string): Review[] {
       date: "Jul 29, 2026",
       rating: getRating(2),
       title: "Quality is top notch",
-      body: "Really impressed with the build quality. Feels premium and looks great. The NextDor team was also very responsive when I had a question before purchasing.",
+      body: "Really impressed with the build quality. Feels premium and looks great. The Nextdor team was also very responsive when I had a question before purchasing.",
       helpful: 5,
       verified: false,
     },

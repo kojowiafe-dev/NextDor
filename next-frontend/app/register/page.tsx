@@ -173,7 +173,7 @@ export default function RegisterPage() {
             </Link>
             <h1 className="mt-4 text-xl font-semibold text-zinc-900">Create your account</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Join NextDor and shop quality products delivered across Ghana.
+              Join Nextdor and shop quality products delivered across Ghana.
             </p>
 
             <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50/70 p-3 text-xs text-purple-900">

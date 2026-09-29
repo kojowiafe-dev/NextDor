@@ -25,6 +25,7 @@ import { authRoutes } from "./modules/auth/auth.routes.js";
 import { syncRoutes } from "./modules/sync/sync.routes.js";
 import { productRoutes } from "./modules/products/product.routes.js";
 import { vendorRoutes } from "./modules/vendors/vendor.routes.js";
+import { orderRoutes, adminOrderRoutes, vendorOrderRoutes } from "./modules/orders/order.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -217,8 +218,11 @@ export async function buildApp() {
   // All API routes registered under /api/v1
   await app.register(authRoutes,    { prefix: "/api/v1/auth" });
   await app.register(syncRoutes,    { prefix: "/api/v1/sync" });
-  await app.register(productRoutes, { prefix: "/api/v1/products" });
-  await app.register(vendorRoutes,  { prefix: "/api/v1/vendors" });
+  await app.register(productRoutes,     { prefix: "/api/v1/products" });
+  await app.register(vendorRoutes,      { prefix: "/api/v1/vendors" });
+  await app.register(orderRoutes,       { prefix: "/api/v1/orders" });
+  await app.register(adminOrderRoutes,  { prefix: "/api/v1/admin/orders" });
+  await app.register(vendorOrderRoutes, { prefix: "/api/v1/vendors" });
 
   return app;
 }

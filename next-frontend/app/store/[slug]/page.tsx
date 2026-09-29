@@ -103,7 +103,7 @@ export default async function VendorStorefrontPage({
               </div>
 
               <p className="mt-1.5 max-w-3xl text-sm text-zinc-600">
-                {vendor.description || "Official seller store on NextDor Ghana Marketplace."}
+                {vendor.description || "Official seller store on Nextdor Ghana Marketplace."}
               </p>
 
               <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
@@ -135,7 +135,7 @@ export default async function VendorStorefrontPage({
           <div>
             <h2 className="text-lg font-bold text-zinc-900">Products from {vendor.name}</h2>
             <p className="text-xs text-zinc-500">
-              Direct from the vendor • Protected by NextDor 48-Hour Buyer Protection
+              Direct from the vendor • Protected by Nextdor 48-Hour Buyer Protection
             </p>
           </div>
         </div>

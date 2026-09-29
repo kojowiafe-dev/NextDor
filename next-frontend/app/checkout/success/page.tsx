@@ -38,7 +38,7 @@ export default async function CheckoutSuccessPage({ searchParams }: SuccessPageP
 
       <h1 className="text-3xl font-bold text-zinc-900">Order Confirmed!</h1>
       <p className="mt-3 text-zinc-500">
-        Thank you for shopping with NextDor. Your order has been received and
+        Thank you for shopping with Nextdor. Your order has been received and
         is being processed.
       </p>
 

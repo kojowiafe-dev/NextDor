@@ -1,66 +1,162 @@
-import { Package } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { Package, ChevronRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { AccountLayout } from "@/components/account/AccountLayout";
-import { OrderCard, type MockOrder } from "@/components/account/OrderCard";
+import { useAuth } from "@/context/AuthContext";
+import { fetchMyOrders, type Order } from "@/lib/orders/api";
 
-export const metadata = { title: "My Orders" };
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; bg: string; text: string }
+> = {
+  PENDING:    { label: "Pending",    bg: "bg-amber-50",  text: "text-amber-700"  },
+  CONFIRMED:  { label: "Confirmed",  bg: "bg-blue-50",   text: "text-blue-700"   },
+  PROCESSING: { label: "Processing", bg: "bg-purple-50", text: "text-purple-700" },
+  SHIPPED:    { label: "Shipped",    bg: "bg-indigo-50", text: "text-indigo-700" },
+  DELIVERED:  { label: "Delivered",  bg: "bg-green-50",  text: "text-green-700"  },
+  CANCELLED:  { label: "Cancelled",  bg: "bg-red-50",    text: "text-red-600"    },
+  REFUNDED:   { label: "Refunded",   bg: "bg-zinc-100",  text: "text-zinc-600"   },
+};
 
-// Mock orders — replace with API fetch when backend is ready
-const MOCK_ORDERS: MockOrder[] = [
-  {
-    id: "ND-00123",
-    date: "Aug 25, 2026",
-    status: "delivered",
-    items: [{ name: "JBL Wireless Speaker", quantity: 1 }],
-    total: 450,
-    currency: "GHS",
-  },
-  {
-    id: "ND-00118",
-    date: "Aug 14, 2026",
-    status: "processing",
-    items: [
-      { name: "Nivea Body Lotion", quantity: 2 },
-      { name: "Dove Shampoo", quantity: 1 },
-    ],
-    total: 120,
-    currency: "GHS",
-  },
-  {
-    id: "ND-00101",
-    date: "Jul 30, 2026",
-    status: "shipped",
-    items: [{ name: "HP Laptop 15", quantity: 1 }],
-    total: 3800,
-    currency: "GHS",
-  },
-  {
-    id: "ND-00094",
-    date: "Jul 10, 2026",
-    status: "cancelled",
-    items: [{ name: "Sony Headphones", quantity: 1 }],
-    total: 280,
-    currency: "GHS",
-  },
-];
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] ?? { label: status, bg: "bg-zinc-100", text: "text-zinc-600" };
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.text}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Order Row ────────────────────────────────────────────────────────────────
+
+function OrderRow({ order }: { order: Order }) {
+  const itemCount = order.items?.length ?? 0;
+  const preview = order.items?.[0]?.productName ?? "—";
+  const extra = itemCount > 1 ? ` +${itemCount - 1} more` : "";
+
+  return (
+    <Link
+      href={`/account/orders/${order.number}`}
+      className="group flex items-center gap-4 rounded-xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:border-[#febd69] hover:shadow-md"
+    >
+      {/* Icon */}
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#fff3e0]">
+        <Package className="h-6 w-6 text-[#ff9900]" />
+      </div>
+
+      {/* Details */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-zinc-900">{order.number}</span>
+          <StatusBadge status={order.status} />
+        </div>
+        <p className="mt-0.5 truncate text-sm text-zinc-500">
+          {preview}{extra}
+        </p>
+        <p className="mt-0.5 text-xs text-zinc-400">
+          {new Date(order.createdAt).toLocaleDateString("en-GH", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
+        </p>
+      </div>
+
+      {/* Total + arrow */}
+      <div className="flex flex-shrink-0 flex-col items-end gap-1">
+        <span className="font-bold text-zinc-900">
+          GH₵ {Number(order.total).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
+        </span>
+        <ChevronRight className="h-4 w-4 text-zinc-300 transition-colors group-hover:text-[#ff9900]" />
+      </div>
+    </Link>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
+  const { token } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const LIMIT = 10;
+
+  const load = async (p: number) => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchMyOrders(token, p, LIMIT);
+      setOrders(res.orders);
+      setTotal(res.meta.total);
+      setPages(res.meta.pages);
+      setPage(p);
+    } catch (e: any) {
+      setError(e.message ?? "Failed to load orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   return (
     <AccountLayout>
       <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
-        <h2 className="mb-1 text-lg font-semibold text-zinc-900">My Orders</h2>
-        <p className="mb-5 text-sm text-zinc-500">
-          {MOCK_ORDERS.length} order{MOCK_ORDERS.length !== 1 ? "s" : ""}
-        </p>
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900">My Orders</h2>
+            {!loading && (
+              <p className="text-sm text-zinc-500">
+                {total} order{total !== 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => load(page)}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
 
-        {MOCK_ORDERS.length > 0 ? (
-          <div className="space-y-4">
-            {MOCK_ORDERS.map((order) => (
-              <OrderCard key={order.id} order={order} />
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-xl bg-zinc-100" />
             ))}
           </div>
-        ) : (
+        )}
+
+        {/* Error */}
+        {!loading && error && (
+          <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error} —{" "}
+            <button
+              onClick={() => load(page)}
+              className="underline hover:no-underline"
+            >
+              retry
+            </button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && orders.length === 0 && (
           <div className="py-12 text-center">
             <Package className="mx-auto mb-3 h-12 w-12 text-zinc-200" />
             <p className="font-medium text-zinc-700">No orders yet</p>
@@ -74,6 +170,40 @@ export default function OrdersPage() {
               Browse Products
             </Link>
           </div>
+        )}
+
+        {/* Order list */}
+        {!loading && !error && orders.length > 0 && (
+          <>
+            <div className="space-y-3">
+              {orders.map((order) => (
+                <OrderRow key={order.id} order={order} />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {pages > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => load(page - 1)}
+                  disabled={page === 1}
+                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-zinc-500">
+                  Page {page} of {pages}
+                </span>
+                <button
+                  onClick={() => load(page + 1)}
+                  disabled={page === pages}
+                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </AccountLayout>

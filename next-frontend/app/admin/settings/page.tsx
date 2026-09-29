@@ -12,7 +12,7 @@ const GHANA_REGIONS = [
 ];
 
 export default function AdminSettingsPage() {
-  const [storeName, setStoreName] = useState("NextDor");
+  const [storeName, setStoreName] = useState("Nextdor");
   const [email, setEmail] = useState("hello@nextdor.online");
   const [phone, setPhone] = useState("+233 20 000 0000");
   const [address, setAddress] = useState("Accra, Greater Accra, Ghana");

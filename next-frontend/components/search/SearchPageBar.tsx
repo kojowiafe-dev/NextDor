@@ -21,7 +21,7 @@ export function SearchPageBar({ initialQuery }: { initialQuery: string }) {
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search NextDor..."
+        placeholder="Search Nextdor..."
         autoFocus
         className="flex-1 rounded-l-xl border border-r-0 border-zinc-300 bg-white px-5 py-3 text-sm text-zinc-900 outline-none focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/20"
       />

@@ -561,7 +561,7 @@ export default function VendorDashboardPage() {
             You are signed in as <span className="font-semibold text-zinc-900">{user?.email}</span> (Customer Account).
           </p>
           <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
-            Your account does not have an active merchant store registered. To start selling on NextDor, register your store below or sign in with your vendor credentials.
+            Your account does not have an active merchant store registered. To start selling on Nextdor, register your store below or sign in with your vendor credentials.
           </p>
           <div className="mt-6 flex flex-col gap-3">
             <Link
@@ -656,7 +656,7 @@ export default function VendorDashboardPage() {
                 )}
               </div>
               <p className="text-xs text-zinc-500">
-                NextDor Multi-Vendor Marketplace • Platform Fee: {vendor?.commissionRate || 10}%
+                Nextdor Multi-Vendor Marketplace • Platform Fee: {vendor?.commissionRate || 10}%
               </p>
             </div>
           </div>
@@ -1367,7 +1367,7 @@ export default function VendorDashboardPage() {
                 <div className="space-y-3">
                   <div>
                     <h3 className="text-sm font-bold text-zinc-900">
-                      How NextDor's 48-Hour Escrow Settlement Protection Works
+                      How Nextdor's 48-Hour Escrow Settlement Protection Works
                     </h3>
                     <p className="text-xs text-zinc-600 mt-1 leading-relaxed">
                       To protect both Ghanaian buyers and marketplace sellers, customer payments are held in an automated escrow account when an order is placed. Here is how your money moves:
@@ -1626,7 +1626,7 @@ export default function VendorDashboardPage() {
                 {/* Commission Platform Rate Info */}
                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-xs text-zinc-600 flex items-center justify-between">
                   <div>
-                    <span className="font-bold text-zinc-900">NextDor Marketplace Commission:</span>{" "}
+                    <span className="font-bold text-zinc-900">Nextdor Marketplace Commission:</span>{" "}
                     Standard {vendor.commissionRate || 10}% fee deducted only upon successful customer checkout.
                   </div>
                   <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-bold text-purple-700">
@@ -1762,7 +1762,7 @@ export default function VendorDashboardPage() {
       {/* Merchant Back-Office Footer */}
       <footer className="mt-16 border-t border-zinc-200 bg-white py-6 text-center text-xs text-zinc-500">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>NextDor Merchant Portal • Dedicated Seller Console</span>
+          <span>Nextdor Merchant Portal • Dedicated Seller Console</span>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:text-purple-600 transition">
               Customer Storefront

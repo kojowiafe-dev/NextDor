@@ -51,7 +51,7 @@ export function MobileNav({ categories }: MobileNavProps) {
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <span className="font-semibold">
-                {isAuthenticated ? `Hello, ${user?.name?.split(" ")[0]}` : "Browse NextDor"}
+                {isAuthenticated ? `Hello, ${user?.name?.split(" ")[0]}` : "Browse Nextdor"}
               </span>
               <button
                 type="button"
@@ -116,7 +116,7 @@ export function MobileNav({ categories }: MobileNavProps) {
                       className="my-1 flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold text-purple-300 hover:bg-white/10"
                     >
                       <Store className="h-4 w-4 text-purple-400" />
-                      <span>Sell on NextDor</span>
+                      <span>Sell on Nextdor</span>
                     </Link>
                   )}
 

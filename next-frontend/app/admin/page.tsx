@@ -207,7 +207,7 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-purple-300 ring-1 ring-purple-500/30">
                   <Store className="h-3.5 w-3.5" />
-                  <span>Flagship: <strong>NextDor Direct (0%)</strong></span>
+                  <span>Flagship: <strong>Nextdor Direct (0%)</strong></span>
                 </div>
               </div>
             </div>

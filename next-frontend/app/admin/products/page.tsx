@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus, Pencil, Trash2, Search, RefreshCw, CheckCircle2, AlertCircle, Store } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, RefreshCw, CheckCircle2, AlertCircle, Store, AlertTriangle } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { formatPrice } from "@/lib/utils";
 import {
@@ -12,6 +12,7 @@ import {
   isProductsCacheStale,
   invalidateProductsCache,
 } from "@/lib/cache/adminCache";
+
 
 interface ProductImage {
   id: string;
@@ -61,6 +62,9 @@ export default function AdminProductsPage() {
   const [syncNotice, setSyncNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
 
   async function loadProducts(forceRefresh = false) {
     // 1. Instant Cache Retrieval (Stale-While-Revalidate)
@@ -181,14 +185,36 @@ export default function AdminProductsPage() {
     return matchesName || matchesCategory;
   });
 
-  function handleDelete(id: string) {
-    setProducts((prev) => {
-      const updated = prev.filter((p) => p.id !== id);
-      setCachedProducts(updated);
-      return updated;
-    });
-    setDeleteId(null);
+  async function handleDelete(id: string) {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      // Retrieve auth token from local storage (stored as "nextdor-token" by AuthContext)
+      const token = typeof window !== "undefined" ? localStorage.getItem("nextdor-token") : null;
+      const res = await fetch(`${API_BASE}/products/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setDeleteError(json.error?.message || "Failed to delete product.");
+        setIsDeleting(false);
+        return;
+      }
+      // Optimistic update: remove from local state & cache
+      setProducts((prev) => {
+        const updated = prev.filter((p) => p.id !== id);
+        setCachedProducts(updated);
+        return updated;
+      });
+      setDeleteId(null);
+    } catch (err) {
+      setDeleteError("Network error. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
   }
+
 
   return (
     <AdminLayout
@@ -216,7 +242,7 @@ export default function AdminProductsPage() {
             title="Ingest products from WooCommerce store"
           >
             <RefreshCw className={`h-4 w-4 text-[#ff9900] ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? (syncProgressText || "Syncing...") : "Sync from WooCommerce"}
+            <span className="hidden sm:inline">{isSyncing ? (syncProgressText || "Syncing...") : "Sync from WooCommerce"}</span>
           </button>
 
           <Link
@@ -224,7 +250,7 @@ export default function AdminProductsPage() {
             className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3.5 py-2 text-sm font-semibold text-purple-700 shadow-sm transition hover:bg-purple-100"
           >
             <Store className="h-4 w-4 text-purple-600 shrink-0" />
-            <span>Vendor Portal</span>
+            <span className="hidden md:inline">Vendor Portal</span>
           </Link>
 
           <Link
@@ -232,7 +258,7 @@ export default function AdminProductsPage() {
             className="flex items-center gap-1.5 rounded-lg bg-[#ff9900] px-4 py-2 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-[#f08804]"
           >
             <Plus className="h-4 w-4" />
-            Add Product
+            <span className="hidden sm:inline">Add Product</span>
           </Link>
         </div>
       }
@@ -279,8 +305,8 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Desktop Table — hidden on small screens */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-400">
@@ -326,7 +352,7 @@ export default function AdminProductsPage() {
                         title="View merchant storefront"
                       >
                         <Store className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                        <span>{product.vendor?.name || "NextDor Direct"}</span>
+                        <span>{product.vendor?.name || "Nextdor Direct"}</span>
                       </Link>
                     </td>
                     <td className="px-5 py-3.5">
@@ -386,43 +412,106 @@ export default function AdminProductsPage() {
               })}
             </tbody>
           </table>
-
-          {isLoading && (
-            <div className="py-12 text-center text-sm text-zinc-500">
-              <RefreshCw className="mx-auto h-5 w-5 animate-spin text-[#ff9900] mb-2" />
-              Loading products from database...
-            </div>
-          )}
-
-          {!isLoading && filtered.length === 0 && (
-            <div className="py-16 text-center">
-              <p className="text-sm font-medium text-zinc-600">No products found in the database.</p>
-              <p className="mt-1 text-xs text-zinc-400">Click &ldquo;Sync from WooCommerce&rdquo; above to import your live store catalog!</p>
-            </div>
-          )}
         </div>
+
+        {/* Mobile Card List — shown only on xs screens */}
+        <div className="sm:hidden divide-y divide-zinc-100">
+          {filtered.map((product) => {
+            const stock = stockConfig[product.stockStatus] || stockConfig.IN_STOCK;
+            const primaryImage = product.images?.[0]?.url;
+            return (
+              <div key={product.id} className="flex items-start gap-3 p-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-sm font-bold text-zinc-500">
+                  {primaryImage ? (
+                    <img src={primaryImage} alt={product.name} className="h-full w-full object-cover" />
+                  ) : (
+                    product.name.charAt(0)
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-zinc-900 text-sm">{product.name}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500 truncate">{product.vendor?.name || "Nextdor Direct"}</p>
+                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${stock.classes}`}>
+                      {stock.label}
+                    </span>
+                    <span className="text-xs font-semibold text-zinc-900">
+                      {formatPrice(Number(product.salePrice ?? product.price), product.currency || "GHS")}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <Link
+                    href={`/admin/products/${product.id}`}
+                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+                    title="Edit"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteId(product.id)}
+                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {isLoading && (
+          <div className="py-12 text-center text-sm text-zinc-500">
+            <RefreshCw className="mx-auto h-5 w-5 animate-spin text-[#ff9900] mb-2" />
+            Loading products from database...
+          </div>
+        )}
+
+        {!isLoading && filtered.length === 0 && (
+          <div className="py-16 text-center">
+            <p className="text-sm font-medium text-zinc-600">No products found in the database.</p>
+            <p className="mt-1 text-xs text-zinc-400">Click &ldquo;Sync from WooCommerce&rdquo; above to import your live store catalog!</p>
+          </div>
+        )}
       </div>
 
       {/* Delete confirm modal */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-zinc-900">Delete Product?</h3>
-            <p className="mt-2 text-sm text-zinc-500">
-              This action cannot be undone. The product will be permanently removed.
-            </p>
-            <div className="mt-5 flex gap-3">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-zinc-900">Delete Product?</h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  This action cannot be undone. The product will be permanently removed from the catalog.
+                </p>
+              </div>
+            </div>
+            {deleteError && (
+              <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => handleDelete(deleteId)}
-                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                disabled={isDeleting}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
-                Delete
+                {isDeleting && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                {isDeleting ? "Deleting…" : "Delete"}
               </button>
               <button
                 type="button"
-                onClick={() => setDeleteId(null)}
-                className="flex-1 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                onClick={() => { setDeleteId(null); setDeleteError(null); }}
+                disabled={isDeleting}
+                className="flex-1 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
               >
                 Cancel
               </button>

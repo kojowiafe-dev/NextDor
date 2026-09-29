@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
             <span className="text-2xl font-black text-zinc-900">N</span>
           </div>
           <h1 className="text-xl font-bold text-white">Admin Portal</h1>
-          <p className="mt-1 text-sm text-zinc-500">NextDor Operations Dashboard</p>
+          <p className="mt-1 text-sm text-zinc-500">Nextdor Operations Dashboard</p>
         </div>
 
         <div className="rounded-2xl bg-[#161b22] p-8 ring-1 ring-white/5">
@@ -168,7 +168,7 @@ export default function AdminLoginPage() {
 
         <p className="mt-6 text-center text-xs text-zinc-600">
           <Link href="/" className="hover:text-zinc-400">
-            ← Back to NextDor Store
+            ← Back to Nextdor Store
           </Link>
         </p>
       </div>
