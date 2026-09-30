@@ -6,12 +6,22 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "www.nextdor.online",
-        pathname: "/wp-content/uploads/**",
+        pathname: "/**",
       },
       {
         protocol: "https",
         hostname: "nextdor.online",
-        pathname: "/wp-content/uploads/**",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "**.cloudinary.com",
+        pathname: "/**",
       },
     ],
   },

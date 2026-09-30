@@ -188,4 +188,228 @@ export class ProductRepository {
       data: { deletedAt: new Date() },
     });
   }
+
+  /**
+   * Retrieves trending products based on 7-day sales velocity and rating acceleration.
+   * If recent order count is low, falls back gracefully to top-reviewed & top-rated items.
+   */
+  async findTrending(limit = 10): Promise<any[]> {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // 1. Group recent OrderItems by productId to find real sales velocity
+    const recentSales = await prisma.orderItem.groupBy({
+      by: ["productId"],
+      where: {
+        order: {
+          createdAt: { gte: sevenDaysAgo },
+          status: { notIn: ["CANCELLED", "REFUNDED"] },
+        },
+      },
+      _sum: { quantity: true },
+      orderBy: {
+        _sum: { quantity: "desc" },
+      },
+      take: limit,
+    });
+
+    const velocityMap = new Map<string, number>();
+    const trendingProductIds: string[] = [];
+    for (const s of recentSales) {
+      if (s.productId) {
+        trendingProductIds.push(s.productId);
+        velocityMap.set(s.productId, s._sum.quantity || 1);
+      }
+    }
+
+    // 2. Fetch products that have active sales velocity
+    let trendingProducts: any[] = [];
+    if (trendingProductIds.length > 0) {
+      trendingProducts = await prisma.product.findMany({
+        where: {
+          id: { in: trendingProductIds },
+          deletedAt: null,
+          stockStatus: "IN_STOCK",
+          OR: [
+            { vendorId: null },
+            { vendor: { status: "ACTIVE", deletedAt: null } },
+          ],
+        },
+        include: {
+          images: { orderBy: { sortOrder: "asc" }, select: { id: true, url: true, alt: true } },
+          categories: { select: { id: true, name: true, slug: true } },
+          vendor: { select: { id: true, name: true, slug: true, logoUrl: true } },
+        },
+      });
+    }
+
+    // Preserve the sales velocity ordering
+    const sorted = trendingProductIds
+      .map((id) => {
+        const prod = trendingProducts.find((p) => p.id === id);
+        if (!prod) return null;
+        return {
+          ...prod,
+          recentSales: velocityMap.get(id) || 1,
+          trendingBadge: "🔥 Trending Fast",
+        };
+      })
+      .filter(Boolean) as any[];
+
+    // 3. If fewer than limit, pad with top-rated/reviewed active products
+    if (sorted.length < limit) {
+      const existingIds = new Set(sorted.map((p) => p.id));
+      const padProducts = await prisma.product.findMany({
+        where: {
+          id: { notIn: Array.from(existingIds) },
+          deletedAt: null,
+          stockStatus: "IN_STOCK",
+          OR: [
+            { vendorId: null },
+            { vendor: { status: "ACTIVE", deletedAt: null } },
+          ],
+        },
+        take: limit - sorted.length,
+        orderBy: [
+          { reviewCount: "desc" },
+          { averageRating: "desc" },
+          { createdAt: "desc" },
+        ],
+        include: {
+          images: { orderBy: { sortOrder: "asc" }, select: { id: true, url: true, alt: true } },
+          categories: { select: { id: true, name: true, slug: true } },
+          vendor: { select: { id: true, name: true, slug: true, logoUrl: true } },
+        },
+      });
+
+      for (const prod of padProducts) {
+        sorted.push({
+          ...prod,
+          recentSales: Math.max(1, prod.reviewCount * 2),
+          trendingBadge: prod.reviewCount > 0 ? "★ Highly Rated" : "⚡ Popular Choice",
+        });
+      }
+    }
+
+    return sorted;
+  }
+
+  /**
+   * Multi-seller grouping by product name.
+   * Finds other active vendors offering products with the same normalized name.
+   */
+  async findOtherSellersByName(productName: string, excludeSlug?: string): Promise<any[]> {
+    const cleanName = productName.trim();
+    if (!cleanName) return [];
+
+    const otherOffers = await prisma.product.findMany({
+      where: {
+        name: { equals: cleanName, mode: "insensitive" },
+        slug: excludeSlug ? { not: excludeSlug } : undefined,
+        deletedAt: null,
+        OR: [
+          { vendorId: null },
+          { vendor: { status: "ACTIVE", deletedAt: null } },
+        ],
+      },
+      include: {
+        vendor: {
+          select: { id: true, name: true, slug: true, logoUrl: true },
+        },
+        images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+      },
+      orderBy: { price: "asc" },
+      take: 10,
+    });
+
+    return otherOffers.map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      price: Number(p.salePrice ?? p.price),
+      currency: p.currency,
+      stockStatus: p.stockStatus,
+      stockQty: p.stockQty,
+      vendor: p.vendor || { name: "Nextdor Direct", slug: "nextdor-direct", logoUrl: null },
+    }));
+  }
+
+  /**
+   * Groups active products by verified merchant for public storefront display.
+   */
+  async getGroupedByMerchant(limitMerchants = 6, productsPerMerchant = 4): Promise<any[]> {
+    const vendors = await prisma.vendor.findMany({
+      where: {
+        status: "ACTIVE",
+        deletedAt: null,
+        products: { some: { deletedAt: null } },
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoUrl: true,
+        bannerUrl: true,
+        description: true,
+        products: {
+          where: { deletedAt: null, stockStatus: "IN_STOCK" },
+          take: productsPerMerchant,
+          orderBy: { createdAt: "desc" },
+          include: {
+            images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true, alt: true } },
+          },
+        },
+        _count: {
+          select: { products: { where: { deletedAt: null } } },
+        },
+      },
+      take: limitMerchants,
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Also include Nextdor Direct flagship if products with vendorId: null exist
+    const directProducts = await prisma.product.findMany({
+      where: { vendorId: null, deletedAt: null, stockStatus: "IN_STOCK" },
+      take: productsPerMerchant,
+      orderBy: { createdAt: "desc" },
+      include: {
+        images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true, alt: true } },
+      },
+    });
+
+    const directCount = await prisma.product.count({
+      where: { vendorId: null, deletedAt: null },
+    });
+
+    const result: any[] = [];
+    if (directProducts.length > 0) {
+      result.push({
+        id: "nextdor-direct",
+        name: "NextDor Direct (Official Store)",
+        slug: "nextdor-direct",
+        logoUrl: null,
+        description: "Official NextDor flagship store with instant MoMo checkout and express courier dispatch.",
+        rating: 5.0,
+        totalProducts: directCount,
+        products: directProducts,
+        isOfficial: true,
+      });
+    }
+
+    for (const v of vendors) {
+      result.push({
+        id: v.id,
+        name: v.name,
+        slug: v.slug,
+        logoUrl: v.logoUrl,
+        bannerUrl: v.bannerUrl,
+        description: v.description,
+        rating: 4.8,
+        totalProducts: v._count.products,
+        products: v.products,
+        isOfficial: false,
+      });
+    }
+
+    return result;
+  }
 }

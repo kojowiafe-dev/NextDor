@@ -81,6 +81,100 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   );
 
   /**
+   * GET /products/trending
+   * Trending products calculated from recent sales velocity & customer ratings.
+   */
+  app.get(
+    "/trending",
+    {
+      schema: {
+        description: "List trending products based on recent sales velocity and customer rating signals",
+        tags: ["Products"],
+        querystring: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { limit = 10 } = (req.query as any) || {};
+      const products = await productService.getTrendingProducts(Number(limit));
+      return reply.send({
+        success: true,
+        data: { products },
+      });
+    }
+  );
+
+  /**
+   * GET /products/sellers
+   * Multi-seller lookup: find other merchants selling the same product name.
+   */
+  app.get(
+    "/sellers",
+    {
+      schema: {
+        description: "Find other vendors offering products with the same or equivalent name",
+        tags: ["Products"],
+        querystring: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string" },
+            excludeSlug: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { name, excludeSlug } = req.query as { name: string; excludeSlug?: string };
+      const sellers = await productService.getOtherSellers(name, excludeSlug);
+      return reply.send({
+        success: true,
+        data: {
+          productName: name,
+          sellers,
+          count: sellers.length,
+        },
+      });
+    }
+  );
+
+  /**
+   * GET /products/grouped-by-merchant
+   * Groups active products by verified merchant for storefront marketplace discovery.
+   */
+  app.get(
+    "/grouped-by-merchant",
+    {
+      schema: {
+        description: "List active verified merchants with preview catalogs for storefront discovery",
+        tags: ["Products"],
+        querystring: {
+          type: "object",
+          properties: {
+            limitMerchants: { type: "integer", default: 6 },
+            productsPerMerchant: { type: "integer", default: 4 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { limitMerchants = 6, productsPerMerchant = 4 } = (req.query as any) || {};
+      const merchants = await productService.getGroupedByMerchant(
+        Number(limitMerchants),
+        Number(productsPerMerchant)
+      );
+      return reply.send({
+        success: true,
+        data: { merchants },
+      });
+    }
+  );
+
+  /**
    * GET /products/:slug
    * Single product lookup by slug.
    */

@@ -5,11 +5,13 @@ import { Star } from "lucide-react";
 import {
   getProductBySlug,
   getRelatedProducts,
+  getOtherSellers,
 } from "@/lib/catalog";
 import { AddToCartButton } from "@/components/product/AddToCartButton";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductRow } from "@/components/home/ProductRow";
 import { ReviewsSection } from "@/components/product/ReviewsSection";
+import { OtherSellersSection } from "@/components/product/OtherSellersSection";
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
@@ -32,7 +34,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound();
   }
 
-  const related = await getRelatedProducts(product.id);
+  const [related, otherSellers] = await Promise.all([
+    getRelatedProducts(product.id),
+    getOtherSellers(product.name, product.slug),
+  ]);
   const sanitizedDescription = DOMPurify.sanitize(product.description);
 
   return (
@@ -107,6 +112,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
           dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
         />
       </section>
+
+      {/* Multi-Seller Grouping: Alternative Merchant Offers */}
+      {otherSellers.length > 0 && (
+        <OtherSellersSection
+          sellers={otherSellers}
+          currentPrice={product.price}
+          productName={product.name}
+        />
+      )}
 
       <ReviewsSection
         productId={product.id}

@@ -56,3 +56,56 @@ export type PaginatedProducts = {
   totalPages: number;
   page: number;
 };
+
+export type TrendingProduct = Product & {
+  recentSales?: number;
+  trendingBadge?: string;
+  vendor?: {
+    id?: string;
+    name: string;
+    slug: string;
+    logoUrl?: string | null;
+  };
+};
+
+export type OtherSellerOffer = {
+  id: string;
+  slug: string;
+  name: string;
+  price: number;
+  currency: string;
+  stockStatus: string;
+  stockQty?: number | null;
+  vendor: {
+    id?: string;
+    name: string;
+    slug: string;
+    logoUrl?: string | null;
+    rating?: number;
+  };
+};
+
+export type MerchantGroup = {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+  bannerUrl?: string | null;
+  description?: string | null;
+  rating?: number;
+  totalProducts: number;
+  isOfficial?: boolean;
+  products: any[];
+};
+
+export type ConsolidatedProduct = {
+  normalizedName: string;
+  displayName: string;
+  minPrice: number;
+  maxPrice: number;
+  currency: string;
+  image: string;
+  sellerCount: number;
+  primarySlug: string;
+  offers: OtherSellerOffer[];
+};

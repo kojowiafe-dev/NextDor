@@ -141,7 +141,48 @@ export class ProductService {
     // Evict targeted caches (fire-and-forget — non-fatal if Redis is down)
     await Promise.allSettled([
       cacheDel(CacheKey.product(product.slug ?? id)),
+      cacheDel(CacheKey.trendingProducts()),
+      cacheDel(CacheKey.groupedByMerchant()),
       flushPattern("products:list:*"),
     ]);
+  }
+
+  /**
+   * Retrieves trending products with 5-minute Redis caching.
+   */
+  async getTrendingProducts(limit = 10) {
+    const cacheKey = CacheKey.trendingProducts();
+    const cached = await cacheGet<any[]>(cacheKey);
+    if (cached) return cached;
+
+    const products = await this.productRepo.findTrending(limit);
+    await cacheSet(cacheKey, products, 5 * 60);
+    return products;
+  }
+
+  /**
+   * Retrieves other merchants selling the same product name.
+   */
+  async getOtherSellers(productName: string, excludeSlug?: string) {
+    const cacheKey = CacheKey.otherSellers(`${productName}:${excludeSlug || ""}`);
+    const cached = await cacheGet<any[]>(cacheKey);
+    if (cached) return cached;
+
+    const sellers = await this.productRepo.findOtherSellersByName(productName, excludeSlug);
+    await cacheSet(cacheKey, sellers, 3 * 60);
+    return sellers;
+  }
+
+  /**
+   * Retrieves products grouped by merchant for storefront spotlight.
+   */
+  async getGroupedByMerchant(limitMerchants = 6, productsPerMerchant = 4) {
+    const cacheKey = CacheKey.groupedByMerchant();
+    const cached = await cacheGet<any[]>(cacheKey);
+    if (cached) return cached;
+
+    const grouped = await this.productRepo.getGroupedByMerchant(limitMerchants, productsPerMerchant);
+    await cacheSet(cacheKey, grouped, 10 * 60);
+    return grouped;
   }
 }

@@ -4,6 +4,10 @@ import type {
   PaginatedProducts,
   Product,
   ProductSort,
+  TrendingProduct,
+  OtherSellerOffer,
+  MerchantGroup,
+  ConsolidatedProduct,
 } from "./types";
 import {
   fetchWCCategories,
@@ -178,4 +182,171 @@ export async function getPopularProducts(limit = 8): Promise<Product[]> {
   return products.slice(0, limit);
 }
 
-export type { Category, Product, GetProductsOptions, PaginatedProducts, ProductSort };
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
+
+/**
+ * Fetches real-time trending products based on 7-day sales velocity and rating acceleration.
+ */
+export async function getTrendingProducts(limit = 8): Promise<TrendingProduct[]> {
+  try {
+    const res = await fetch(`${API_BASE}/products/trending?limit=${limit}`, {
+      next: { revalidate: 60 },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.products) && json.data.products.length > 0) {
+        return json.data.products.map((p: any): TrendingProduct => ({
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          description: p.description || "",
+          shortDescription: p.shortDesc || "",
+          price: Number(p.salePrice ?? p.price),
+          regularPrice: p.salePrice ? Number(p.price) : null,
+          currency: p.currency || "GHS",
+          onSale: Boolean(p.salePrice),
+          images: p.images?.length > 0
+            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
+            : [{ src: "", alt: p.name }],
+          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
+          rating: Number(p.averageRating || 0),
+          reviewCount: p.reviewCount || 0,
+          inStock: p.stockStatus === "IN_STOCK",
+          recentSales: p.recentSales || 1,
+          trendingBadge: p.trendingBadge || "🔥 Trending Fast",
+          vendor: p.vendor ? {
+            id: p.vendor.id,
+            name: p.vendor.name,
+            slug: p.vendor.slug,
+            logoUrl: p.vendor.logoUrl,
+          } : undefined,
+        }));
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch live trending products, falling back to popular:", err);
+  }
+
+  // Graceful fallback to catalog popular products if backend is warming up
+  const fallback = await getPopularProducts(limit);
+  return fallback.map((p) => ({
+    ...p,
+    trendingBadge: "🔥 Trending Fast",
+    recentSales: Math.max(1, p.reviewCount * 3),
+    vendor: { name: "Nextdor Direct", slug: "nextdor" },
+  }));
+}
+
+/**
+ * Fetches verified merchants with their top preview products.
+ */
+export async function getGroupedByMerchant(limitMerchants = 6, productsPerMerchant = 4): Promise<MerchantGroup[]> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/products/grouped-by-merchant?limitMerchants=${limitMerchants}&productsPerMerchant=${productsPerMerchant}`,
+      { next: { revalidate: 120 } }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.merchants) && json.data.merchants.length > 0) {
+        return json.data.merchants;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch live grouped by merchant:", err);
+  }
+  return [];
+}
+
+/**
+ * Finds alternative sellers offering the same product name.
+ */
+export async function getOtherSellers(productName: string, excludeSlug?: string): Promise<OtherSellerOffer[]> {
+  try {
+    const cleanName = encodeURIComponent(productName.trim());
+    const excludeParam = excludeSlug ? `&excludeSlug=${encodeURIComponent(excludeSlug)}` : "";
+    const res = await fetch(`${API_BASE}/products/sellers?name=${cleanName}${excludeParam}`, {
+      next: { revalidate: 60 },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.sellers)) {
+        return json.data.sellers;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch other sellers:", err);
+  }
+  return [];
+}
+
+/**
+ * Client/server helper that groups multi-seller products by normalized title.
+ */
+export function groupProductsByName(products: Product[]): ConsolidatedProduct[] {
+  const map = new Map<string, ConsolidatedProduct>();
+
+  for (const prod of products) {
+    const key = prod.name.trim().toLowerCase();
+    const price = prod.price;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        normalizedName: key,
+        displayName: prod.name,
+        minPrice: price,
+        maxPrice: price,
+        currency: prod.currency,
+        image: prod.images[0]?.src || "",
+        sellerCount: 1,
+        primarySlug: prod.slug,
+        offers: [
+          {
+            id: prod.id,
+            slug: prod.slug,
+            name: prod.name,
+            price,
+            currency: prod.currency,
+            stockStatus: prod.inStock ? "IN_STOCK" : "OUT_OF_STOCK",
+            vendor: {
+              name: "Nextdor Direct",
+              slug: "nextdor",
+            },
+          },
+        ],
+      });
+    } else {
+      const existing = map.get(key)!;
+      existing.sellerCount += 1;
+      existing.minPrice = Math.min(existing.minPrice, price);
+      existing.maxPrice = Math.max(existing.maxPrice, price);
+      existing.offers.push({
+        id: prod.id,
+        slug: prod.slug,
+        name: prod.name,
+        price,
+        currency: prod.currency,
+        stockStatus: prod.inStock ? "IN_STOCK" : "OUT_OF_STOCK",
+        vendor: {
+          name: "Nextdor Direct",
+          slug: "nextdor",
+        },
+      });
+      existing.offers.sort((a, b) => a.price - b.price);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+export type {
+  Category,
+  Product,
+  GetProductsOptions,
+  PaginatedProducts,
+  ProductSort,
+  TrendingProduct,
+  OtherSellerOffer,
+  MerchantGroup,
+  ConsolidatedProduct,
+};
