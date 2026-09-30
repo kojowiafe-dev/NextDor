@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const footerLinks = {
   shop: [
@@ -69,9 +70,17 @@ export function Footer() {
       </div>
 
       <div className="border-t border-zinc-700 py-6 text-center text-sm text-zinc-400">
-        <p className="font-semibold text-white">
-          next<span className="text-[#ff9900]">dor</span>
-        </p>
+        <div className="flex justify-center mb-3">
+          <Link href="/" className="inline-block transition hover:opacity-90">
+            <Image
+              src="/logo.png"
+              alt="NextDor"
+              width={140}
+              height={38}
+              className="h-8 w-auto object-contain mx-auto"
+            />
+          </Link>
+        </div>
         <p className="mt-1">Style, Convenience, and Comfort — Nextdor to You</p>
         <p className="mt-2">
           &copy; {new Date().getFullYear()} Nextdor. All rights reserved.

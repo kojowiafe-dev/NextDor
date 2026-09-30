@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { MapPin, ShoppingCart, User, ChevronDown, LogOut, Package, Settings, ShieldCheck, Store } from "lucide-react";
@@ -167,8 +168,15 @@ export function Header({ categories }: HeaderProps) {
           <div className="md:hidden">
             <MobileNav categories={categories} />
           </div>
-          <Link href="/" className="text-xl font-bold tracking-tight">
-            next<span className="text-[#ff9900]">dor</span>
+          <Link href="/" className="flex items-center shrink-0 py-0.5">
+            <Image
+              src="/logo.png"
+              alt="NextDor"
+              width={140}
+              height={38}
+              priority
+              className="h-8 md:h-9 w-auto object-contain"
+            />
           </Link>
         </div>
 

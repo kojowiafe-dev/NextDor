@@ -102,7 +102,7 @@ export class OrderService {
 
     // ── Validate each cart item ──────────────────────────────────────────────
     const enrichedItems = input.cart.map((cartItem) => {
-      const product = products.find((p) => p.id === cartItem.productId);
+      const product = products.find((p: { id: string; [key: string]: any }) => p.id === cartItem.productId);
 
       if (!product) {
         throw new NotFoundError(`Product ${cartItem.productId}`);

@@ -23,6 +23,8 @@ import {
   mapWCProducts,
 } from "@/lib/woocommerce/mappers";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
+
 function sortToWCParams(sort?: ProductSort): {
   orderby?: string;
   order?: string;
@@ -68,19 +70,67 @@ export async function getProducts(
 
   const { products: rawProducts, total, totalPages } =
     await fetchWCProductsWithMeta(params);
-  let products = mapWCProducts(rawProducts);
+  if (rawProducts.length > 0) {
+    let products = mapWCProducts(rawProducts);
+    if (options.onSale) {
+      products = products.filter((product) => product.onSale);
+    }
+    return {
+      products,
+      total,
+      totalPages: options.onSale
+        ? Math.max(1, Math.ceil(products.length / perPage))
+        : Math.max(1, totalPages),
+      page,
+    };
+  }
 
-  if (options.onSale) {
-    products = products.filter((product) => product.onSale);
+  // Graceful fallback to backend PostgreSQL catalog
+  try {
+    const res = await fetch(
+      `${API_BASE}/products?page=${page}&limit=${perPage}${options.search ? `&search=${encodeURIComponent(options.search)}` : ""}`,
+      { next: { revalidate: 60 } }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.products)) {
+        let products: Product[] = json.data.products.map((p: any): Product => ({
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          description: p.description || "",
+          shortDescription: p.shortDesc || "",
+          price: Number(p.salePrice ?? p.price),
+          regularPrice: p.salePrice ? Number(p.price) : null,
+          currency: p.currency || "GHS",
+          onSale: Boolean(p.salePrice),
+          images: p.images?.length > 0
+            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
+            : [{ src: "", alt: p.name }],
+          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
+          rating: Number(p.averageRating || 0),
+          reviewCount: p.reviewCount || 0,
+          inStock: p.stockStatus === "IN_STOCK",
+        }));
+        if (options.onSale) {
+          products = products.filter((product) => product.onSale);
+        }
+        return {
+          products,
+          total: json.data.total ?? products.length,
+          totalPages: json.data.totalPages ?? Math.max(1, Math.ceil((json.data.total ?? products.length) / perPage)),
+          page,
+        };
+      }
+    }
+  } catch {
+    // Backend also warming up
   }
 
   return {
-    products,
-    total,
-    // Fall back to local calculation only when onSale filter reduces the count
-    totalPages: options.onSale
-      ? Math.max(1, Math.ceil(products.length / perPage))
-      : Math.max(1, totalPages),
+    products: [],
+    total: 0,
+    totalPages: 1,
     page,
   };
 }
@@ -105,13 +155,51 @@ export async function getAllProducts(
   }
 
   const rawProducts = await fetchWCProducts(params);
-  let products = mapWCProducts(rawProducts);
-
-  if (options.onSale) {
-    products = products.filter((product) => product.onSale);
+  if (rawProducts.length > 0) {
+    let products = mapWCProducts(rawProducts);
+    if (options.onSale) {
+      products = products.filter((product) => product.onSale);
+    }
+    return products;
   }
 
-  return products;
+  // Graceful fallback to backend PostgreSQL catalog
+  try {
+    const res = await fetch(`${API_BASE}/products?limit=50`, {
+      next: { revalidate: 60 },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.products) && json.data.products.length > 0) {
+        let products: Product[] = json.data.products.map((p: any): Product => ({
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          description: p.description || "",
+          shortDescription: p.shortDesc || "",
+          price: Number(p.salePrice ?? p.price),
+          regularPrice: p.salePrice ? Number(p.price) : null,
+          currency: p.currency || "GHS",
+          onSale: Boolean(p.salePrice),
+          images: p.images?.length > 0
+            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
+            : [{ src: "", alt: p.name }],
+          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
+          rating: Number(p.averageRating || 0),
+          reviewCount: p.reviewCount || 0,
+          inStock: p.stockStatus === "IN_STOCK",
+        }));
+        if (options.onSale) {
+          products = products.filter((product) => product.onSale);
+        }
+        return products;
+      }
+    }
+  } catch {
+    // Backend also warming up
+  }
+
+  return [];
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
@@ -119,30 +207,87 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
   const product = mapWCProducts(rawProducts).find(
     (entry) => entry.slug === slug,
   );
-  return product ?? null;
+  if (product) return product;
+
+  // Fallback to backend API
+  try {
+    const res = await fetch(`${API_BASE}/products/${slug}`, { next: { revalidate: 60 } });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data?.product) {
+        const p = json.data.product;
+        return {
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          description: p.description || "",
+          shortDescription: p.shortDesc || "",
+          price: Number(p.salePrice ?? p.price),
+          regularPrice: p.salePrice ? Number(p.price) : null,
+          currency: p.currency || "GHS",
+          onSale: Boolean(p.salePrice),
+          images: p.images?.length > 0
+            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
+            : [{ src: "", alt: p.name }],
+          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
+          rating: Number(p.averageRating || 0),
+          reviewCount: p.reviewCount || 0,
+          inStock: p.stockStatus === "IN_STOCK",
+        };
+      }
+    }
+  } catch {
+    // Backend also warming up
+  }
+
+  return null;
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
   const rawProduct = await fetchWCProductById(Number(id));
-  if (!rawProduct) {
-    return null;
+  if (rawProduct) {
+    const product = mapWCProduct(rawProduct);
+    return product.price > 0 ? product : null;
   }
-
-  const product = mapWCProduct(rawProduct);
-  return product.price > 0 ? product : null;
+  return null;
 }
 
 export async function getCategories(): Promise<Category[]> {
   const rawCategories = await fetchWCCategories();
-  return rawCategories
-    .map(mapWCCategory)
-    .filter(
-      (category) =>
-        category.count > 0 &&
-        category.slug !== "uncategorized" &&
-        category.parentId === null,
-    )
-    .sort((a, b) => b.count - a.count);
+  if (rawCategories.length > 0) {
+    return rawCategories
+      .map(mapWCCategory)
+      .filter(
+        (category) =>
+          category.count > 0 &&
+          category.slug !== "uncategorized" &&
+          category.parentId === null,
+      )
+      .sort((a, b) => b.count - a.count);
+  }
+
+  // Graceful fallback to backend PostgreSQL catalog
+  try {
+    const res = await fetch(`${API_BASE}/products/categories`, {
+      next: { revalidate: 120 },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.categories)) {
+        return json.data.categories.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          count: c._count?.products ?? 0,
+          parentId: c.parentId ?? null,
+        }));
+      }
+    }
+  } catch {
+    // Backend also warming up
+  }
+
+  return [];
 }
 
 export async function getCategoryBySlug(
@@ -181,8 +326,6 @@ export async function getPopularProducts(limit = 8): Promise<Product[]> {
   const products = await getAllProducts({ sort: "popularity" });
   return products.slice(0, limit);
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
 /**
  * Fetches real-time trending products based on 7-day sales velocity and rating acceleration.

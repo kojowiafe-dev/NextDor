@@ -79,7 +79,7 @@ export class OrderRepository {
   async placeOrder(input: PlaceOrderInput): Promise<Order> {
     const orderNumber = await this.generateOrderNumber();
 
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Decrement stock for each product (Optimistic Concurrency Control)
       for (const item of input.items) {
         await tx.product.updateMany({
@@ -268,7 +268,7 @@ export class OrderRepository {
     note?: string,
     createdBy?: string,
   ): Promise<Order> {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const order = await tx.order.update({
         where: { id: orderId },
         data: { status },

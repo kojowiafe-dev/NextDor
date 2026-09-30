@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -131,10 +132,15 @@ export default function VendorRegisterPage() {
       {/* Top Navigation */}
       <header className="border-b border-white/10 bg-[#161b22]">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold tracking-tight text-white">
-              next<span className="text-[#ff9900]">dor</span>
-            </span>
+          <Link href="/" className="flex items-center gap-3">
+            <Image
+              src="/logo.png"
+              alt="NextDor"
+              width={120}
+              height={32}
+              className="h-7 w-auto object-contain"
+              priority
+            />
             <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-300 border border-purple-500/30">
               Merchant Partner
             </span>

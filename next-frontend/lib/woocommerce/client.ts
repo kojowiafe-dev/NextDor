@@ -2,10 +2,14 @@ import type { WCProduct, WCCategoryFull } from "./types";
 
 const REVALIDATE_SECONDS = 300;
 
+const DEFAULT_HEADERS: HeadersInit = {
+  "Accept": "application/json",
+};
+
 const FALLBACK_STORE_URLS = [
   process.env.WOOCOMMERCE_STORE_URL,
-  "https://nextdor.online/wp-json/wc/store/v1",
   "https://www.nextdor.online/wp-json/wc/store/v1",
+  "https://nextdor.online/wp-json/wc/store/v1",
 ].filter((url, index, list): url is string => Boolean(url) && list.indexOf(url) === index);
 
 type FetchOptions = {
@@ -24,7 +28,9 @@ function buildUrl(
   path: string,
   searchParams?: Record<string, string | number | undefined>,
 ): URL {
-  const url = new URL(`${baseUrl}${path}`);
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const url = new URL(`${normalizedBase}${normalizedPath}`);
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
       if (value !== undefined) url.searchParams.set(key, String(value));
@@ -44,17 +50,31 @@ async function storeFetch<T>(
     const url = buildUrl(baseUrl, path, options.searchParams);
     try {
       const response = await fetch(url.toString(), {
+        headers: DEFAULT_HEADERS,
         next: { revalidate: REVALIDATE_SECONDS },
       });
+
       if (!response.ok) {
-        throw new Error(`WooCommerce API error: ${response.status} ${path}`);
+        throw new Error(`WooCommerce API error: ${response.status} ${response.statusText} (${path})`);
       }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        throw new Error(
+          `WooCommerce API returned HTML instead of JSON (${contentType || "text/html"}): ${text.slice(0, 100)}...`
+        );
+      }
+
       return (await response.json()) as T;
     } catch (error) {
       lastError = error;
+      const cause = (error as any)?.cause;
+      const causeDetails = cause
+        ? ` (cause: ${cause.code || cause.message || cause})`
+        : "";
       console.warn(
-        `[WooCommerce] Failed to fetch ${url.toString()}:`,
-        error instanceof Error ? error.message : error,
+        `[WooCommerce] Failed to fetch ${url.toString()}: ${error instanceof Error ? error.message : error}${causeDetails}`,
       );
     }
   }
@@ -75,20 +95,34 @@ async function storeFetchWithMeta<T>(
     const url = buildUrl(baseUrl, path, options.searchParams);
     try {
       const response = await fetch(url.toString(), {
+        headers: DEFAULT_HEADERS,
         next: { revalidate: REVALIDATE_SECONDS },
       });
+
       if (!response.ok) {
-        throw new Error(`WooCommerce API error: ${response.status} ${path}`);
+        throw new Error(`WooCommerce API error: ${response.status} ${response.statusText} (${path})`);
       }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        throw new Error(
+          `WooCommerce API returned HTML instead of JSON (${contentType || "text/html"}): ${text.slice(0, 100)}...`
+        );
+      }
+
       const data = (await response.json()) as T;
       const total = Number(response.headers.get("X-WP-Total") ?? 0);
       const totalPages = Number(response.headers.get("X-WP-TotalPages") ?? 1);
       return { data, total, totalPages };
     } catch (error) {
       lastError = error;
+      const cause = (error as any)?.cause;
+      const causeDetails = cause
+        ? ` (cause: ${cause.code || cause.message || cause})`
+        : "";
       console.warn(
-        `[WooCommerce] Failed to fetch ${url.toString()}:`,
-        error instanceof Error ? error.message : error,
+        `[WooCommerce] Failed to fetch ${url.toString()}: ${error instanceof Error ? error.message : error}${causeDetails}`,
       );
     }
   }

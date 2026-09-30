@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -56,16 +57,24 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
       }`}
     >
       {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-white/5 px-4">
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 px-3">
         <Link href="/admin" className="flex items-center gap-2 overflow-hidden">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-xs font-bold text-zinc-900">
-            N
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-white">Nextdor</p>
+          {collapsed ? (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-xs font-bold text-zinc-900 shadow-sm">
+              N
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <Image
+                src="/logo.png"
+                alt="NextDor Admin"
+                width={110}
+                height={28}
+                className="h-6 w-auto object-contain"
+                priority
+              />
               <span
-                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                className={`w-fit rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase tracking-wider ${
                   user?.role === "super_admin"
                     ? "bg-[#ff9900]/20 text-[#ff9900]"
                     : "bg-blue-500/20 text-blue-400"

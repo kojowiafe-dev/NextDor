@@ -28,7 +28,7 @@
  *    Also: "PostgreSQL up and running" by Regina Obe — Chapter on pooling.
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { logger } from "./logger.js";
 
 // Extend globalThis to hold our dev-mode cached instance
@@ -49,7 +49,7 @@ function createPrismaClient(): PrismaClient {
   // Forward slow queries to our structured logger
   // SHOULD INCASE: Tune the threshold — 500ms is a good starting point.
   // Any query slower than this is a candidate for an index or query rewrite.
-  client.$on("query", (e) => {
+  client.$on("query" as never, (e: Prisma.QueryEvent) => {
     const durationMs = Number(e.duration);
     if (durationMs > 500) {
       logger.warn(

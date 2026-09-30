@@ -321,7 +321,7 @@ export class ProductRepository {
       take: 10,
     });
 
-    return otherOffers.map((p) => ({
+    return otherOffers.map((p: any) => ({
       id: p.id,
       slug: p.slug,
       name: p.name,

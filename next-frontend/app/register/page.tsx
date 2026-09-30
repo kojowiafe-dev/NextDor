@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
@@ -168,8 +169,15 @@ export default function RegisterPage() {
         <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-zinc-100">
           {/* Logo */}
           <div className="mb-8 text-center">
-            <Link href="/" className="text-2xl font-bold tracking-tight text-zinc-900">
-              next<span className="text-[#ff9900]">dor</span>
+            <Link href="/" className="inline-block rounded-xl bg-[#131921] px-5 py-2.5 shadow-md transition hover:bg-black">
+              <Image
+                src="/logo.png"
+                alt="NextDor"
+                width={140}
+                height={38}
+                className="h-8 w-auto object-contain mx-auto"
+                priority
+              />
             </Link>
             <h1 className="mt-4 text-xl font-semibold text-zinc-900">Create your account</h1>
             <p className="mt-1 text-sm text-zinc-500">

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X, User, Package, LogOut, LogIn, ShieldCheck, Store } from "lucide-react";
@@ -50,9 +51,15 @@ export function MobileNav({ categories }: MobileNavProps) {
           <aside className="relative flex h-full w-[min(85vw,320px)] flex-col bg-[#232f3e] text-white shadow-xl">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <span className="font-semibold">
-                {isAuthenticated ? `Hello, ${user?.name?.split(" ")[0]}` : "Browse Nextdor"}
-              </span>
+              <Link href="/" onClick={close} className="flex items-center">
+                <Image
+                  src="/logo.png"
+                  alt="NextDor"
+                  width={110}
+                  height={30}
+                  className="h-6 w-auto object-contain"
+                />
+              </Link>
               <button
                 type="button"
                 onClick={close}

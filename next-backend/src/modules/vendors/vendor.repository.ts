@@ -72,7 +72,7 @@ export class VendorRepository {
     user: Prisma.UserCreateInput;
     vendor: Omit<Prisma.VendorCreateInput, "owner">;
   }) {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const newUser = await tx.user.create({
         data: params.user,
       });

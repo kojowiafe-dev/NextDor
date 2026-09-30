@@ -8,6 +8,7 @@ import {
 } from "@/lib/catalog";
 import { CategoryTiles } from "@/components/home/CategoryTiles";
 import { HeroCarousel } from "@/components/home/HeroCarousel";
+import { SpecialDealsSection } from "@/components/home/SpecialDealsSection";
 import { ProductRow } from "@/components/home/ProductRow";
 import { TrendingRow } from "@/components/home/TrendingRow";
 import { MerchantSpotlightRow } from "@/components/home/MerchantSpotlightRow";
@@ -23,24 +24,18 @@ export default async function HomePage() {
       getPopularProducts(5),
     ]);
 
-  const dealProducts = dealProduct ? [dealProduct] : [];
-
   return (
     <>
-      <HeroCarousel dealProduct={dealProduct} />
+      <HeroCarousel />
+
+      {/* Featured Deals: Deal of the Day + Friday Bonanza + Quick Steals */}
+      <SpecialDealsSection dealProduct={dealProduct} />
+
       <CategoryTiles categories={categories} />
 
       {/* 1. Real-Time Trending Section (Sales Velocity & Urgency) */}
       {trendingProducts.length > 0 && (
         <TrendingRow products={trendingProducts} />
-      )}
-
-      {dealProducts.length > 0 && (
-        <ProductRow
-          title="Deal of the Day"
-          products={dealProducts}
-          viewAllHref="/shop?sort=price-desc"
-        />
       )}
 
       {/* 2. Group Products by Verified Merchant (Multi-Tenant Marketplace Spotlight) */}
