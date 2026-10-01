@@ -46,6 +46,13 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
   (req as any).authUser = user;
 }
 
+async function optionalAuth(req: FastifyRequest) {
+  const user = extractUser(req);
+  if (user) {
+    (req as any).authUser = user;
+  }
+}
+
 async function requireAdmin(req: FastifyRequest, reply: FastifyReply) {
   const user = extractUser(req);
   if (!user || !["ADMIN", "SUPER_ADMIN"].includes(user.role)) {
@@ -76,20 +83,21 @@ async function requireVendor(req: FastifyRequest, reply: FastifyReply) {
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   /**
    * POST /api/v1/orders
-   * Place a new order (checkout).
+   * Place a new order (checkout - supports authenticated or guest checkout).
    */
   app.post(
     "/",
     {
-      preHandler: requireAuth,
+      preHandler: optionalAuth,
       schema: {
-        description: "Place a new order (checkout)",
+        description: "Place a new order (checkout - supports authenticated or guest)",
         tags: ["Orders"],
         security: [{ bearerAuth: [] }],
         body: {
           type: "object",
           required: ["cart", "shippingAddress"],
           properties: {
+            guestEmail: { type: "string" },
             cart: {
               type: "array",
               minItems: 1,
@@ -126,11 +134,21 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const { userId } = (req as any).authUser;
+      const authUser = (req as any).authUser;
       const body = req.body as any;
+      const userId = authUser?.userId;
+      const guestEmail = body.guestEmail;
+
+      if (!userId && !guestEmail) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: "BAD_REQUEST", message: "Email is required for checkout" },
+        });
+      }
 
       const order = await orderService.checkout({
         userId,
+        guestEmail,
         cart: body.cart,
         shippingAddress: body.shippingAddress,
         addressId: body.addressId,

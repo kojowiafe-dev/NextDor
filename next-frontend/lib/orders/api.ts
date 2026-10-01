@@ -75,6 +75,7 @@ export type CartItem = {
 };
 
 export type CheckoutPayload = {
+  guestEmail?: string;
   cart: CartItem[];
   shippingAddress: {
     street: string;
@@ -92,25 +93,29 @@ export type CheckoutPayload = {
 
 async function authFetch(
   path: string,
-  token: string,
+  token?: string | null,
   options: RequestInit = {},
 ): Promise<Response> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   return fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(options.headers ?? {}),
-    },
+    headers,
   });
 }
 
 /**
- * Place a new order (checkout).
+ * Place a new order (checkout - supports authenticated or guest checkout).
  */
 export async function placeOrder(
   payload: CheckoutPayload,
-  token: string,
+  token?: string | null,
 ): Promise<{ orderId: string; orderNumber: string; total: string; status: string }> {
   const res = await authFetch("/api/v1/orders", token, {
     method: "POST",

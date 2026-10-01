@@ -14,6 +14,7 @@
     "dev:frontend": "npm run dev -w next-frontend",
     "build:shared": "npm run build -w @nextdor/shared",
     "build:backend": "npm run build -w next-backend",
-    "build:frontend": "npm run build -w next-frontend"
+    "build:frontend": "npm run build -w next-frontend",
+    "start:backend": "npm start -w next-backend"
   }
 }
