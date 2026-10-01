@@ -2,7 +2,8 @@
  * Orders API client — typed fetch wrappers for the order endpoints.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://nextdor.onrender.com";
+const API_BASE = RAW_API_BASE.replace(/\/api\/v1\/?$/, "");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
