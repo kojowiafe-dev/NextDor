@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import DOMPurify from "isomorphic-dompurify";
 import { Star } from "lucide-react";
 import {
   getProductBySlug,
   getRelatedProducts,
   getOtherSellers,
 } from "@/lib/catalog";
+import { sanitizeHtml } from "@/lib/utils";
 import { AddToCartButton } from "@/components/product/AddToCartButton";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductRow } from "@/components/home/ProductRow";
@@ -38,7 +38,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     getRelatedProducts(product.id),
     getOtherSellers(product.name, product.slug),
   ]);
-  const sanitizedDescription = DOMPurify.sanitize(product.description);
+  const sanitizedDescription = sanitizeHtml(product.description || "");
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">

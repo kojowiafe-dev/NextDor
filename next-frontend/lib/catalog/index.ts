@@ -302,7 +302,11 @@ export async function getRelatedProducts(
   productId: string,
   limit = 8,
 ): Promise<Product[]> {
-  const rawProducts = await fetchWCRelatedProducts(Number(productId), limit);
+  const numericId = Number(productId);
+  if (!numericId || Number.isNaN(numericId)) {
+    return [];
+  }
+  const rawProducts = await fetchWCRelatedProducts(numericId, limit);
   return mapWCProducts(rawProducts);
 }
 
