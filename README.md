@@ -1,6 +1,6 @@
 # NextDor — Enterprise Multi-Vendor Marketplace
 
-NextDor is an enterprise-grade, high-performance Ghanaian E-Commerce and Multi-Vendor Marketplace built with Next.js 14 (App Router), Fastify, TypeScript, Prisma ORM, and Cloud PostgreSQL (Neon).
+> **"Shop More, Wait Less"** — An enterprise-grade, high-performance Ghanaian E-Commerce and Multi-Vendor Marketplace platform built with Next.js 16 (App Router + Turbopack), Fastify, TypeScript, Prisma ORM, Cloud PostgreSQL (Neon), and Cloudinary media infrastructure.
 
 ---
 
@@ -8,10 +8,11 @@ NextDor is an enterprise-grade, high-performance Ghanaian E-Commerce and Multi-V
 
 | Document | Purpose |
 | :--- | :--- |
-| 🗺️ **[Master Project Overview & Navigation Map](file:///c:/Users/User/OneDrive/Desktop/NextDor/PROJECT_OVERVIEW.md)** | **Start here!** Full sitemap, "If I want this, where do I go?" cheat sheet, frontend/backend routing index, and environment setup. |
-| 🏛️ **[Multi-Vendor OOD Architecture](file:///home/kojowiafe/Desktop/NextDor/MULTI_VENDOR_OOD_ARCHITECTURE.md)** | Comprehensive function-by-function, line-by-line architectural breakdown, SOLID principles, and Optimistic Concurrency Control (OCC). |
-| ⚡ **[Frontend Caching & Performance Architecture](file:///home/kojowiafe/Desktop/NextDor/FRONTEND_CACHING_ARCHITECTURE.md)** | Client-side SWR caching engine, in-flight request deduplication, navigation latency elimination, and audit. |
-| ⚙️ **[Backend Architecture & Database Design](file:///home/kojowiafe/Desktop/NextDor/BACKEND_ARCHITECTURE.md)** | Complete database ERD, 14 models, security specifications, and RFC 7240 async sync mechanics. |
+| 🗺️ **[Master Project Overview & Navigation Map](./PROJECT_OVERVIEW.md)** | **Start here!** Full sitemap, "If I want this, where do I go?" cheat sheet, routing index, and environment setup. |
+| 🏛️ **[Multi-Vendor OOD Architecture](./MULTI_VENDOR_OOD_ARCHITECTURE.md)** | Comprehensive function-by-function architectural breakdown, SOLID principles, Tenant Isolation, and Optimistic Concurrency Control (OCC). |
+| ⚡ **[Frontend Caching & Performance Architecture](./FRONTEND_CACHING_ARCHITECTURE.md)** | Client-side SWR caching engine, in-flight request deduplication, navigation latency elimination, and audit. |
+| ⚙️ **[Backend Architecture & Database Design](./BACKEND_ARCHITECTURE.md)** | Complete database ERD, 14 models, security specifications, Paystack/MoMo settlement, and RFC 7240 async sync mechanics. |
+| 📖 **[Recommended Books & Architecture Pillars](./RECOMMENDED_BOOKS_AND_ARCHITECTURE_PILLARS.md)** | Curated reading list of industry-standard textbooks on DDD, Concurrency, Distributed Systems, Multi-Tenancy, and Marketplace Economics. |
 
 ---
 
@@ -33,9 +34,20 @@ npm install
 npm run dev
 ```
 - Web Application: `http://localhost:3000`
-- Public Vendor Storefront: `http://localhost:3000/store/sweet-bakes`
+- Customer Storefront: `http://localhost:3000/`
 - Vendor Portal Dashboard: `http://localhost:3000/vendor/dashboard`
-- Admin Sync Dashboard: `http://localhost:3000/admin/products`
+- Admin Management Portal: `http://localhost:3000/admin`
+- Interactive Cloudinary Image Upload API: `http://localhost:3000/api/upload`
+
+---
+
+## 🌟 Core System Pillars
+
+1. **Marketplace Order Partitioning**: Automated split of multi-vendor checkouts into distinct `VendorOrder` records with isolated tenant visibility.
+2. **Deterministic Commission & Payouts**: 90% merchant / 10% platform split calculated with Martin Fowler's `Money` Value Object (pesewas/minor units) to prevent penny rounding leaks.
+3. **Multi-Tenant Security & OCC**: Hardened tenant isolation (`WHERE id = productId AND vendorId = currentVendorId`) for viewing, editing, and soft-deleting products, paired with Optimistic Concurrency Control versioning.
+4. **Cloudinary Asset Storage**: High-speed, signed media pipeline with client-side drag-and-drop uploads and edge CDN delivery.
+5. **Brand Consistency**: Unified Amazon/NextDor orange theme (`#ff9900` / `#f08804`) and motto *"Shop More, Wait Less"*.
 
 ---
 
@@ -46,4 +58,4 @@ If port 4000 is blocked (`EADDRINUSE: address already in use 0.0.0.0:4000`), kil
 Get-Process -Id (Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
 
-For complete runbooks on Prisma engine DLL locks (`EPERM`) and IDE TypeScript cache resets, see [Section 7 of the Project Overview](file:///c:/Users/User/OneDrive/Desktop/NextDor/PROJECT_OVERVIEW.md#-7-troubleshooting--operational-runbook).
+For complete runbooks on Prisma engine DLL locks (`EPERM`) and IDE TypeScript cache resets, see [Section 7 of the Project Overview](./PROJECT_OVERVIEW.md#-7-troubleshooting--operational-runbook).

@@ -43,7 +43,7 @@ NextDor does not use an "anemic model" (where raw database rows are passed aroun
 
 ## 💎 2. Domain Layer: Value Objects & Mathematical Strategies
 
-### [`next-backend/src/domain/Money.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/domain/Money.ts)
+### [`next-backend/src/domain/Money.ts`](./next-backend/src/domain/Money.ts)
 
 A **Value Object** has no unique database identifier (UUID). It is defined purely by its values (`minorAmount` and `currency`). Two `Money` objects representing 50 GHS are completely equal.
 
@@ -389,23 +389,34 @@ NextDor solves this with an automated **Escrow Settlement Engine**:
 
 ## 🎛️ 9. Merchant Console: 4-Tab Reactive Console Architecture
 
-The Merchant Portal ([app/vendor/dashboard/page.tsx](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-frontend/app/vendor/dashboard/page.tsx)) provides four dedicated control planes:
+The Merchant Portal ([`next-frontend/app/vendor/dashboard/page.tsx`](./next-frontend/app/vendor/dashboard/page.tsx)) provides four dedicated control planes:
 
 | Tab | Role & Capabilities | API Endpoints |
 |---|---|---|
-| **📦 Inventory & Stock** | Live catalog, inline stock/price editor with OCC version counters, and product publishing modal. | `GET /vendors/portal/products`<br>`PATCH /vendors/portal/products/:id` |
+| **📦 Inventory & Stock** | Live catalog, inline stock/price editor with OCC version counters, Cloudinary drag-and-drop image upload, product publishing modal locked to `req.vendorId`, and tenant-isolated soft-delete. | `GET /vendors/portal/products`<br>`POST /vendors/portal/products`<br>`PATCH /vendors/portal/products/:id`<br>`DELETE /vendors/portal/products/:id` |
 | **🛍️ Store Orders & Dispatch** | Partitioned sub-orders, customer address snapshots, line items, 90% net earnings calculation, and 1-click dispatch status progression. | `GET /vendors/portal/orders`<br>`PATCH /vendors/portal/orders/:id/status` |
 | **💳 MoMo Payouts & Escrow** | Real-time financial cards (Lifetime Net, In 48h Escrow, Available, Disbursed), escrow educational guide, and MoMo transfer ledger. | `GET /vendors/portal/payouts` |
 | **⚙️ Store Profile & Settings** | Public brand identity (Name, Bio, Phone), MoMo settlement account selection (MTN, Telecel, AT), and Logo/Banner URL live previews. | `PATCH /vendors/portal/me` |
 
 ---
 
+## ☁️ 10. Media Infrastructure: Cloudinary Asset Pipeline
+
+NextDor delegates binary media storage to **Cloudinary** to maintain serverless scalability and maximize edge CDN performance:
+
+1. **Signed Serverless Upload Route (`/api/upload`)**: Next.js route handler securely signs uploads and streams file buffers to Cloudinary under folder `nextdor/products`, keeping API secrets strictly server-side.
+2. **Interactive UI Component (`components/ui/ImageUpload.tsx`)**: Reusable drag-and-drop component featuring instant client previews, real-time Cloudinary upload progress, CDN badge detection, and fallback URL input.
+3. **Optimized Delivery**: Integrated with `next/image` using Next.js 16 remote patterns (`res.cloudinary.com`), enabling WebP/AVIF auto-transcoding, responsive srcset generation, and blur-up loading.
+
+---
+
 ## 🏆 Key Takeaways
 
 1. **Precision Finance**: Minor pesewa integer math avoids JavaScript floating-point errors.
-2. **Absolute Tenant Isolation**: No vendor can access another vendor's inventory, sub-orders, or payouts.
-3. **Concurrency Safety**: Optimistic locking guarantees race-free stock management.
+2. **Absolute Tenant Isolation**: No vendor can access, edit, or delete another vendor's inventory, sub-orders, or payouts (`WHERE id = productId AND vendorId = currentVendorId`).
+3. **Concurrency Safety**: Optimistic locking (OCC version counter) guarantees race-free stock and pricing management.
 4. **Sub-Order Partitioning**: Master orders safely decompose into merchant-isolated line items.
 5. **Automated Escrow Protection**: 48-hour delivery verification window protects buyers while guaranteeing seller MoMo settlement.
-6. **Decoupled Architecture**: High maintainability through SOLID, Dependency Inversion, and Clean Architecture.
+6. **Decoupled Architecture**: High maintainability through SOLID, Dependency Inversion, Clean Architecture, and Cloudinary media pipelines.
+
 
