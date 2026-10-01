@@ -34,7 +34,7 @@ function AccountDropdown() {
     return (
       <Link
         href="/login"
-        className="hidden items-center gap-1 hover:text-[#febd69] sm:flex"
+        className="hidden items-center gap-1 hover:text-[#ff9900] sm:flex"
       >
         <User className="h-5 w-5" />
         <div className="text-xs leading-tight">
@@ -55,7 +55,7 @@ function AccountDropdown() {
     >
       <button
         type="button"
-        className="flex items-center gap-1 hover:text-[#febd69]"
+        className="flex items-center gap-1 hover:text-[#ff9900]"
         aria-expanded={open}
       >
         {/* Avatar initials */}
@@ -78,13 +78,13 @@ function AccountDropdown() {
           </div>
 
           {isAdmin && (
-            <div className="border-b border-zinc-100 bg-amber-50/70 p-2">
+            <div className="border-b border-zinc-100 bg-[#ff9900]/10 p-2">
               <Link
                 href="/admin"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-500/25 transition"
+                className="flex items-center gap-2.5 rounded-lg bg-[#ff9900]/15 px-3 py-2 text-xs font-bold text-zinc-900 hover:bg-[#ff9900]/25 transition"
               >
-                <ShieldCheck className="h-4 w-4 text-amber-600" />
+                <ShieldCheck className="h-4 w-4 text-[#ff9900]" />
                 <span>Admin Portal</span>
                 <span className="ml-auto rounded bg-[#ff9900] px-1.5 py-0.5 text-[10px] font-bold text-zinc-900 uppercase">
                   Admin
@@ -215,7 +215,7 @@ export function Header({ categories }: HeaderProps) {
 
           <Link
             href="/cart"
-            className="relative flex items-end gap-1 hover:text-[#febd69]"
+            className="relative flex items-end gap-1 hover:text-[#ff9900]"
           >
             <ShoppingCart className="h-7 w-7" />
             <span className="hidden font-semibold sm:inline">Cart</span>

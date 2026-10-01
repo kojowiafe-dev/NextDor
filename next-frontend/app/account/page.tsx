@@ -43,7 +43,7 @@ export default function AccountPage() {
     <AccountLayout>
       {/* Welcome banner */}
       <div className="mb-6 rounded-xl bg-gradient-to-r from-[#232f3e] to-[#37475a] p-6 text-white">
-        <p className="text-sm font-medium text-[#febd69]">Welcome back 👋</p>
+        <p className="text-sm font-medium text-[#ff9900]">Welcome back 👋</p>
         <h1 className="mt-1 text-2xl font-bold">{user?.name ?? "Customer"}</h1>
         <p className="mt-1 text-sm text-zinc-300">{user?.email}</p>
       </div>

@@ -295,10 +295,10 @@ export default function CheckoutPage() {
 
       {/* Smart Hybrid Checkout Banner */}
       {!user ? (
-        <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-4 sm:p-5 ring-1 ring-amber-500/25">
+        <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#ff9900]/10 via-[#ff9900]/5 to-transparent p-4 sm:p-5 ring-1 ring-[#ff9900]/25">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3.5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-[#b12704]">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#fff3e0] text-[#ff9900]">
                 <UserCheck className="h-5 w-5" />
               </div>
               <div>
@@ -312,7 +312,7 @@ export default function CheckoutPage() {
             </div>
             <Link
               href="/login?redirect=/checkout"
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#232f3e] px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-zinc-800 shadow-xs"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#ff9900] px-4 py-2.5 text-xs font-bold text-zinc-900 transition-colors hover:bg-[#f08804] shadow-xs"
             >
               <LogIn className="h-3.5 w-3.5" />
               <span>Sign In</span>

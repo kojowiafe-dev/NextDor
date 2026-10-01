@@ -136,7 +136,7 @@ export function SpecialDealsSection({ dealProduct }: SpecialDealsSectionProps) {
 
             {/* Discount Badge Visual */}
             <div className="relative flex shrink-0 items-center justify-center">
-              <div className="flex h-28 w-28 flex-col items-center justify-center rounded-2xl bg-gradient-to-tr from-[#ff9900] to-[#febd69] p-3 text-center text-[#131921] shadow-2xl shadow-[#ff9900]/25 transition-transform hover:scale-105 sm:h-32 sm:w-32">
+              <div className="flex h-28 w-28 flex-col items-center justify-center rounded-2xl bg-gradient-to-tr from-[#ff9900] to-[#f08804] p-3 text-center text-[#131921] shadow-2xl shadow-[#ff9900]/25 transition-transform hover:scale-105 sm:h-32 sm:w-32">
                 <Percent className="h-5 w-5 mb-0.5" />
                 <span className="text-2xl font-black tracking-tighter sm:text-3xl">
                   {discount}%
@@ -187,7 +187,7 @@ export function SpecialDealsSection({ dealProduct }: SpecialDealsSectionProps) {
             </div>
 
             <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
-              <span className="text-xs font-bold text-amber-300">
+              <span className="text-xs font-bold text-[#ff9900]">
                 ⚡ Up to 50% Off Top Brands
               </span>
               <Link

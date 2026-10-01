@@ -81,7 +81,7 @@ export function Footer() {
             />
           </Link>
         </div>
-        <p className="mt-1">Style, Convenience, and Comfort — Nextdor to You</p>
+        <p className="mt-1">Shop More, Wait Less</p>
         <p className="mt-2">
           &copy; {new Date().getFullYear()} Nextdor. All rights reserved.
         </p>

@@ -48,7 +48,7 @@ export function ProductCard({ product }: ProductCardProps) {
   }
 
   return (
-    <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-zinc-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-amber-500/30">
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-zinc-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-[#ff9900]/30">
       {/* Top Badges: Sale Discount & In-Stock Availability */}
       <div className="mb-2 flex items-center justify-between gap-1.5">
         {product.onSale ? (
@@ -76,7 +76,7 @@ export function ProductCard({ product }: ProductCardProps) {
       {/* Product Image Clickable Link */}
       <Link
         href={`/product/${product.slug}`}
-        className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-zinc-50 transition-colors group-hover:bg-amber-500/5 block"
+        className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-zinc-50 transition-colors group-hover:bg-[#ff9900]/5 block"
       >
         {image && image.src ? (
           <Image
@@ -140,7 +140,7 @@ export function ProductCard({ product }: ProductCardProps) {
             justAdded
               ? "bg-emerald-600 text-white"
               : product.inStock
-              ? "bg-[#ff9900] text-zinc-950 hover:bg-[#f08804] hover:shadow-amber-500/25 cursor-pointer"
+              ? "bg-[#ff9900] text-zinc-950 hover:bg-[#f08804] hover:shadow-[#ff9900]/25 cursor-pointer"
               : "cursor-not-allowed bg-zinc-100 text-zinc-400"
           }`}
         >

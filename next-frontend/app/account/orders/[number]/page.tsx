@@ -275,7 +275,7 @@ export default function OrderDetailPage({
           <div className="rounded-xl bg-gradient-to-r from-[#232f3e] to-[#37475a] p-5 text-white">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-[#febd69]">
+                <p className="text-sm font-medium text-[#ff9900]">
                   Order #{order.number}
                 </p>
                 <p className="mt-1 text-xs text-zinc-400">

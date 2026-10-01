@@ -27,7 +27,7 @@ export function SearchPageBar({ initialQuery }: { initialQuery: string }) {
       />
       <button
         type="submit"
-        className="flex items-center gap-2 rounded-r-xl bg-[#febd69] px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f3a847]"
+        className="flex items-center gap-2 rounded-r-xl bg-[#ff9900] px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f08804]"
       >
         <Search className="h-4 w-4" />
         Search

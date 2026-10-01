@@ -274,7 +274,7 @@ export function StreamlinedStorefront({
       {/* ─── 3. EMPTY STATE IF NO PRODUCTS MATCH FILTERS ─────────────── */}
       {filteredProducts.length === 0 && (
         <div className="my-12 flex flex-col items-center justify-center rounded-2xl bg-white p-10 text-center shadow-sm">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#fff3e0] text-[#ff9900]">
             <Search className="h-6 w-6" />
           </div>
           <h3 className="mt-4 text-lg font-bold text-zinc-900">

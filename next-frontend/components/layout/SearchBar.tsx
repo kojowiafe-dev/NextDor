@@ -29,7 +29,7 @@ export function SearchBar({ className = "" }: { className?: string }) {
       <button
         type="submit"
         aria-label="Search"
-        className="flex items-center justify-center rounded-r-md bg-[#febd69] px-4 text-zinc-900 transition-colors hover:bg-[#f3a847]"
+        className="flex items-center justify-center rounded-r-md bg-[#ff9900] px-4 text-zinc-900 transition-colors hover:bg-[#f08804]"
       >
         <Search className="h-5 w-5" />
       </button>

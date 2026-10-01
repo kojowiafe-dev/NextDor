@@ -47,7 +47,7 @@ function OrderRow({ order }: { order: Order }) {
   return (
     <Link
       href={`/account/orders/${order.number}`}
-      className="group flex items-center gap-4 rounded-xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:border-[#febd69] hover:shadow-md"
+      className="group flex items-center gap-4 rounded-xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:border-[#ff9900] hover:shadow-md"
     >
       {/* Icon */}
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#fff3e0]">

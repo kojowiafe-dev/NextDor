@@ -44,13 +44,13 @@ export function AccountSidebar() {
 
       {/* Management Portal Shortcut */}
       {isAdmin && (
-        <div className="border-b border-zinc-100 bg-amber-50/60 p-3">
+        <div className="border-b border-zinc-100 bg-[#ff9900]/10 p-3">
           <Link
             href="/admin"
-            className="flex items-center justify-between rounded-lg bg-amber-500/15 border border-amber-300/60 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-500/25 transition"
+            className="flex items-center justify-between rounded-lg bg-[#ff9900]/15 border border-[#ff9900]/40 px-3 py-2 text-xs font-bold text-zinc-900 hover:bg-[#ff9900]/25 transition"
           >
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-amber-600" />
+              <ShieldCheck className="h-4 w-4 text-[#ff9900]" />
               <span>Admin Portal</span>
             </div>
             <span className="rounded bg-[#ff9900] px-1.5 py-0.5 text-[10px] font-bold text-zinc-900 uppercase">

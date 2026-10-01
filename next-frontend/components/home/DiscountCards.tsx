@@ -159,7 +159,7 @@ export function DealOfTheDayCard({ dealProduct }: DealOfTheDayCardProps) {
 
         {/* Right Side: Discount Circle & CTA Link */}
         <div className="flex flex-row items-center gap-4 sm:flex-col sm:items-end">
-          <div className="flex h-24 w-24 shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-tr from-[#ff9900] to-[#febd69] p-2 text-center text-[#131921] shadow-lg shadow-[#ff9900]/25 sm:h-28 sm:w-28">
+          <div className="flex h-24 w-24 shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-tr from-[#ff9900] to-[#f08804] p-2 text-center text-[#131921] shadow-lg shadow-[#ff9900]/25 sm:h-28 sm:w-28">
             <span className="text-2xl font-black sm:text-3xl leading-none">
               {discount > 0 ? `${discount}%` : "HOT"}
             </span>
@@ -199,16 +199,16 @@ export function BonanzaPromoCard({ onFilterDeals }: BonanzaPromoCardProps) {
     <div className="relative my-8 overflow-hidden rounded-2xl bg-gradient-to-r from-[#201030] via-[#2d1b46] to-[#1a152e] p-6 text-white shadow-xl ring-1 ring-purple-500/30 sm:p-8">
       {/* Background glow */}
       <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-purple-600/25 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-16 left-1/3 h-56 w-56 rounded-full bg-amber-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 left-1/3 h-56 w-56 rounded-full bg-[#ff9900]/15 blur-3xl" />
 
       <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
         <div className="max-w-xl space-y-2">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/20 border border-purple-400/40 px-3 py-1 text-xs font-bold uppercase tracking-wider text-purple-200">
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <Sparkles className="h-3.5 w-3.5 text-[#ff9900]" />
               Special Bonanza Offer
             </span>
-            <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black uppercase text-zinc-950">
+            <span className="rounded-full bg-[#ff9900] px-2 py-0.5 text-[10px] font-black uppercase text-zinc-950">
               Weekend Extra
             </span>
           </div>
@@ -224,8 +224,8 @@ export function BonanzaPromoCard({ onFilterDeals }: BonanzaPromoCardProps) {
 
           <div className="pt-2 flex flex-wrap items-center gap-3">
             <div className="inline-flex items-center gap-2 rounded-xl bg-black/40 border border-purple-400/30 px-3.5 py-1.5 text-xs">
-              <Tag className="h-3.5 w-3.5 text-amber-400" />
-              <span className="font-mono font-bold tracking-wider text-amber-300">
+              <Tag className="h-3.5 w-3.5 text-[#ff9900]" />
+              <span className="font-mono font-bold tracking-wider text-[#ff9900]">
                 NEXTSAVE10
               </span>
               <button
@@ -256,7 +256,7 @@ export function BonanzaPromoCard({ onFilterDeals }: BonanzaPromoCardProps) {
           <Link
             href="/shop?onSale=true"
             onClick={onFilterDeals}
-            className="inline-flex items-center gap-2 rounded-xl bg-amber-400 hover:bg-amber-300 px-6 py-3 text-xs font-black uppercase tracking-wider text-zinc-950 shadow-lg shadow-amber-400/20 transition-all active:scale-95"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#ff9900] hover:bg-[#f08804] px-6 py-3 text-xs font-black uppercase tracking-wider text-zinc-950 shadow-lg shadow-[#ff9900]/20 transition-all active:scale-95"
           >
             <span>Explore Bonanza Deals</span>
             <ArrowRight className="h-4 w-4" />

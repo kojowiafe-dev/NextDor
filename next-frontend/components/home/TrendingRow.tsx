@@ -12,11 +12,11 @@ export function TrendingRow({ products }: TrendingRowProps) {
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-6">
-      <div className="rounded-2xl bg-gradient-to-br from-amber-500/[0.04] via-orange-500/[0.02] to-transparent p-4 sm:p-6 ring-1 ring-amber-500/15">
+      <div className="rounded-2xl bg-gradient-to-br from-[#ff9900]/[0.05] via-[#ff9900]/[0.02] to-transparent p-4 sm:p-6 ring-1 ring-[#ff9900]/15">
         {/* Header */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-500/10 pb-4">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#ff9900]/10 pb-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-[#ff9900] text-white shadow-sm shadow-amber-500/30">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#ff9900] to-[#f08804] text-white shadow-sm shadow-[#ff9900]/25">
               <Flame className="h-5 w-5 animate-pulse" />
             </div>
             <div>
@@ -54,11 +54,11 @@ export function TrendingRow({ products }: TrendingRowProps) {
               <Link
                 key={product.id}
                 href={`/product/${product.slug}`}
-                className="group relative flex flex-col overflow-hidden rounded-xl bg-white p-3 shadow-sm ring-1 ring-zinc-100 transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-amber-500/30"
+                className="group relative flex flex-col overflow-hidden rounded-xl bg-white p-3 shadow-sm ring-1 ring-zinc-100 transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-[#ff9900]/30"
               >
                 {/* Badge */}
                 <div className="absolute left-2.5 top-2.5 z-10 flex flex-col gap-1">
-                  <span className="inline-flex items-center shrink-0 whitespace-nowrap rounded-md bg-amber-500/90 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">
+                  <span className="inline-flex items-center shrink-0 whitespace-nowrap rounded-md bg-[#ff9900] px-2 py-0.5 text-[10px] font-bold text-zinc-900 shadow-sm backdrop-blur-sm">
                     {badgeText}
                   </span>
                 </div>
@@ -101,8 +101,8 @@ export function TrendingRow({ products }: TrendingRowProps) {
                     {/* Rating */}
                     {product.rating > 0 && (
                       <div className="mt-1.5 flex items-center gap-1">
-                        <div className="flex items-center text-amber-500">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <div className="flex items-center text-[#ff9900]">
+                          <Star className="h-3 w-3 fill-[#ff9900] text-[#ff9900]" />
                           <span className="ml-1 text-xs font-semibold text-zinc-800">
                             {product.rating.toFixed(1)}
                           </span>
@@ -128,8 +128,8 @@ export function TrendingRow({ products }: TrendingRowProps) {
                     </div>
 
                     {/* Sales Velocity Pill */}
-                    <div className="mt-1.5 flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    <div className="mt-1.5 flex items-center gap-1 rounded bg-[#fff3e0] px-1.5 py-0.5 text-[10px] font-medium text-zinc-800">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900] animate-pulse" />
                       <span className="truncate">
                         {product.recentSales} sold in last 48h
                       </span>

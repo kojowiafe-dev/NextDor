@@ -13,7 +13,7 @@ export function CategoryNav({ categories }: CategoryNavProps) {
       <div className="mx-auto flex max-w-7xl items-center gap-4 overflow-x-auto px-4 py-2">
         <Link
           href="/shop"
-          className="shrink-0 font-semibold hover:text-[#febd69]"
+          className="shrink-0 font-semibold hover:text-[#ff9900]"
         >
           All
         </Link>
@@ -21,7 +21,7 @@ export function CategoryNav({ categories }: CategoryNavProps) {
           <Link
             key={category.id}
             href={`/category/${category.slug}`}
-            className="shrink-0 whitespace-nowrap hover:text-[#febd69]"
+            className="shrink-0 whitespace-nowrap hover:text-[#ff9900]"
           >
             {category.name}
           </Link>

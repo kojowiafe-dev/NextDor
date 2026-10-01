@@ -79,7 +79,7 @@ export function MerchantSpotlightRow({ merchants }: MerchantSpotlightRowProps) {
                     </div>
                     <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500">
                       <div className="flex items-center gap-1">
-                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        <Star className="h-3.5 w-3.5 fill-[#ff9900] text-[#ff9900]" />
                         <span className="font-semibold text-zinc-800">
                           {merchant.rating ? merchant.rating.toFixed(1) : "4.8"}
                         </span>

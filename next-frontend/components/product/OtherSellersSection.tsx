@@ -21,7 +21,7 @@ export function OtherSellersSection({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-4 mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 ring-1 ring-amber-500/20">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#fff3e0] text-[#ff9900] ring-1 ring-[#ff9900]/20">
             <Store className="h-4 w-4" />
           </div>
           <div>
@@ -78,7 +78,7 @@ export function OtherSellersSection({
                     </span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
-                    <div className="flex items-center gap-1 text-amber-500">
+                    <div className="flex items-center gap-1 text-[#ff9900]">
                       <Star className="h-3 w-3 fill-current" />
                       <span className="font-semibold text-zinc-700">
                         {seller.vendor.rating ? seller.vendor.rating.toFixed(1) : "4.9"}
