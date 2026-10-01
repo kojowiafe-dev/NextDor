@@ -80,7 +80,32 @@ export async function buildApp() {
 
   // CORS — controls which origins can call this API
   await app.register(import("@fastify/cors"), {
-    origin: config.CORS_ORIGINS,
+    origin: (origin, cb) => {
+      // Allow non-browser requests (e.g. mobile apps, curl, server-side fetch)
+      if (!origin) return cb(null, true);
+
+      // Check explicit config list
+      if (config.CORS_ORIGINS.includes(origin)) {
+        return cb(null, true);
+      }
+
+      // Allow Vercel production & preview deployments (*.vercel.app)
+      if (/^https:\/\/([a-z0-9-]+)\.vercel\.app$/i.test(origin)) {
+        return cb(null, true);
+      }
+
+      // Allow NextDor production custom domains
+      if (/^https:\/\/(www\.)?nextdor\.online$/i.test(origin)) {
+        return cb(null, true);
+      }
+
+      // Allow localhost in dev
+      if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+        return cb(null, true);
+      }
+
+      return cb(null, false);
+    },
     credentials: true, // Required for httpOnly cookie (refresh token)
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
