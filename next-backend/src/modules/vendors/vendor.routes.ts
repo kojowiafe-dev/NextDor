@@ -428,6 +428,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
               enum: ["IN_STOCK", "OUT_OF_STOCK", "LOW_STOCK"],
             },
             categoryIds: { type: "array", items: { type: "string" } },
+            imageUrl: { type: "string" },
           },
         },
       },
@@ -447,6 +448,36 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({
         success: true,
         data: { product: updated },
+      });
+    }
+  );
+
+  /**
+   * DELETE /vendors/portal/products/:id
+   * Vendor soft-deletes a product they own.
+   * Enforces Tenant Isolation: WHERE id = productId AND vendorId = currentVendorId
+   */
+  app.delete(
+    "/portal/products/:id",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Soft-delete a product owned by authenticated vendor",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      await vendorService.deleteVendorProduct(req.vendorId!, id);
+      return reply.send({
+        success: true,
+        message: "Product deleted successfully.",
       });
     }
   );

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { createSWRCache } from "@/lib/cache/clientCache";
+import { ImageUpload } from "@/components/ui/ImageUpload";
 import {
   Store,
   Package,
@@ -39,6 +40,7 @@ import {
   Wallet,
   Building2,
   FileText,
+  Trash2,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 
@@ -509,6 +511,34 @@ export default function VendorDashboardPage() {
       setErrorNotice(`Error creating product: ${err.message}`);
     } finally {
       setIsCreatingProduct(false);
+    }
+  }
+
+  // Delete Product
+  async function handleDeleteProduct(product: VendorProduct) {
+    if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) {
+      return;
+    }
+    setErrorNotice(null);
+    setSuccessNotice(null);
+    try {
+      const token = getValidToken();
+      const res = await fetch(`${API_BASE}/vendors/portal/products/${product.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setErrorNotice(json.error?.message || "Failed to delete product.");
+        return;
+      }
+      setSuccessNotice(`Deleted "${product.name}" successfully!`);
+      vendorPortalCache.invalidateAll();
+      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+    } catch (err: any) {
+      setErrorNotice(`Error deleting product: ${err.message}`);
     }
   }
 
@@ -1112,12 +1142,21 @@ export default function VendorDashboardPage() {
                                   </button>
                                 </div>
                               ) : (
-                                <button
-                                  onClick={() => startEditing(prod)}
-                                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition"
-                                >
-                                  Edit Stock / Price
-                                </button>
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => startEditing(prod)}
+                                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition"
+                                  >
+                                    Edit Stock / Price
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(prod)}
+                                    className="rounded-lg border border-red-200 p-1.5 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-300 transition"
+                                    title="Delete product"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -1800,16 +1839,13 @@ export default function VendorDashboardPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700">Photo Image URL</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={newProdImage}
-                  onChange={(e) => setNewProdImage(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
-                />
-              </div>
+              <ImageUpload
+                value={newProdImage}
+                onChange={setNewProdImage}
+                label="Product Photo"
+                folder="nextdor/products"
+                disabled={isCreatingProduct}
+              />
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100">
                 <button

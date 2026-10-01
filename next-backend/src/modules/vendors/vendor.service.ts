@@ -323,6 +323,18 @@ export class VendorService {
               set: dto.categoryIds.map((id) => ({ id })),
             }
           : undefined,
+      images: dto.imageUrl?.trim()
+        ? {
+            deleteMany: {},
+            create: [
+              {
+                url: dto.imageUrl.trim(),
+                alt: dto.name?.trim() || product.name,
+                sortOrder: 0,
+              },
+            ],
+          }
+        : undefined,
     });
 
     logger.info(
@@ -331,6 +343,20 @@ export class VendorService {
     );
 
     return updated;
+  }
+
+  /**
+   * Vendor soft-deletes a product they own.
+   * Strictly enforces Tenant Isolation: WHERE id = productId AND vendorId = currentVendorId
+   */
+  async deleteVendorProduct(vendorId: string, productId: string) {
+    const product = await this.vendorRepo.findVendorProductById(vendorId, productId);
+    if (!product) {
+      throw new NotFoundError("Product not found or you do not have permission to delete it.");
+    }
+    await this.vendorRepo.softDeleteProduct(productId);
+    logger.info({ productId, vendorId }, "Vendor product soft-deleted");
+    return { success: true };
   }
 
   /**

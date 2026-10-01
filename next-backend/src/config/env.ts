@@ -82,6 +82,12 @@ const envSchema = z.object({
 
   // ── WooCommerce ──────────────────────────────────────────────────────────
   WOOCOMMERCE_STORE_URL: z.string().url(),
+
+  // ── Cloudinary ───────────────────────────────────────────────────────────
+  CLOUDINARY_CLOUD_NAME: z.string().default(process.env.CLOUD_NAME || "mq17etnb"),
+  CLOUDINARY_API_KEY: z.string().default(process.env.CLOUD_API_KEY || "536664647454792"),
+  CLOUDINARY_API_SECRET: z.string().default(process.env.CLOUD_API_SECRET || "VzaEvbCJW8KHmd_IwCYAr3h34-U"),
+  CLOUDINARY_URL: z.string().optional(),
 });
 
 // Parsed, type-safe config object — import this everywhere, never process.env

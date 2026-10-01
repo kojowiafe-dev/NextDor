@@ -210,6 +210,16 @@ export class VendorRepository {
   }
 
   /**
+   * Soft-deletes a product by setting deletedAt timestamp.
+   */
+  async softDeleteProduct(productId: string) {
+    return prisma.product.update({
+      where: { id: productId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  /**
    * Updates vendor store profile settings.
    */
   async updateProfile(vendorId: string, data: Prisma.VendorUpdateInput) {

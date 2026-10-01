@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AuthFormField } from "@/components/account/AuthFormField";
+import { ImageUpload } from "@/components/ui/ImageUpload";
 import type { AdminProduct } from "@/lib/admin/mockData";
 
 type ProductFormData = Omit<AdminProduct, "id" | "slug">;
@@ -109,13 +110,11 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
                     <p className="text-xs text-red-600">{errors.description}</p>
                   )}
                 </div>
-                <AuthFormField
-                  label="Image URL"
-                  id="prod-image"
-                  type="url"
+                <ImageUpload
+                  label="Product Image"
                   value={form.image}
-                  onChange={(e) => set("image", e.target.value)}
-                  placeholder="https://..."
+                  onChange={(url) => set("image", url)}
+                  disabled={isSaving}
                 />
               </div>
             </div>
