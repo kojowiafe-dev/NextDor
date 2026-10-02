@@ -169,6 +169,12 @@ NextDor/
 | **Platform Settings Console** | `next-frontend/app/admin/settings/page.tsx` | `http://localhost:3000/admin/settings` |
 | **Public Merchant Storefront** | `next-frontend/app/store/[slug]/page.tsx` | `http://localhost:3000/store/[slug]` |
 | **Global Navigation & Search** | `next-frontend/components/layout/Header.tsx` | Rendered on all pages |
+| **Mobile Thumb Navigation Bar** | `next-frontend/components/layout/BottomNav.tsx` | Fixed bottom bar on mobile (Home, Shop, Search, Cart, Account) |
+| **Swipeable Category Pills** | `next-frontend/components/layout/CategoryNav.tsx` | Instant horizontal touch category navigation on mobile + desktop bar |
+| **Mobile Drawer Navigation** | `next-frontend/components/layout/MobileNav.tsx` | Responsive slide-out drawer with quick portal shortcuts & categories |
+| **Interactive Search Input** | `next-frontend/components/layout/SearchBar.tsx` | High-contrast search with instant one-tap clear button |
+| **Admin Notifications Center** | `next-frontend/components/admin/AdminNotificationsPopover.tsx` | Real-time bell popover with unread badge & live alert feeds |
+| **Admin Operations Sidebar** | `next-frontend/components/admin/AdminSidebar.tsx` | Zero-scrollbar non-scrollable desktop sidebar + auto-closing mobile drawer |
 | **Global Footer & Auth Status** | `next-frontend/components/layout/Footer.tsx` | Rendered on all pages ("Shop More, Wait Less") |
 
 ---
@@ -188,7 +194,7 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Order Lookup (Polymorphic)** | Orders Repo | `src/modules/orders/order.repository.ts` | `GET /api/v1/orders/:idOrNumber` |
 | **Admin Orders Queue** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/admin/orders?limit=100`<br>`PATCH /api/v1/admin/orders/:id/status` |
 | **Admin Customer Aggregates** | Admin Customer Service | `src/modules/admin/admin.customer.service.ts` | `GET /api/v1/admin/customers`<br>`GET /api/v1/admin/customers/:id` |
-| **Admin Platform Analytics** | Admin Analytics Service | `src/modules/admin/admin.analytics.service.ts` | `GET /api/v1/admin/analytics/overview` (30-day revenue series, status counts, conversion rate) |
+| **Admin Platform Analytics** | Admin Analytics Service | `src/modules/admin/admin.analytics.service.ts` | `GET /api/v1/admin/analytics/overview` (Live DB counts: totalCustomers, totalProducts, totalOrders, 30-day revenue series, conversion rate) |
 | **Public Catalog & Search** | Products Controller | `src/modules/products/product.routes.ts` | `GET /api/v1/products`<br>`GET /api/v1/products/:slugOrId` |
 | **Admin Product Creation** | Products Service | `src/modules/products/product.service.ts` | `POST /api/v1/products` (Admin & Super Admin) |
 | **Product Mutation & OCC** | Products Service | `src/modules/products/product.service.ts` | `PATCH /api/v1/products/:id` (Admin & Vendor Owner) |

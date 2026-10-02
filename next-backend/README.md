@@ -128,11 +128,12 @@ src/
 - `GET /sellers`: Multi-vendor product comparisons by name
 - `GET /grouped-by-merchant`: Active merchant storefront preview groupings
 - `GET /:slug`: Full product detail by URL slug
+- `POST /`: Create new product (Admin or Super Admin only, assigns flagship vendor, invalidates Redis cache)
 - `PATCH /:id`: Update product details (Admin or Vendor with OCC version check)
 - `DELETE /:id`: Soft-delete product (Admin only)
 
 ### 🛒 Orders (`/api/v1/orders`)
-- `POST /`: Atomic checkout supporting authenticated or guest checkout
+- `POST /`: Atomic checkout supporting authenticated checkout (enforced customer identity)
 - `GET /`: Paginated list of my orders
 - `GET /:number`: Granular order tracking timeline (supports polymorphic lookup by order number `ND-XXXXX` or database UUID)
 - `POST /:number/cancel`: Cancel an unfulfilled customer order
@@ -148,6 +149,7 @@ src/
 - `GET /portal/orders`: Partitioned merchant sub-orders queue
 - `PATCH /portal/orders/:id/status`: Update dispatch status (`PROCESSING` $\rightarrow$ `SHIPPED` $\rightarrow$ `DELIVERED`)
 - `GET /portal/payouts`: Escrow balances and MoMo disbursement ledger
+- `GET /admin/alerts`: Pending merchant KYC verification alerts for Admin notification popover
 
 ### 🛡️ Admin & Governance (`/api/v1/admin`)
 - `GET /orders`: Global marketplace order management
@@ -155,7 +157,7 @@ src/
 - `PATCH /orders/:id/status`: Force-update order status with audit log note
 - `GET /customers`: Customer directory with order counts and spend totals
 - `GET /customers/:id`: Customer detail with address and order history
-- `GET /analytics/overview`: 30-day revenue metrics, daily trends, and volume charts
+- `GET /analytics/overview`: 30-day revenue metrics, daily trends, volume charts, and live database counts (`totalCustomers`, `totalProducts`, `totalOrders`)
 - `GET /analytics/summary`: High-level dashboard summary metrics
 - `GET /merchants`: Merchant verification queue
 - `PATCH /merchants/:id/status`: Approve, suspend, or update commission rates

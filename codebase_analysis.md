@@ -106,14 +106,22 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
   4. *Store Profile & Settings*: Brand identity, store bio, logo, banner, and settlement phone numbers.
 
 ### 🛡️ Admin Management Console (`/admin`)
-- **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, and recent audit activity.
+- **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), and recent audit activity.
+- **Admin Notifications Center**: Interactive header bell popover (`AdminNotificationsPopover.tsx`) with real-time unread badge, polling vendor KYC alerts (`/vendors/admin/alerts`) and security audit logs (`/auth/audit-logs`).
+- **Admin Navigation**: Zero-scrollbar non-scrollable desktop sidebar (`AdminSidebar.tsx`) with large NextDor logo and full-text action buttons, paired with a touch-friendly auto-dismissing mobile drawer with close (`X`) control.
 - **`/admin/orders`**: Global order management across all marketplace transactions, search by customer or order number, and manual status override with audit logging.
-- **`/admin/products`**: Global catalog directory, pricing audits, and soft-delete controls.
+- **`/admin/products`**: Global catalog directory, pricing audits, admin product creation (`POST /api/v1/products` via `AdminProductCreateForm`), and soft-delete controls.
 - **`/admin/customers` & `/admin/customers/[id]`**: Customer directory with order counts, lifetime spend aggregates, and full customer detail history.
 - **`/admin/analytics`**: 30-day revenue trends, daily order distribution, top-selling categories, and vendor performance breakdowns.
 - **`/admin/merchants`**: Merchant application queue, KYC review, commission rate adjustment, and one-click approval/suspension.
 - **`/admin/admins`**: Administrative staff directory and role assignment.
 - **`/admin/settings`**: Platform operational parameters, escrow durations, and maintenance modes.
+
+### 📱 Mobile-First Navigation & Usability
+- **Persistent Bottom Navigation (`BottomNav.tsx`)**: High-convenience thumb navigation bar fixed at viewport bottom with 1-tap access to Home, Shop/Explore, Search, Cart (with live animated item count badge), and Account/Sign In.
+- **Horizontal Swipeable Category Pills (`CategoryNav.tsx`)**: Responsive mobile category strip right beneath the header enabling instant category switching with horizontal touch swipe, without requiring menu drawer interaction.
+- **Accessible Mobile Drawer (`MobileNav.tsx`)**: Streamlined slide-out navigation with quick portal shortcuts (Admin Portal / Vendor Portal), account management, category directory, and touch-optimized tap targets.
+- **High-Contrast Quick Search (`SearchBar.tsx`)**: High-visibility white search input with instant clear (`X`) button for rapid query adjustments on mobile screens.
 
 ---
 

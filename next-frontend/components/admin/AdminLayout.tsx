@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, Bell, ExternalLink } from "lucide-react";
+import { Menu, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { AdminGuard } from "./AdminGuard";
 import { AdminSidebar } from "./AdminSidebar";
+import { AdminNotificationsPopover } from "./AdminNotificationsPopover";
 
 type AdminLayoutProps = {
   children: React.ReactNode;
@@ -26,15 +27,15 @@ export function AdminLayout({ children, title, actions }: AdminLayoutProps) {
 
         {/* Mobile sidebar overlay */}
         {mobileSidebarOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
+          <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
             <button
               type="button"
-              className="absolute inset-0 bg-black/60"
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
               onClick={() => setMobileSidebarOpen(false)}
               aria-label="Close sidebar"
             />
-            <div className="relative h-full">
-              <AdminSidebar />
+            <div className="relative h-full z-10 animate-in slide-in-from-left duration-200">
+              <AdminSidebar onClose={() => setMobileSidebarOpen(false)} />
             </div>
           </div>
         )}
@@ -42,13 +43,14 @@ export function AdminLayout({ children, title, actions }: AdminLayoutProps) {
         {/* Main content */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Top bar */}
-          <header className="flex min-h-16 shrink-0 flex-col gap-2 border-b border-zinc-200 bg-white px-4 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:py-0">
-            <div className="flex items-center gap-3">
+          <header className="flex h-14 sm:h-16 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3 sm:px-4 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               {/* Mobile menu toggle */}
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen(true)}
-                className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 md:hidden"
+                className="rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 active:scale-95 md:hidden"
+                aria-label="Open navigation menu"
               >
                 <Menu className="h-5 w-5" />
               </button>
@@ -57,37 +59,33 @@ export function AdminLayout({ children, title, actions }: AdminLayoutProps) {
                 type="button"
                 onClick={() => setSidebarCollapsed((v) => !v)}
                 className="hidden rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 md:flex"
+                aria-label="Toggle sidebar collapse"
               >
                 <Menu className="h-5 w-5" />
               </button>
               {title && (
-                <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
+                <h1 className="text-sm sm:text-base font-semibold text-zinc-900 truncate">
+                  {title}
+                </h1>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 pb-2 sm:pb-0">
+            <div className="flex items-center gap-2 shrink-0">
               {actions}
-              <button
-                type="button"
-                className="relative rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"
-                aria-label="Notifications"
-              >
-                <Bell className="h-5 w-5" />
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#ff9900]" />
-              </button>
+              <AdminNotificationsPopover />
               <Link
                 href="/"
                 target="_blank"
-                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                className="hidden sm:flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
-                View Store
+                <span>View Store</span>
               </Link>
             </div>
           </header>
 
           {/* Page content */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto p-3 sm:p-6">{children}</main>
         </div>
       </div>
     </AdminGuard>

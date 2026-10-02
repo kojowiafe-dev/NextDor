@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { CategoryNav } from "@/components/layout/CategoryNav";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { BottomNav } from "@/components/layout/BottomNav";
 import type { Category } from "@/lib/catalog";
 
 interface StorefrontShellProps {
@@ -23,11 +24,12 @@ export function StorefrontShell({ categories, children }: StorefrontShellProps) 
   }
 
   return (
-    <div id="top" className="flex min-h-screen flex-col bg-[#eaeded]">
+    <div id="top" className="flex min-h-screen flex-col bg-[#eaeded] pb-16 md:pb-0">
       <Header categories={categories} />
       <CategoryNav categories={categories} />
       <main className="flex-1">{children}</main>
       <Footer />
+      <BottomNav />
     </div>
   );
 }

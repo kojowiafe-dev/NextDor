@@ -89,15 +89,27 @@ The application features 34 active routes organized into four distinct operation
 ### 4. 🛡️ Admin Management Console (`/admin`)
 | Route | Description |
 | :--- | :--- |
-| `/admin` | Executive dashboard with platform KPIs, gross sales, vendor volume, and audit log |
+| `/admin` | Executive dashboard with platform KPIs, gross sales, vendor volume, live database metrics (`totalCustomers`, `totalProducts`), and recent audit logs |
 | `/admin/orders` | Global marketplace order list with search and manual status overrides |
 | `/admin/products` | Platform product catalog directory, price auditing, and soft delete |
+| `/admin/products/new` | Admin product creation form with Cloudinary upload and flagship vendor assignment |
 | `/admin/customers` | Customer directory with spend history and order counts |
 | `/admin/customers/[id]` | Individual customer profile, order breakdown, and address list |
 | `/admin/analytics` | 30-day revenue charts, daily orders, category sales, and vendor performance |
 | `/admin/merchants` | Merchant verification queue, KYC review, and commission rate adjustment |
 | `/admin/admins` | Internal staff directory and role management |
 | `/admin/settings` | Platform operational settings and escrow parameters |
+
+---
+
+## 📱 Mobile-First Commerce & Navigation
+
+The frontend is optimized for seamless one-handed mobile commerce in Ghana:
+- **Persistent Bottom Navigation (`components/layout/BottomNav.tsx`)**: Fixed at bottom of screen with safe-area padding. 1-tap navigation to Home, Shop, Search, Cart (with live animated item count badge), and Account/Sign In.
+- **Horizontal Swipeable Category Pills (`components/layout/CategoryNav.tsx`)**: Touch-friendly swipeable category bar directly below the header for instantaneous category browsing without opening menus.
+- **High-Contrast Quick Search (`components/layout/SearchBar.tsx`)**: White background, dark text, and a 1-tap clear button (`X`) for rapid mobile product queries.
+- **Mobile Navigation Drawer (`components/layout/MobileNav.tsx`)**: Slide-out menu with direct shortcuts to Admin/Vendor portals, customer orders, wishlist, and categorized directory.
+- **Admin Mobile Usability (`components/admin/AdminSidebar.tsx` & `AdminLayout.tsx`)**: Auto-dismissing drawer on link navigation, visible close (`X`) control, single-row mobile top bar, and real-time alert notifications popover (`AdminNotificationsPopover.tsx`).
 
 ---
 

@@ -16,6 +16,7 @@ import {
   Store,
   ShieldCheck,
   FileText,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -36,9 +37,10 @@ const superAdminExtraItems = [
 
 type AdminSidebarProps = {
   collapsed?: boolean;
+  onClose?: () => void;
 };
 
-export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
+export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const { user, isSuperAdmin, logout } = useAuth();
 
@@ -52,15 +54,19 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
 
   return (
     <aside
-      className={`flex h-full flex-col justify-between bg-[#0d1117] transition-all overflow-hidden ${
-        collapsed ? "w-16" : "w-60"
+      className={`flex h-full flex-col justify-between bg-[#0d1117] transition-all ${
+        onClose ? "overflow-y-auto w-64 shadow-2xl" : "overflow-hidden " + (collapsed ? "w-16" : "w-60")
       }`}
     >
       {/* Top Section: Logo + Navigation */}
-      <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-        {/* Logo */}
+      <div className={`flex flex-col min-h-0 flex-1 ${onClose ? "" : "overflow-hidden"}`}>
+        {/* Logo Bar */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/5 px-4 py-2">
-          <Link href="/admin" className="flex items-center gap-2 overflow-hidden">
+          <Link
+            href="/admin"
+            onClick={onClose}
+            className="flex items-center gap-2 overflow-hidden"
+          >
             {collapsed ? (
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-sm font-bold text-zinc-900 shadow-sm">
                 N
@@ -87,10 +93,22 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
               </div>
             )}
           </Link>
+
+          {/* Close button in mobile drawer */}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 active:scale-95 transition"
+              aria-label="Close menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-hidden px-2.5 py-2">
+        {/* Nav list */}
+        <nav className={`flex-1 px-2.5 py-2 ${onClose ? "" : "overflow-hidden"}`}>
           {!collapsed && (
             <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
               Main Menu
@@ -103,6 +121,7 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    onClick={onClose}
                     title={collapsed ? item.label : undefined}
                     className={`group flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all ${
                       active
@@ -144,6 +163,7 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
         )}
         <Link
           href="/"
+          onClick={onClose}
           title={collapsed ? "Back to Storefront" : undefined}
           className={`mb-1 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/5 hover:text-white ${
             collapsed ? "justify-center" : ""
@@ -154,7 +174,10 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
         </Link>
         <button
           type="button"
-          onClick={logout}
+          onClick={() => {
+            onClose?.();
+            logout();
+          }}
           title={collapsed ? "Sign Out" : undefined}
           className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-red-500/10 hover:text-red-400 ${
             collapsed ? "justify-center" : ""
