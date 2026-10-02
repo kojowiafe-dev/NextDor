@@ -1,25 +1,31 @@
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
 
-export type MockOrder = {
+export type AccountOrderSummary = {
   id: string;
   date: string;
-  status: "delivered" | "processing" | "cancelled" | "shipped";
+  status: "delivered" | "processing" | "cancelled" | "shipped" | "pending" | "confirmed" | "refunded";
   items: { name: string; quantity: number }[];
   total: number;
   currency: string;
 };
 
-const statusConfig = {
+export type MockOrder = AccountOrderSummary;
+
+type OrderCardProps = {
+  order: AccountOrderSummary;
+};
+
+const statusConfig: Record<string, { label: string; classes: string }> = {
   delivered: { label: "Delivered", classes: "bg-green-100 text-green-700" },
   processing: { label: "Processing", classes: "bg-blue-100 text-blue-700" },
   shipped: { label: "Shipped", classes: "bg-amber-100 text-amber-700" },
   cancelled: { label: "Cancelled", classes: "bg-red-100 text-red-700" },
+  pending: { label: "Pending", classes: "bg-amber-100 text-amber-700" },
+  confirmed: { label: "Confirmed", classes: "bg-blue-100 text-blue-700" },
+  refunded: { label: "Refunded", classes: "bg-zinc-100 text-zinc-700" },
 };
 
-type OrderCardProps = {
-  order: MockOrder;
-};
 
 export function OrderCard({ order }: OrderCardProps) {
   const config = statusConfig[order.status];

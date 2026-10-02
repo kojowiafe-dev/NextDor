@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   DollarSign,
   ShoppingBag,
@@ -27,7 +27,7 @@ import { API_BASE } from "@/lib/api-config";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { StatCard } from "@/components/admin/StatCard";
 import { useAuth } from "@/context/AuthContext";
-import { MOCK_ORDERS, WEEKLY_REVENUE, type AdminOrder } from "@/lib/admin/mockData";
+import { type AdminOrder } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
 import { createSWRCache } from "@/lib/cache/clientCache";
 import { adminOrdersCache } from "@/lib/cache/adminCache";
@@ -138,7 +138,7 @@ export default function AdminDashboardPage() {
     totalCount: 1,
   });
   const [orders, setOrders] = useState<AdminOrder[]>(() => {
-    return adminOrdersCache.get("all_orders") ?? MOCK_ORDERS;
+    return adminOrdersCache.get("all_orders") ?? [];
   });
   const [isApproving, setIsApproving] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -199,7 +199,7 @@ export default function AdminDashboardPage() {
         const res = await fetch(`${API_BASE}/admin/orders?limit=100`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) return MOCK_ORDERS;
+        if (!res.ok) return [];
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
           return json.data.map((o: any): AdminOrder => ({
@@ -225,7 +225,7 @@ export default function AdminDashboardPage() {
             },
           }));
         }
-        return MOCK_ORDERS;
+        return [];
       });
       if (liveOrders) setOrders(liveOrders);
     } catch {
@@ -260,6 +260,21 @@ export default function AdminDashboardPage() {
   const pipelineOrders = orders.filter((o) => o.status === "processing" || o.status === "pending" || o.status === "confirmed" || o.status === "shipped");
   const platformFee = totalRevenue * 0.10; // 10% platform cut
   const escrowHold = totalRevenue * 0.90; // 90% escrow reserve held for merchants
+
+  const weeklyRevenue = useMemo(() => {
+    const buckets = [0, 0, 0, 0, 0, 0, 0];
+    const now = Date.now();
+    for (const order of orders) {
+      if (order.status !== "cancelled" && order.status !== "refunded") {
+        const orderTime = new Date(order.date).getTime();
+        const diffDays = Math.floor((now - orderTime) / (24 * 60 * 60 * 1000));
+        if (diffDays >= 0 && diffDays < 7) {
+          buckets[6 - diffDays] += order.total;
+        }
+      }
+    }
+    return buckets;
+  }, [orders]);
 
   return (
     <AdminLayout
@@ -614,7 +629,7 @@ export default function AdminDashboardPage() {
                 <span className="rounded-full bg-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-800">Priority</span>
               </div>
               <p className="mt-2 text-2xl font-bold text-blue-900">
-                {MOCK_ORDERS.filter((o) => o.status === "processing").length} Orders
+                {orders.filter((o) => o.status === "processing").length} Orders
               </p>
               <p className="mt-1 text-xs text-blue-700">Orders ready for warehouse packing and courier dispatch.</p>
             </div>
@@ -661,7 +676,7 @@ export default function AdminDashboardPage() {
               ↑ 12% vs last week
             </span>
           </div>
-          <RevenueChart data={WEEKLY_REVENUE} />
+          <RevenueChart data={weeklyRevenue} />
         </div>
 
         {/* Recent Orders List */}
@@ -676,32 +691,38 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
           <ul className="space-y-3">
-            {recentOrders.map((order) => {
-              const cfg = statusConfig[order.status] || statusConfig.processing;
-              return (
-                <li key={order.id}>
-                  <Link
-                    href={`/admin/orders/${order.id}`}
-                    className="flex items-center justify-between gap-2 rounded-lg p-2 hover:bg-zinc-50 transition"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-zinc-900">
-                        {order.customer?.name || "Customer"}
-                      </p>
-                      <p className="text-xs text-zinc-500">{order.id}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {formatPrice(order.total, order.currency)}
-                      </p>
-                      <span className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${cfg.classes}`}>
-                        {cfg.label}
-                      </span>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
+            {recentOrders.length === 0 ? (
+              <li className="py-8 text-center text-xs text-zinc-400">
+                No orders placed yet. Real orders will appear here automatically.
+              </li>
+            ) : (
+              recentOrders.map((order) => {
+                const cfg = statusConfig[order.status] || statusConfig.processing;
+                return (
+                  <li key={order.id}>
+                    <Link
+                      href={`/admin/orders/${order.id}`}
+                      className="flex items-center justify-between gap-2 rounded-lg p-2 hover:bg-zinc-50 transition"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-zinc-900">
+                          {order.customer?.name || "Customer"}
+                        </p>
+                        <p className="text-xs text-zinc-500">{order.id}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {formatPrice(order.total, order.currency)}
+                        </p>
+                        <span className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${cfg.classes}`}>
+                          {cfg.label}
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })
+            )}
           </ul>
         </div>
       </div>

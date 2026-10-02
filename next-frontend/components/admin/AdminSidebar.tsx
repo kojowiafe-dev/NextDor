@@ -19,21 +19,19 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-const superAdminNavItems = [
-  { label: "Platform Overview", href: "/admin", icon: LayoutDashboard, exact: true },
-  { label: "Merchants", href: "/admin/merchants", icon: Store },
-  { label: "Administrators", href: "/admin/admins", icon: ShieldCheck },
-  { label: "Audit Logs", href: "/admin/audit-logs", icon: FileText },
-  { label: "Platform Settings", href: "/admin/settings", icon: Settings },
-];
-
-const opsAdminNavItems = [
-  { label: "Operations Console", href: "/admin", icon: LayoutDashboard, exact: true },
+const coreNavItems = [
+  { label: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Customers", href: "/admin/customers", icon: Users },
-  { label: "Merchant Review", href: "/admin/merchants", icon: Store },
+  { label: "Merchants", href: "/admin/merchants", icon: Store },
   { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+];
+
+const superAdminExtraItems = [
+  { label: "Administrators", href: "/admin/admins", icon: ShieldCheck },
+  { label: "Audit Logs", href: "/admin/audit-logs", icon: FileText },
+  { label: "Platform Settings", href: "/admin/settings", icon: Settings },
 ];
 
 type AdminSidebarProps = {
@@ -44,9 +42,11 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
   const pathname = usePathname();
   const { user, isSuperAdmin, logout } = useAuth();
 
-  const currentNavItems = isSuperAdmin ? superAdminNavItems : opsAdminNavItems;
+  const currentNavItems = isSuperAdmin
+    ? [...coreNavItems, ...superAdminExtraItems]
+    : coreNavItems;
 
-  function isActive(item: (typeof superAdminNavItems)[0]) {
+  function isActive(item: (typeof coreNavItems)[0]) {
     return item.exact ? pathname === item.href : pathname.startsWith(item.href);
   }
 

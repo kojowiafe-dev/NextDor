@@ -346,6 +346,10 @@ enum OrderStatus    { PENDING CONFIRMED PROCESSING SHIPPED DELIVERED CANCELLED R
 enum PaymentStatus  { UNPAID PARTIAL PAID REFUNDED }
 enum DeliveryMethod { STANDARD EXPRESS PICKUP }
 
+// Polymorphic lookup note: OrderRepository.findByNumber accepts both human-readable
+// order numbers (e.g. "ND-00001") and internal UUIDs, ensuring smooth routing
+// across customer tracking URLs, payment webhook callbacks, and admin tools.
+
 model OrderStatusHistory {
   id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   orderId   String      @db.Uuid
@@ -786,15 +790,48 @@ Users (authenticated)
   PATCH  /users/me/addresses/:id
   DELETE /users/me/addresses/:id
 
-Products
-  GET    /products               ?page&limit&sort&category&search
-  GET    /products/:slug
-  GET    /products/:slug/reviews
+Products (Catalog)
+  GET    /products                     ?page&limit&sort&category&vendor&search
+  GET    /products/categories          (Category list with product counts)
+  GET    /products/trending            ?limit=10 (Sales velocity & customer rating signals)
+  GET    /products/sellers             ?name=...&excludeSlug=... (Multi-merchant lookup)
+  GET    /products/grouped-by-merchant ?limitMerchants=6&productsPerMerchant=4
+  GET    /products/:slug               (Single product detail by slug)
+  GET    /products/:slug/reviews       (Product reviews)
+  PATCH  /products/:id                 (Update product details - Admin or Vendor)
+  DELETE /products/:id                 (Soft-delete product - Admin)
 
-Orders (authenticated)
-  POST   /orders
-  GET    /orders
-  GET    /orders/:id
+Orders
+  POST   /orders                       (Place order / checkout - auth or guest)
+  GET    /orders                       (List my orders - paginated)
+  GET    /orders/:number               (Order detail & tracking: supports polymorphic lookup by order number ND-XXXXX or UUID)
+  POST   /orders/:number/cancel        (Cancel customer order)
+
+Vendors (Merchant Portal & Onboarding)
+  POST   /vendors/register             (Public merchant registration)
+  GET    /vendors/portal/me            (Authenticated merchant profile & MoMo details)
+  PATCH  /vendors/portal/me            (Update merchant settings & payout info)
+  GET    /vendors/portal/products      (Merchant's isolated product inventory)
+  POST   /vendors/portal/products      (Publish new product under merchant vendorId)
+  PATCH  /vendors/portal/products/:id  (Update vendor product with OCC version lock)
+  DELETE /vendors/portal/products/:id  (Tenant-isolated soft delete)
+  GET    /vendors/portal/orders        (Partitioned merchant sub-orders queue)
+  PATCH  /vendors/portal/orders/:id/status (Dispatch status progression: PROCESSING -> SHIPPED -> DELIVERED)
+  GET    /vendors/portal/payouts       (Escrow balances & automated MoMo disbursement ledger)
+
+Admin (role: ADMIN or SUPER_ADMIN)
+  GET    /admin/orders                 ?status&page&limit (Global orders list)
+  GET    /admin/orders/:number         (Global order detail by number or UUID)
+  PATCH  /admin/orders/:id/status      (Force-update status with audit log note)
+  GET    /admin/customers              ?page&limit&search (Customer list with spend/orders)
+  GET    /admin/customers/:id          (Customer profile, addresses & order history)
+  GET    /admin/analytics/overview     (Platform metrics, revenue, and 30-day trends)
+  GET    /admin/analytics/summary      (Quick dashboard KPI summary)
+  GET    /admin/merchants              (Merchant approval queue & verification)
+  PATCH  /admin/merchants/:id/status   (Approve, suspend, or adjust commission rate)
+  GET    /admin/reviews                ?approved=false (Review moderation queue)
+  PATCH  /admin/reviews/:id/approve    (Approve review)
+  DELETE /admin/reviews/:id            (Reject/delete review)
 
 Reviews (authenticated)
   POST   /products/:slug/reviews
@@ -806,25 +843,12 @@ Cart (session-based, Redis)
   DELETE /cart/items/:productId
   DELETE /cart
 
-Payments
-  POST   /payments/initiate
-  GET    /payments/:reference/status
+Payments & Escrow
+  POST   /payments/initiate            (Paystack initialization for MoMo/Card)
+  GET    /payments/:reference/status   (Verify transaction)
 
-Webhooks (no auth — signature verified)
+Webhooks (no auth — Paystack HMAC-SHA512 verified)
   POST   /webhooks/paystack
-
-Admin (role: ADMIN)
-  GET    /admin/orders           ?status&page
-  PATCH  /admin/orders/:id/status
-  GET    /admin/products
-  POST   /admin/products
-  PATCH  /admin/products/:id
-  DELETE /admin/products/:id
-  GET    /admin/customers
-  GET    /admin/analytics/summary
-  GET    /admin/reviews          ?approved=false
-  PATCH  /admin/reviews/:id/approve
-  DELETE /admin/reviews/:id
 ```
 
 ---

@@ -1,33 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Package, User, MapPin, Heart, ArrowRight } from "lucide-react";
+import { Package, User, MapPin, Heart, ArrowRight, Loader2 } from "lucide-react";
 import { AccountLayout } from "@/components/account/AccountLayout";
-import { OrderCard, type MockOrder } from "@/components/account/OrderCard";
+import { OrderCard, type AccountOrderSummary } from "@/components/account/OrderCard";
 import { useAuth } from "@/context/AuthContext";
-
-// Mock recent orders — replace with real API fetch when backend is ready
-const MOCK_RECENT_ORDERS: MockOrder[] = [
-  {
-    id: "ND-00123",
-    date: "Aug 25, 2026",
-    status: "delivered",
-    items: [{ name: "JBL Wireless Speaker", quantity: 1 }],
-    total: 450,
-    currency: "GHS",
-  },
-  {
-    id: "ND-00118",
-    date: "Aug 14, 2026",
-    status: "processing",
-    items: [
-      { name: "Nivea Body Lotion", quantity: 2 },
-      { name: "Dove Shampoo", quantity: 1 },
-    ],
-    total: 120,
-    currency: "GHS",
-  },
-];
+import { fetchMyOrders } from "@/lib/orders/api";
 
 const quickLinks = [
   { label: "My Orders", href: "/account/orders", icon: Package, desc: "Track & manage orders" },
@@ -37,7 +16,54 @@ const quickLinks = [
 ];
 
 export default function AccountPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [recentOrders, setRecentOrders] = useState<AccountOrderSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadOrders() {
+      if (!token) {
+        setRecentOrders([]);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const res = await fetchMyOrders(token, 1, 3);
+        if (!isMounted) return;
+        if (Array.isArray(res.orders)) {
+          const mapped: AccountOrderSummary[] = res.orders.map((o: any) => ({
+            id: o.number || o.id,
+            date: new Intl.DateTimeFormat("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }).format(new Date(o.createdAt)),
+            status: o.status.toLowerCase() as any,
+            items: (o.items || []).map((it: any) => ({
+              name: it.productName,
+              quantity: it.quantity,
+            })),
+            total: Number(o.total || 0),
+            currency: o.currency || "GHS",
+          }));
+          setRecentOrders(mapped);
+        } else {
+          setRecentOrders([]);
+        }
+      } catch (err) {
+        console.error("Failed to load customer orders:", err);
+        setRecentOrders([]);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadOrders();
+    return () => {
+      isMounted = false;
+    };
+  }, [token]);
 
   return (
     <AccountLayout>
@@ -77,19 +103,24 @@ export default function AccountPage() {
           </Link>
         </div>
 
-        {MOCK_RECENT_ORDERS.length > 0 ? (
+        {isLoading ? (
+          <div className="flex h-28 items-center justify-center gap-2 text-sm text-zinc-500">
+            <Loader2 className="h-5 w-5 animate-spin text-[#ff9900]" />
+            <span>Loading orders...</span>
+          </div>
+        ) : recentOrders.length > 0 ? (
           <div className="space-y-3">
-            {MOCK_RECENT_ORDERS.map((order) => (
+            {recentOrders.map((order) => (
               <OrderCard key={order.id} order={order} />
             ))}
           </div>
         ) : (
           <div className="py-8 text-center">
             <Package className="mx-auto mb-2 h-8 w-8 text-zinc-300" />
-            <p className="text-sm text-zinc-500">No orders yet.</p>
+            <p className="text-sm text-zinc-500">No orders placed yet.</p>
             <Link
               href="/shop"
-              className="mt-3 inline-block text-sm font-medium text-[#007185] hover:underline"
+              className="mt-3 inline-block rounded-lg bg-[#ff9900] px-4 py-2 text-xs font-semibold text-zinc-900 transition hover:bg-[#e68a00]"
             >
               Start shopping
             </Link>

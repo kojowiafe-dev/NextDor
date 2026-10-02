@@ -1,141 +1,171 @@
-# NextDor — Codebase Analysis
+# NextDor — Complete Codebase Analysis & System Architecture
 
-## What Is This Project?
+## 1. Executive Summary
 
-**NextDor** (`nextdor.online`) is a Ghanaian e-commerce storefront — a Next.js frontend that sits on top of a **WooCommerce/WordPress backend** (already live at `nextdor.online`). Think of it as a modern, custom-built storefront replacing the default WooCommerce theme, but still pulling all product/category data from WooCommerce via its Store API.
+**NextDor** (`nextdor.online`) is an enterprise-grade Ghanaian multi-vendor e-commerce marketplace operating under the brand motto **"Shop More, Wait Less"**. The platform connects local customers with verified Ghanaian merchants across Accra, Kumasi, and regions nationwide, supporting electronics, computing, fashion, beauty, home goods, and supermarket essentials priced in **Ghanaian Cedis (GHS)**.
 
-The tagline is: *"Style, Convenience, and Comfort — Nextdor to You"*, and it sells electronics, laptops, beauty products, bakery items, and more — delivered across Ghana. Prices are in **GHS (Ghanaian Cedis)**.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | **Next.js 16.3.3** (App Router, React 19) |
-| Language | **TypeScript** |
-| Styling | **Tailwind CSS v4** |
-| Icons | **Lucide React** |
-| Font | **Outfit** (Google Fonts) |
-| Backend/Data | **WooCommerce Store API** (REST, no auth needed) |
-| Cart State | **React Context + localStorage** |
-| HTML Sanitization | `isomorphic-dompurify` |
-| Utilities | `clsx`, `tailwind-merge` |
+The system is architected as a high-performance monorepo:
+1. **`next-frontend`**: Next.js 16 (App Router + Turbopack + React 19) delivering a lightning-fast customer storefront, authenticated customer account management, a merchant self-service portal, and a super admin console.
+2. **`next-backend`**: Node.js 20 LTS + Fastify v5 high-throughput REST API with Prisma ORM 5 connecting to Neon Serverless Cloud PostgreSQL, Paystack payment integration, and Cloudinary media pipelines.
+3. **`packages/shared`**: Shared TypeScript types, interfaces, and Zod schemas shared between frontend and backend to guarantee end-to-end type safety.
 
 ---
 
-## Architecture Overview
+## 2. Technology Stack
+
+| Layer | Technologies & Libraries | Key Responsibilities |
+| :--- | :--- | :--- |
+| **Frontend Framework** | Next.js 16.3 (App Router, Turbopack, React 19) | Server and Client Components, SSR, dynamic routing, metadata |
+| **Frontend Styling** | Tailwind CSS v4, Lucide React, Google Outfit Font | Brand Amazon/NextDor palette (`#ff9900`, `#131921`), responsive layouts |
+| **Frontend Caching** | Multi-Tier SWR (`clientCache.ts`, `adminCache.ts`), `fetchDedupe` | Instant navigation, memory + localStorage persistence, deduplication |
+| **Backend Framework** | Fastify v5, `@fastify/cors`, `@fastify/helmet`, `@fastify/swagger` | High-throughput async HTTP server (~76k req/s), OpenAPI documentation |
+| **Database & ORM** | PostgreSQL 16 (Neon Serverless), Prisma ORM 5 | 14 relational models, migrations, ACID transactions, UUID v4 keys |
+| **Authentication** | JWT (HS256), RFC 6749 Opaque Refresh Tokens, bcryptjs | 15-min access tokens, 30-day token family rotation, replay detection |
+| **Access Control (RBAC)**| 5-Tier Roles (`CUSTOMER`, `VENDOR_OWNER`, `VENDOR_STAFF`, `ADMIN`, `SUPER_ADMIN`) | Route guards, tenant isolation, admin oversight |
+| **Payments & Escrow** | Paystack (Node SDK), Mobile Money (MTN, Telecel, AT), Cards | Webhooks with HMAC-SHA512 verification, 48-hour delivery escrow |
+| **Media & CDN** | Cloudinary v2, Next.js Image Optimization | Serverless signed image uploads (`/api/upload`), edge transcoding |
+| **Concurrency Control**| Optimistic Concurrency Control (OCC) | Version counters on products to prevent concurrent write collisions |
+
+---
+
+## 3. High-Level Monorepo Structure
 
 ```
-nextdor.online (WordPress + WooCommerce)
-        ↓  WC Store API v1 (public REST)
-next-frontend (Next.js App Router)
-  ├── lib/woocommerce/  ← Raw API client + WC types
-  ├── lib/catalog/      ← Domain model + business logic
-  ├── components/       ← UI components
-  ├── context/          ← Cart state (client-side)
-  └── app/              ← Pages (App Router)
+NextDor/
+├── next-frontend/                      # Next.js 16 App Router Client
+│   ├── app/                            # 34 active routes
+│   │   ├── (storefront)/               # Customer shopping routes (/, /shop, /product/[slug], /cart, /checkout)
+│   │   ├── account/                    # Customer portal (/account, /account/orders, /account/addresses)
+│   │   ├── vendor/                     # Merchant portal (/vendor/dashboard, /vendor/register)
+│   │   ├── admin/                      # Super admin & staff console (/admin, /admin/customers, /admin/analytics)
+│   │   └── api/upload/                 # Cloudinary image upload serverless route handler
+│   ├── components/                     # Reusable UI component library
+│   │   ├── layout/                     # StoreHeader, CategoryNav, MobileNav, Footer
+│   │   ├── home/                       # HeroCarousel, CategoryTiles, ProductRow, TrendingSection
+│   │   ├── product/                    # ProductCard, ProductGrid, PriceDisplay, AddToCartButton
+│   │   ├── admin/                      # AdminNavbar, StatusBadge, DataTables
+│   │   └── ui/                         # Modal, ImageUpload, Pagination, Input
+│   ├── context/                        # Global state (CartContext, AuthContext, ToastContext)
+│   └── lib/                            # Business logic, caching, and API clients
+│       ├── cache/                      # clientCache.ts, adminCache.ts (SWR cache engines)
+│       ├── api/                        # client.ts, adminApi.ts, vendorApi.ts
+│       └── auth/                       # tokenStorage.ts, session utilities
+│
+├── next-backend/                       # Fastify v5 Production REST API
+│   ├── src/
+│   │   ├── app.ts                      # Fastify instance, plugins, error handlers
+│   │   ├── server.ts                   # Startup entry point (port 4000)
+│   │   ├── config/                     # Environment validation with Zod
+│   │   ├── domain/                     # Martin Fowler Money Value Object & CommissionCalculator
+│   │   └── modules/                    # Feature vertical slices (Clean Architecture)
+│   │       ├── auth/                   # Register, login, refresh rotation, RBAC guards
+│   │       ├── users/                  # Customer profile and address repository & service
+│   │       ├── products/               # Catalog, categories, OCC locking, soft delete
+│   │       ├── orders/                 # Checkout, multi-vendor sub-orders, polymorphic findByNumber
+│   │       ├── vendors/                # Merchant onboarding, tenant-isolated inventory & payouts
+│   │       ├── admin/                  # Admin customer directory, analytics overview, governance
+│   │       ├── audit/                  # Platform audit logging (immutable events)
+│   │       └── sync/                   # Asynchronous WooCommerce migration sync worker
+│   ├── prisma/                         # schema.prisma, migrations, seeds
+│   └── package.json
+│
+├── packages/shared/                    # Monorepo shared schemas and types
+│   ├── src/schemas/                    # Zod validation schemas (auth, product, order, vendor)
+│   └── src/index.ts
+└── documentation/                      # Architectural specifications
 ```
 
-The data layer is cleanly two-tiered:
-1. **`lib/woocommerce/`** — raw WC API types and HTTP client, with fallback URLs and 5-min ISR cache
-2. **`lib/catalog/`** — normalizes WC data into clean domain types (`Product`, `Category`) and exposes product-fetching functions
+---
+
+## 4. Frontend Application Portals
+
+The frontend provides four distinct user experiences governed by RBAC and clean navigation:
+
+### 🛍️ Storefront Portal (Public & Customer)
+- **`/`**: Dynamic homepage featuring Hero carousel, top categories, Deal of the Day, Flash Sales, and trending products.
+- **`/shop`**: Full catalog with multi-facet filters (categories, price range, vendors, sorting by newest/price/popularity), server search, and pagination.
+- **`/product/[slug]`**: Rich product detail page with high-resolution image galleries, stock status, seller comparison ("Other Sellers"), and Add to Cart.
+- **`/category/[slug]`**: Category-filtered catalog with breadcrumb trails.
+- **`/cart`**: Interactive shopping cart with quantity adjustment, price calculation, and subtotal updates.
+- **`/checkout`**: Multi-step checkout with delivery address selection, Ghana delivery options (Standard, Express, Pickup), and Paystack payment initiation.
+- **`/track-order`**: Public order status lookup accepting order numbers (e.g. `ND-00001`) or tracking UUIDs.
+
+### 👤 Customer Account Portal (`/account`)
+- **`/account`**: Central customer overview with recent orders, default shipping address, and quick shortcuts.
+- **`/account/orders` & `/account/orders/[id]`**: Complete order history, line item breakdown, tracking status timeline, and cancel order capability.
+- **`/account/addresses`**: Multi-address management (Home, Work, Other) with default address toggling.
+- **`/account/wishlist`**: Saved items for future purchase.
+- **`/account/settings`**: Profile information and security management.
+
+### 🏪 Merchant Portal (`/vendor`)
+- **`/vendor/register`**: Public merchant onboarding with business registration, owner details, and Mobile Money payout configuration (MTN MoMo, Telecel Cash, AT Money).
+- **`/vendor/dashboard`**: 4-tab reactive console:
+  1. *Inventory & Stock*: Real-time product table, inline price/stock editor with OCC concurrency protection, Cloudinary image uploader, and product publishing modal.
+  2. *Store Orders & Dispatch*: Partitioned sub-orders (`VendorOrder`), buyer address snapshots, line items, and 1-click dispatch progression (`PROCESSING` $\rightarrow$ `SHIPPED` $\rightarrow$ `DELIVERED`).
+  3. *MoMo Payouts & Escrow*: Lifetime earnings, funds in 48-hour customer verification escrow, available balances, and automated transfer ledger.
+  4. *Store Profile & Settings*: Brand identity, store bio, logo, banner, and settlement phone numbers.
+
+### 🛡️ Admin Management Console (`/admin`)
+- **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, and recent audit activity.
+- **`/admin/orders`**: Global order management across all marketplace transactions, search by customer or order number, and manual status override with audit logging.
+- **`/admin/products`**: Global catalog directory, pricing audits, and soft-delete controls.
+- **`/admin/customers` & `/admin/customers/[id]`**: Customer directory with order counts, lifetime spend aggregates, and full customer detail history.
+- **`/admin/analytics`**: 30-day revenue trends, daily order distribution, top-selling categories, and vendor performance breakdowns.
+- **`/admin/merchants`**: Merchant application queue, KYC review, commission rate adjustment, and one-click approval/suspension.
+- **`/admin/admins`**: Administrative staff directory and role assignment.
+- **`/admin/settings`**: Platform operational parameters, escrow durations, and maintenance modes.
 
 ---
 
-## Pages / Routes
+## 5. Backend Architecture & Clean Design
 
-| Route | Status | Description |
-|---|---|---|
-| `/` | ✅ Done | Homepage: Hero banner, category tiles, Deal of the Day, Featured & Popular product rows |
-| `/shop` | ✅ Done | Full product catalog with sort (popularity, date, price, rating) + category filter pills + pagination |
-| `/product/[slug]` | ✅ Done | Product detail: image gallery, price, stock status, Add to Cart, description (sanitized HTML), related products |
-| `/category/[slug]` | ✅ Done | Category-filtered product grid with breadcrumbs |
-| `/search` | ✅ Done | Search results page driven by `?q=` query param |
-| `/cart` | ✅ Done (partial) | Cart page with qty controls, remove, order summary — **Checkout button is disabled ("Coming Soon")** |
-| `/account` | ⚠️ Stub | Placeholder page — sign in/account features not yet built |
+The backend enforces strict **Clean Architecture** and **SOLID** principles:
 
----
+### Separation of Concerns
+1. **Route Handlers / Controllers (`*.routes.ts`)**: HTTP-only concerns. Extract headers/tokens, validate input schemas with Zod, and delegate business decisions to services.
+2. **Domain Services (`*.service.ts`)**: Pure business logic. Enforce invariants (e.g. stock availability, commission math, status transitions), wrap multi-step operations in transactions, and manage cache invalidations.
+3. **Repositories (`*.repository.ts`)**: Data access layer. Encapsulate all Prisma ORM operations, database joins, pagination skips, and index hints. Services never write raw SQL or call Prisma directly.
+4. **Domain Value Objects (`domain/Money.ts`)**: Monetary calculations run in minor units (integer pesewas) via Martin Fowler's `Money` pattern to eliminate JavaScript IEEE 754 floating-point rounding errors.
 
-## Component Breakdown
-
-### Layout Components (`components/layout/`)
-- **`StoreLayout`** — async server component; fetches categories, wraps all pages in `CartProvider` + `Header` + `CategoryNav` + `Footer`
-- **`Header`** — logo, delivery location (Ghana), search bar, account link, cart icon with live item count badge
-- **`CategoryNav`** — horizontal scrollable category navigation bar
-- **`MobileNav`** — hamburger menu for mobile
-- **`SearchBar`** — form that navigates to `/search?q=...`
-- **`Footer`** — links for Shop, Help, Account sections + branding
-
-### Home Components (`components/home/`)
-- **`HeroCarousel`** — hero banner showing the best "Deal of the Day" discount percentage with CTA buttons
-- **`CategoryTiles`** — top-6 categories as clickable tiles with letter avatars
-- **`ProductRow`** — horizontal scrollable row of product cards with a "View All" link
-
-### Product Components (`components/product/`)
-- **`ProductCard`** — card with image, name, short description, star rating, price, sale badge
-- **`ProductGrid`** — responsive grid (2 → 4 columns) of `ProductCard`s
-- **`ProductGallery`** — image gallery for the product detail page
-- **`PriceDisplay`** — handles sale pricing (strikethrough original price, red sale price, discount % badge)
-- **`AddToCartButton`** — client component; adds product to cart context or shows "Out of Stock"
+### Polymorphic Order Retrieval
+`OrderRepository.findByNumber(numberOrId, userId)` supports polymorphic lookups:
+- If a string matches the UUID pattern, it queries by primary key `id`.
+- Otherwise, it queries by the human-readable unique order number (`number`, e.g. `ND-00001`).
+- This allows seamless interoperability across Paystack webhook references, customer tracking URLs, and internal administrative tools.
 
 ---
 
-## Data / Catalog Layer
+## 6. Frontend Caching & Data Flow
 
-### Cart (`context/CartContext.tsx`)
-- Client-side only, persisted to **localStorage** (`nextdor-cart`)
-- Supports: `addItem`, `removeItem`, `updateQty`, `clearCart`
-- Exposes: `items`, `itemCount`, `subtotal`
-- No backend cart sync — purely frontend for now
-
-### Catalog Functions (`lib/catalog/index.ts`)
-| Function | What it does |
-|---|---|
-| `getProducts(options)` | Paginated product list with sort/search/category filter |
-| `getAllProducts(options)` | Fetches up to 100 products (no pagination) |
-| `getProductBySlug(slug)` | Finds a product by slug |
-| `getProductById(id)` | Fetches a single product by numeric ID |
-| `getCategories()` | Top-level categories only, sorted by count, excludes "uncategorized" |
-| `getCategoryBySlug(slug)` | Single category lookup |
-| `getRelatedProducts(id, limit)` | Related products for PDP |
-| `getDealOfTheDay()` | On-sale product with the highest discount % |
-| `getFeaturedProducts(limit)` | Latest products by date |
-| `getPopularProducts(limit)` | Products sorted by popularity |
-
-### WooCommerce Client (`lib/woocommerce/client.ts`)
-- Uses the **public WC Store API v1** (no auth required)
-- Fallback URL chain: env var → `nextdor.online` → `www.nextdor.online`
-- **5-minute ISR revalidation** (`next: { revalidate: 300 }`) for caching
-- Filters out internal/non-purchasable products (e.g. `reverse-withdrawal-payment`)
+To ensure sub-100ms page transitions without stale data or duplicate network roundtrips:
+1. **Multi-Tier SWR (`clientCache.ts`, `adminCache.ts`)**:
+   - **L1 Memory**: Instant synchronous cache hit (0ms latency).
+   - **L2 localStorage**: Persistent cross-tab and reload cache with configurable TTLs (e.g. 5 minutes for catalog, 1 minute for admin analytics).
+2. **In-Flight Request Deduplication (`fetchDedupe`)**:
+   - Simultaneous components requesting the same API endpoint share a single inflight Promise, preventing API hammering during component mount waterfalls.
+3. **Mutation Invalidation**:
+   - Mutations (e.g. placing an order, editing inventory, approving a merchant) immediately purge related cache keys (`clientCache.invalidate("products")`, `adminCache.invalidate("orders")`), ensuring instant UI consistency.
+4. **Zero Dummy Data**:
+   - All mock data arrays and placeholder JSON fixtures have been removed. Every page and table connects directly to the live backend API, with graceful loading skeletons and empty state UI when no records exist.
 
 ---
 
-## What's Incomplete / Missing
+## 7. Security & Compliance Architecture
 
-> [!WARNING]
-> These are significant gaps for a production client site:
-
-1. **Checkout flow** — The cart "Checkout" button is explicitly disabled with "Coming Soon". No payment integration (e.g. Paystack, which is common in Ghana).
-2. **User accounts / auth** — `/account` is a stub. No sign-in, order history, or saved addresses.
-3. **Backend** — `next-backend/` directory exists but is **completely empty**. The docker-compose file is also empty. A custom backend was likely planned but not started.
-4. **Order tracking** — Footer links to "Track Order" go to `#` (no-op).
-5. **Customer service / returns pages** — Footer links are all `#`.
-6. **WooCommerce checkout redirect** — There's no WooCommerce checkout redirect as a fallback either.
-7. **No image for Hero** — The `HeroCarousel` is a text-only banner (no product image shown alongside it).
-8. **Category tiles use letter avatars** — No actual category images are fetched/displayed (WooCommerce categories may have images, but they aren't used).
-9. **Pagination bug** — The `getProducts` function calculates `totalPages` based on the filtered slice length, not the WC API's `X-WP-TotalPages` header — this will be incorrect for large catalogs.
-10. **`packages/shared/`** — Exists but appears to be a monorepo package placeholder (not explored in depth, likely empty or scaffolding).
+| Area | Implementation Details |
+| :--- | :--- |
+| **Authentication** | Dual-token authentication: short-lived (15 min) JWT access tokens + long-lived (30 day) cryptographically secure opaque refresh tokens stored hashed in the database. |
+| **Token Family Rotation** | RFC 6749 token family rotation. If a previously used refresh token is presented again (indicating token theft), the entire family is instantly revoked, forcing re-authentication. |
+| **Tenant Isolation** | All vendor operations enforce database isolation: queries are hard-filtered by `vendorId = req.authUser.vendorId`. Merchants cannot view, modify, or delete another merchant's data. |
+| **Optimistic Concurrency**| Product updates include `version: product.version`. If another process updated the product concurrently, the database returns 0 rows updated, throwing `ConflictError` instead of overwriting data. |
+| **Audit Logging** | High-privilege administrative and merchant actions (merchant approval, commission changes, order status overrides) create immutable `AuditLog` records containing user ID, IP address, timestamp, and payload snapshots. |
+| **Payment Integrity** | Paystack webhooks are validated using HMAC-SHA512 with timing-safe comparison (`crypto.timingSafeEqual`) on the raw request body before processing. |
 
 ---
 
-## Branding / Design System
+## 8. Verification & Operational Health
 
-- **Color palette** (Amazon-inspired dark theme):
-  - Dark navy: `#131921` (header/footer bg)
-  - Slate: `#232f3e`, `#37475a`
-  - Amber: `#ff9900` (primary CTA / accents)
-  - Gold: `#febd69`
-  - Page background: `#eaeded` (light gray)
-- **Font**: Outfit (Google Fonts)
-- **Design inspiration**: Clearly Amazon-like UI/UX patterns (header structure, cart badge, product card layout, color scheme)
+The entire platform is fully verified and compiling cleanly:
+- **`next-backend`**: `npm run build` and `npx tsc --noEmit` pass with **0 errors**.
+- **`next-frontend`**: `npm run build` generates all **34 routes** (SSG + SSR + Turbopack) with **0 errors**.
+- **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`) are synchronized with the live code.

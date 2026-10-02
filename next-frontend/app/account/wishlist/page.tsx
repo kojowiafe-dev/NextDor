@@ -3,7 +3,7 @@
 import { Heart, ShoppingCart, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { formatPrice } from "@/lib/utils";
 
@@ -16,31 +16,30 @@ type WishlistItem = {
   image: string;
 };
 
-// Mock wishlist — replace with real API / context when backend is ready
-const INITIAL_WISHLIST: WishlistItem[] = [
-  {
-    id: "w1",
-    slug: "jbl-wireless-speaker",
-    name: "JBL Wireless Bluetooth Speaker",
-    price: 450,
-    currency: "GHS",
-    image: "",
-  },
-  {
-    id: "w2",
-    slug: "hp-laptop-15",
-    name: "HP 15.6\" Laptop – Intel Core i5",
-    price: 3800,
-    currency: "GHS",
-    image: "",
-  },
-];
+const STORAGE_KEY = "nextdor_wishlist";
 
 export default function WishlistPage() {
-  const [items, setItems] = useState<WishlistItem[]>(INITIAL_WISHLIST);
+  const [items, setItems] = useState<WishlistItem[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        setItems(JSON.parse(stored));
+      }
+    } catch {
+      // Ignored
+    }
+  }, []);
 
   function removeItem(id: string) {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    const updated = items.filter((item) => item.id !== id);
+    setItems(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // Ignored
+    }
   }
 
   return (
@@ -60,7 +59,7 @@ export default function WishlistPage() {
                 key={item.id}
                 className="flex items-center gap-4 rounded-xl border border-zinc-100 p-4 transition-shadow hover:shadow-sm"
               >
-                {/* Product image / placeholder */}
+                {/* Product image */}
                 <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-zinc-50">
                   {item.image ? (
                     <Image

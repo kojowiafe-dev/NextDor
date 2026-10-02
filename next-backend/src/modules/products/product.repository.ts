@@ -110,11 +110,21 @@ export class ProductRepository {
   }
 
   /**
-   * Retrieves single product by URL slug with relations.
+   * Retrieves single product by URL slug or UUID with relations.
    */
   async findBySlug(slug: string): Promise<any | null> {
-    return prisma.product.findUnique({
-      where: { slug },
+    return this.findBySlugOrId(slug);
+  }
+
+  async findBySlugOrId(identifier: string): Promise<any | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+    return prisma.product.findFirst({
+      where: {
+        OR: [
+          { slug: identifier },
+          ...(isUuid ? [{ id: identifier }] : []),
+        ],
+      },
       include: {
         images: { orderBy: { sortOrder: "asc" } },
         categories: true,
@@ -132,6 +142,23 @@ export class ProductRepository {
           where: { approved: true },
           orderBy: { createdAt: "desc" },
           take: 10,
+        },
+      },
+    });
+  }
+
+  /**
+   * Updates product fields by primary key ID.
+   */
+  async updateProduct(id: string, data: Prisma.ProductUpdateInput): Promise<any> {
+    return prisma.product.update({
+      where: { id },
+      data,
+      include: {
+        images: { orderBy: { sortOrder: "asc" } },
+        categories: true,
+        vendor: {
+          select: { id: true, name: true, slug: true },
         },
       },
     });

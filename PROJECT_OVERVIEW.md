@@ -79,11 +79,12 @@ NextDor/
 │   │   ├── domain/                   # Domain Layer (Money & CommissionCalculator)
 │   │   ├── lib/                      # Prisma, Redis, Logger, Errors, Cloudinary
 │   │   ├── modules/                  # 3-Tier Modules (Routes, Services, Repositories)
+│   │   │   ├── admin/                # Platform customer management and 30-day analytics engine
 │   │   │   ├── audit/                # Immutable platform administrative governance audit trail
 │   │   │   ├── auth/                 # Authentication, JWT, and Token Rotation
 │   │   │   ├── health/               # /health liveness and database ping check
 │   │   │   ├── orders/               # Master orders, multi-vendor sub-orders, checkout
-│   │   │   ├── products/             # Public catalog, categories, search, slug lookup
+│   │   │   ├── products/             # Public catalog, categories, search, slug lookup, product updates
 │   │   │   ├── sync/                 # Background WooCommerce sync engine
 │   │   │   └── vendors/              # Multi-vendor portal, OCC inventory, orders, escrow
 │   │   ├── app.ts                    # Fastify application factory & plugin registry
@@ -144,18 +145,31 @@ NextDor/
 | **Order Confirmation Page** | `next-frontend/app/checkout/success/page.tsx` | `http://localhost:3000/checkout/success` |
 | **Customer Login** | `next-frontend/app/login/page.tsx` | `http://localhost:3000/login` |
 | **Customer Registration** | `next-frontend/app/register/page.tsx` | `http://localhost:3000/register` |
-| **User Account & Orders** | `next-frontend/app/account/page.tsx` | `http://localhost:3000/account` |
+| **User Account Overview** | `next-frontend/app/account/page.tsx` | `http://localhost:3000/account` |
+| **User Saved Delivery Addresses** | `next-frontend/app/account/addresses/page.tsx` | `http://localhost:3000/account/addresses` |
+| **User Wishlist** | `next-frontend/app/account/wishlist/page.tsx` | `http://localhost:3000/account/wishlist` |
+| **User Order History List** | `next-frontend/app/account/orders/page.tsx` | `http://localhost:3000/account/orders` |
+| **Order Tracking & Timeline** | `next-frontend/app/account/orders/[number]/page.tsx` | `http://localhost:3000/account/orders/[number]` |
 | **Vendor Management Portal** | `next-frontend/app/vendor/dashboard/page.tsx` | `http://localhost:3000/vendor/dashboard`<br>(4 Tabs: Inventory & OCC, Store Orders & Dispatch, MoMo Payouts & 48h Escrow, Store Settings) |
 | **Cloudinary Image Uploader** | `next-frontend/components/ui/ImageUpload.tsx` | Embedded in Vendor Dashboard & Admin forms |
 | **Cloudinary Upload API** | `next-frontend/app/api/upload/route.ts` | `POST http://localhost:3000/api/upload` |
 | **Merchant Onboarding** | `next-frontend/app/vendor/register/page.tsx` | `http://localhost:3000/vendor/register` |
-| **Super Admin Governance** | `next-frontend/app/admin/page.tsx` | `http://localhost:3000/admin` |
-| **Admin Product Form** | `next-frontend/components/admin/ProductForm.tsx` | `http://localhost:3000/admin/products/new` |
+| **Super Admin Command Console** | `next-frontend/app/admin/page.tsx` | `http://localhost:3000/admin` |
+| **Admin Orders Management** | `next-frontend/app/admin/orders/page.tsx` | `http://localhost:3000/admin/orders` |
+| **Admin Order Detail & Transitions** | `next-frontend/app/admin/orders/[id]/page.tsx` | `http://localhost:3000/admin/orders/[id]` |
+| **Admin Product Catalog & Sync** | `next-frontend/app/admin/products/page.tsx` | `http://localhost:3000/admin/products` |
+| **Admin Product Create Form** | `next-frontend/app/admin/products/new/page.tsx` | `http://localhost:3000/admin/products/new` |
+| **Admin Product Edit Form** | `next-frontend/app/admin/products/[id]/page.tsx` | `http://localhost:3000/admin/products/[id]` |
+| **Admin Customer Directory** | `next-frontend/app/admin/customers/page.tsx` | `http://localhost:3000/admin/customers` |
+| **Admin Customer Profile & Orders** | `next-frontend/app/admin/customers/[id]/page.tsx` | `http://localhost:3000/admin/customers/[id]` |
+| **Admin Platform Analytics** | `next-frontend/app/admin/analytics/page.tsx` | `http://localhost:3000/admin/analytics` |
 | **Admin Merchant Approvals** | `next-frontend/app/admin/merchants/page.tsx` | `http://localhost:3000/admin/merchants` |
-| **Platform Audit Trail** | `next-frontend/app/admin/audit-logs/page.tsx` | `http://localhost:3000/admin/audit-logs` |
+| **Admin Team Management** | `next-frontend/app/admin/admins/page.tsx` | `http://localhost:3000/admin/admins` |
+| **Platform Audit Trail Logs** | `next-frontend/app/admin/audit-logs/page.tsx` | `http://localhost:3000/admin/audit-logs` |
+| **Platform Settings Console** | `next-frontend/app/admin/settings/page.tsx` | `http://localhost:3000/admin/settings` |
 | **Public Merchant Storefront** | `next-frontend/app/store/[slug]/page.tsx` | `http://localhost:3000/store/[slug]` |
 | **Global Navigation & Search** | `next-frontend/components/layout/Header.tsx` | Rendered on all pages |
-| **Global Footer Motto** | `next-frontend/components/layout/Footer.tsx` | Rendered on all pages ("Shop More, Wait Less") |
+| **Global Footer & Auth Status** | `next-frontend/components/layout/Footer.tsx` | Rendered on all pages ("Shop More, Wait Less") |
 
 ---
 
@@ -169,9 +183,14 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Server Health & DB Ping** | Health | `src/modules/health/health.routes.ts` | `GET /health` |
 | **User Registration & Login** | Auth Controller | `src/modules/auth/auth.routes.ts` | `POST /api/v1/auth/register`<br>`POST /api/v1/auth/login` |
 | **Token Refresh & Logout** | Auth Service | `src/modules/auth/auth.service.ts` | `POST /api/v1/auth/refresh`<br>`POST /api/v1/auth/logout` |
-| **Customer Order Placement** | Orders Service | `src/modules/orders/order.service.ts` | `POST /api/v1/orders/checkout` (Splits into `VendorOrder` records) |
-| **Customer Orders List** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/orders/my-orders` |
-| **Public Catalog & Search** | Products Controller | `src/modules/products/product.routes.ts` | `GET /api/v1/products`<br>`GET /api/v1/products/:slug` |
+| **Customer Order Placement** | Orders Service | `src/modules/orders/order.service.ts` | `POST /api/v1/orders` (Splits into `VendorOrder` records) |
+| **Customer Orders List** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/orders?page=1&limit=10` |
+| **Order Lookup (Polymorphic)** | Orders Repo | `src/modules/orders/order.repository.ts` | `GET /api/v1/orders/:idOrNumber` |
+| **Admin Orders Queue** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/admin/orders?limit=100`<br>`PATCH /api/v1/admin/orders/:id/status` |
+| **Admin Customer Aggregates** | Admin Customer Service | `src/modules/admin/admin.customer.service.ts` | `GET /api/v1/admin/customers`<br>`GET /api/v1/admin/customers/:id` |
+| **Admin Platform Analytics** | Admin Analytics Service | `src/modules/admin/admin.analytics.service.ts` | `GET /api/v1/admin/analytics/overview` (30-day revenue series, status counts, conversion rate) |
+| **Public Catalog & Search** | Products Controller | `src/modules/products/product.routes.ts` | `GET /api/v1/products`<br>`GET /api/v1/products/:slugOrId` |
+| **Product Mutation & OCC** | Products Service | `src/modules/products/product.service.ts` | `PATCH /api/v1/products/:id` (Admin & Vendor Owner) |
 | **Product Categories** | Products Service | `src/modules/products/product.service.ts` | `GET /api/v1/products/categories` |
 | **WooCommerce Sync Engine** | Sync Service | `src/modules/sync/sync.service.ts` | `POST /api/v1/sync/products`<br>`GET /api/v1/sync/status/:jobId` |
 | **Public Marketplace Directory** | Vendor Controller | `src/modules/vendors/vendor.routes.ts` | `GET /api/v1/vendors` |

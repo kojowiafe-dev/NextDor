@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, RefreshCw } from "lucide-react";
+import { Search, RefreshCw, Users, Loader2 } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
-import { MOCK_CUSTOMERS, type AdminCustomer } from "@/lib/admin/mockData";
+import type { AdminCustomer } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
 import { createSWRCache } from "@/lib/cache/clientCache";
 import { API_BASE } from "@/lib/api-config";
@@ -14,19 +14,21 @@ export const adminCustomersCache = createSWRCache<AdminCustomer[]>("nextdor_admi
 
 export default function AdminCustomersPage() {
   const { token } = useAuth();
-  const [customers, setCustomers] = useState<AdminCustomer[]>(MOCK_CUSTOMERS);
-  const [isLoading, setIsLoading] = useState(false);
+  const [customers, setCustomers] = useState<AdminCustomer[]>(() => {
+    return adminCustomersCache.get("customers_list") ?? [];
+  });
+  const [isLoading, setIsLoading] = useState(!adminCustomersCache.get("customers_list"));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
   async function loadCustomers(forceRefresh = false) {
-    // 1. Instant Cache Retrieval (Stale-While-Revalidate)
-    const { data: cached, isStale, hasData } = adminCustomersCache.getEntry();
+    const cacheKey = "customers_list";
+    const { data: cached, isStale, hasData } = adminCustomersCache.getEntry(cacheKey);
 
     if (hasData && !forceRefresh) {
       setCustomers(cached!);
       setIsLoading(false);
-      if (!isStale) return; // Completely fresh
+      if (!isStale) return;
       setIsRefreshing(true);
     } else if (!hasData) {
       setIsLoading(true);
@@ -34,28 +36,25 @@ export default function AdminCustomersPage() {
       setIsRefreshing(true);
     }
 
-    // 2. Network Fetch with in-flight deduplication
     try {
-      const live = await adminCustomersCache.fetchDedupe(undefined, async () => {
-        try {
-          if (!token) return MOCK_CUSTOMERS;
-          const res = await fetch(`${API_BASE}/admin/customers`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) return MOCK_CUSTOMERS;
-          const json = await res.json();
-          if (json.success && Array.isArray(json.data?.customers)) {
-            return json.data.customers;
-          }
-          return MOCK_CUSTOMERS;
-        } catch {
-          return MOCK_CUSTOMERS;
-        }
-      });
-
-      if (live) {
-        setCustomers(live);
+      if (!token) {
+        setCustomers([]);
+        return;
       }
+      const res = await fetch(`${API_BASE}/admin/customers?search=${encodeURIComponent(search)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const list = json.data?.customers ?? [];
+        adminCustomersCache.set(list, cacheKey);
+        setCustomers(list);
+      } else {
+        setCustomers([]);
+      }
+    } catch (err) {
+      console.error("Failed to load customers:", err);
+      setCustomers([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -64,7 +63,7 @@ export default function AdminCustomersPage() {
 
   useEffect(() => {
     loadCustomers();
-  }, [token]);
+  }, [token, search]);
 
   const filtered = customers.filter(
     (c) =>
@@ -105,71 +104,81 @@ export default function AdminCustomersPage() {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                <th className="px-5 py-3 text-left">Customer</th>
-                <th className="px-5 py-3 text-left">Phone</th>
-                <th className="px-5 py-3 text-left">Joined</th>
-                <th className="px-5 py-3 text-center">Orders</th>
-                <th className="px-5 py-3 text-right">Total Spent</th>
-                <th className="px-5 py-3 text-left">Status</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {filtered.map((customer) => (
-                <tr key={customer.id} className="group hover:bg-zinc-50/70">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-xs font-bold text-[#ff9900]">
-                        {customer.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium text-zinc-900">{customer.name}</p>
-                        <p className="text-xs text-zinc-400">{customer.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 text-zinc-500">{customer.phone ?? "—"}</td>
-                  <td className="px-5 py-3.5 text-zinc-500">{customer.joined}</td>
-                  <td className="px-5 py-3.5 text-center font-semibold text-zinc-700">
-                    {customer.totalOrders}
-                  </td>
-                  <td className="px-5 py-3.5 text-right font-semibold text-zinc-900">
-                    {formatPrice(customer.totalSpent, customer.currency)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        customer.status === "active"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-zinc-100 text-zinc-500"
-                      }`}
-                    >
-                      {customer.status === "active" ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Link
-                      href={`/admin/customers/${customer.id}`}
-                      className="text-xs font-medium text-[#007185] opacity-0 hover:underline group-hover:opacity-100"
-                    >
-                      View →
-                    </Link>
-                  </td>
+        {/* Content */}
+        {isLoading ? (
+          <div className="flex h-48 items-center justify-center gap-2 text-zinc-500">
+            <Loader2 className="h-5 w-5 animate-spin text-[#ff9900]" />
+            <span className="text-sm">Loading customers...</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center">
+            <Users className="mx-auto mb-3 h-10 w-10 text-zinc-300" />
+            <p className="font-semibold text-zinc-700">No customers found</p>
+            <p className="mt-1 text-xs text-zinc-400">
+              {search ? "No customers matched your search query." : "Registered customers will appear here."}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                  <th className="px-5 py-3 text-left">Customer</th>
+                  <th className="px-5 py-3 text-left">Phone</th>
+                  <th className="px-5 py-3 text-left">Joined</th>
+                  <th className="px-5 py-3 text-center">Orders</th>
+                  <th className="px-5 py-3 text-right">Total Spent</th>
+                  <th className="px-5 py-3 text-left">Status</th>
+                  <th className="px-5 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="py-12 text-center text-sm text-zinc-400">
-              No customers found for &quot;{search}&quot;.
-            </div>
-          )}
-        </div>
+              </thead>
+              <tbody className="divide-y divide-zinc-50">
+                {filtered.map((customer) => (
+                  <tr key={customer.id} className="group hover:bg-zinc-50/70">
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-xs font-bold text-[#ff9900]">
+                          {customer.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium text-zinc-900">{customer.name}</p>
+                          <p className="text-xs text-zinc-400">{customer.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-zinc-500">{customer.phone || "—"}</td>
+                    <td className="px-5 py-3.5 text-zinc-500">{customer.joined}</td>
+                    <td className="px-5 py-3.5 text-center font-medium text-zinc-800">
+                      {customer.totalOrders}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-medium text-zinc-800">
+                      {formatPrice(customer.totalSpent, customer.currency)}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          customer.status === "active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-zinc-100 text-zinc-500"
+                        }`}
+                      >
+                        {customer.status === "active" ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Link
+                        href={`/admin/customers/${customer.id}`}
+                        className="text-xs font-medium text-[#007185] hover:text-[#c7511f] hover:underline"
+                      >
+                        View Details →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </AdminLayout>
   );

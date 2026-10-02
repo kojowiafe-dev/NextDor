@@ -1,39 +1,92 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Mail, Phone, Calendar, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, ShoppingBag, Loader2, MapPin } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { MOCK_CUSTOMERS, MOCK_ORDERS } from "@/lib/admin/mockData";
+import { useAuth } from "@/context/AuthContext";
 import { formatPrice } from "@/lib/utils";
+import { API_BASE } from "@/lib/api-config";
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
   delivered: { label: "Delivered", classes: "bg-green-100 text-green-700" },
   processing: { label: "Processing", classes: "bg-blue-100 text-blue-700" },
   shipped: { label: "Shipped", classes: "bg-amber-100 text-amber-700" },
   cancelled: { label: "Cancelled", classes: "bg-red-100 text-red-700" },
+  pending: { label: "Pending", classes: "bg-amber-100 text-amber-700" },
+  confirmed: { label: "Confirmed", classes: "bg-blue-100 text-blue-700" },
+  refunded: { label: "Refunded", classes: "bg-zinc-100 text-zinc-700" },
 };
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const customer = MOCK_CUSTOMERS.find((c) => c.id === id);
+  const { token } = useAuth();
+  const [customer, setCustomer] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCustomer() {
+      if (!id || !token) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/admin/customers/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted) setCustomer(json.data?.customer ?? null);
+        } else {
+          if (isMounted) setCustomer(null);
+        }
+      } catch (err) {
+        console.error("Failed to load customer details:", err);
+        if (isMounted) setCustomer(null);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadCustomer();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, token]);
+
+  if (isLoading) {
+    return (
+      <AdminLayout title="Customer Details">
+        <div className="flex h-48 items-center justify-center gap-2 text-zinc-500">
+          <Loader2 className="h-5 w-5 animate-spin text-[#ff9900]" />
+          <span>Loading customer profile...</span>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   if (!customer) {
     return (
       <AdminLayout title="Customer Not Found">
-        <p className="text-zinc-500">Customer not found.</p>
+        <p className="text-zinc-500">Customer was not found or has been deleted.</p>
         <Link href="/admin/customers" className="mt-4 inline-flex items-center gap-1 text-sm text-[#007185] hover:underline">
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4" /> Back to Customers
         </Link>
       </AdminLayout>
     );
   }
 
-  const customerOrders = MOCK_ORDERS.filter(
-    (o) => o.customer.email === customer.email,
-  );
+  const initials = customer.name
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
-  const initials = customer.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const orders = customer.orders || [];
+  const addresses = customer.addresses || [];
 
   return (
     <AdminLayout title={customer.name}>
@@ -51,9 +104,11 @@ export default function CustomerDetailPage() {
               {initials}
             </div>
             <h2 className="font-semibold text-zinc-900">{customer.name}</h2>
-            <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              customer.status === "active" ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-500"
-            }`}>
+            <span
+              className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                customer.status === "active" ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-500"
+              }`}
+            >
               {customer.status === "active" ? "Active" : "Inactive"}
             </span>
 
@@ -84,12 +139,30 @@ export default function CustomerDetailPage() {
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-zinc-900">
-                  {formatPrice(customer.totalSpent, customer.currency)}
+                  {formatPrice(customer.totalSpent, customer.currency || "GHS")}
                 </p>
                 <p className="text-xs text-zinc-500">Total Spent</p>
               </div>
             </div>
           </div>
+
+          {/* Saved Addresses */}
+          {addresses.length > 0 && (
+            <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
+              <div className="mb-3 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-zinc-400" />
+                <h3 className="font-semibold text-zinc-900 text-sm">Addresses</h3>
+              </div>
+              <div className="space-y-2">
+                {addresses.map((a: any) => (
+                  <div key={a.id} className="rounded-lg border border-zinc-100 p-2.5 text-xs text-zinc-600">
+                    <span className="font-semibold text-zinc-800">{a.label}: </span>
+                    {a.street}, {a.city}, {a.region}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Orders */}
@@ -100,10 +173,10 @@ export default function CustomerDetailPage() {
               <h3 className="font-semibold text-zinc-900">Order History</h3>
             </div>
 
-            {customerOrders.length > 0 ? (
+            {orders.length > 0 ? (
               <div className="space-y-3">
-                {customerOrders.map((order) => {
-                  const cfg = statusConfig[order.status];
+                {orders.map((order: any) => {
+                  const cfg = statusConfig[order.status] || statusConfig.processing;
                   return (
                     <Link
                       key={order.id}
@@ -114,7 +187,7 @@ export default function CustomerDetailPage() {
                         <p className="font-mono text-xs font-semibold text-zinc-600">{order.id}</p>
                         <p className="mt-0.5 text-sm text-zinc-500">{order.date}</p>
                         <p className="mt-0.5 text-xs text-zinc-400">
-                          {order.items.map((i) => i.name).join(", ")}
+                          {order.items.map((i: any) => i.name).join(", ")}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1">

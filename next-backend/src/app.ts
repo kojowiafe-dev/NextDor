@@ -26,6 +26,7 @@ import { syncRoutes } from "./modules/sync/sync.routes.js";
 import { productRoutes } from "./modules/products/product.routes.js";
 import { vendorRoutes } from "./modules/vendors/vendor.routes.js";
 import { orderRoutes, adminOrderRoutes, vendorOrderRoutes } from "./modules/orders/order.routes.js";
+import { adminRoutes } from "./modules/admin/admin.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -262,6 +263,7 @@ export async function buildApp() {
   await app.register(vendorRoutes,      { prefix: "/api/v1/vendors" });
   await app.register(orderRoutes,       { prefix: "/api/v1/orders" });
   await app.register(adminOrderRoutes,  { prefix: "/api/v1/admin/orders" });
+  await app.register(adminRoutes,       { prefix: "/api/v1/admin" });
   await app.register(vendorOrderRoutes, { prefix: "/api/v1/vendors" });
 
   return app;

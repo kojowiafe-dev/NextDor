@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
-import { MOCK_ORDERS, type AdminOrder } from "@/lib/admin/mockData";
+import { type AdminOrder } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
 import { adminOrdersCache } from "@/lib/cache/adminCache";
 import { API_BASE } from "@/lib/api-config";
@@ -28,7 +28,7 @@ export default function AdminOrderDetailPage() {
   const { token } = useAuth();
   const [order, setOrder] = useState<AdminOrder | null>(() => {
     const cached = adminOrdersCache.get("all_orders");
-    return cached?.find((o) => o.id === params.id) ?? MOCK_ORDERS.find((o) => o.id === params.id) ?? null;
+    return cached?.find((o) => o.id === params.id || o.dbId === params.id) ?? null;
   });
   const [status, setStatus] = useState<string>(order?.status ?? "processing");
   const [isSaving, setIsSaving] = useState(false);
@@ -46,9 +46,7 @@ export default function AdminOrderDetailPage() {
       setIsLoading(true);
       try {
         if (!token) {
-          const fallback = MOCK_ORDERS.find((o) => o.id === params.id) ?? null;
-          setOrder(fallback);
-          if (fallback) setStatus(fallback.status);
+          setOrder(null);
           return;
         }
 
@@ -92,13 +90,9 @@ export default function AdminOrderDetailPage() {
           }
         }
 
-        const fallback = MOCK_ORDERS.find((o) => o.id === params.id) ?? null;
-        setOrder(fallback);
-        if (fallback) setStatus(fallback.status);
+        setOrder(null);
       } catch {
-        const fallback = MOCK_ORDERS.find((o) => o.id === params.id) ?? null;
-        setOrder(fallback);
-        if (fallback) setStatus(fallback.status);
+        setOrder(null);
       } finally {
         setIsLoading(false);
       }

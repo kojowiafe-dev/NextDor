@@ -102,6 +102,65 @@ export class ProductService {
   }
 
   /**
+   * Updates an existing product and evicts corresponding cache keys.
+   */
+  async updateProduct(id: string, input: {
+    name?: string;
+    description?: string;
+    price?: number;
+    salePrice?: number | null;
+    currency?: string;
+    stockStatus?: "IN_STOCK" | "OUT_OF_STOCK" | "LOW_STOCK";
+    stockQty?: number | null;
+    category?: string;
+    image?: string;
+  }) {
+    const existing = await this.productRepo.findById(id);
+    if (!existing || existing.deletedAt) {
+      throw new NotFoundError(`Product '${id}' not found.`);
+    }
+
+    const data: any = {};
+    if (input.name !== undefined) data.name = input.name.trim();
+    if (input.description !== undefined) data.description = input.description.trim();
+    if (input.price !== undefined) data.price = input.price;
+    if (input.salePrice !== undefined) data.salePrice = input.salePrice;
+    if (input.currency !== undefined) data.currency = input.currency;
+    if (input.stockStatus !== undefined) data.stockStatus = input.stockStatus;
+    if (input.stockQty !== undefined) data.stockQty = input.stockQty;
+
+    if (input.category) {
+      const categories = await this.productRepo.listCategoriesWithCounts();
+      const match = categories.find(
+        (c) => c.name.toLowerCase() === input.category!.toLowerCase() || c.slug === input.category
+      );
+      if (match) {
+        data.categories = {
+          set: [{ id: match.id }],
+        };
+      }
+    }
+
+    if (input.image) {
+      data.images = {
+        deleteMany: {},
+        create: [{ url: input.image, alt: input.name || existing.name || "Product image" }],
+      };
+    }
+
+    const updated = await this.productRepo.updateProduct(id, data);
+
+    await Promise.allSettled([
+      cacheDel(CacheKey.product(existing.slug)),
+      cacheDel(CacheKey.trendingProducts()),
+      cacheDel(CacheKey.groupedByMerchant()),
+      flushPattern("products:list:*"),
+    ]);
+
+    return updated;
+  }
+
+  /**
    * Lists all categories with product counts.
    * Cached in Redis for 15 minutes (categories change infrequently).
    */

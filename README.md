@@ -9,9 +9,12 @@
 | Document | Purpose |
 | :--- | :--- |
 | 🗺️ **[Master Project Overview & Navigation Map](./PROJECT_OVERVIEW.md)** | **Start here!** Full sitemap, "If I want this, where do I go?" cheat sheet, routing index, and environment setup. |
+| 🔍 **[Codebase Analysis & System Architecture](./codebase_analysis.md)** | Full monorepo breakdown, tech stack, active routes, domain logic, and security verification. |
 | 🏛️ **[Multi-Vendor OOD Architecture](./MULTI_VENDOR_OOD_ARCHITECTURE.md)** | Comprehensive function-by-function architectural breakdown, SOLID principles, Tenant Isolation, and Optimistic Concurrency Control (OCC). |
 | ⚡ **[Frontend Caching & Performance Architecture](./FRONTEND_CACHING_ARCHITECTURE.md)** | Client-side SWR caching engine, in-flight request deduplication, navigation latency elimination, and audit. |
 | ⚙️ **[Backend Architecture & Database Design](./BACKEND_ARCHITECTURE.md)** | Complete database ERD, 14 models, security specifications, Paystack/MoMo settlement, and RFC 7240 async sync mechanics. |
+| 💻 **[Frontend Application Guide](./next-frontend/README.md)** | Next.js 16 App Router setup, portals, component design system, and Cloudinary uploads. |
+| 🖥️ **[Backend API Server Guide](./next-backend/README.md)** | Fastify v5 setup, Prisma migrations, Clean Architecture modules, and API route index. |
 | 📖 **[Recommended Books & Architecture Pillars](./RECOMMENDED_BOOKS_AND_ARCHITECTURE_PILLARS.md)** | Curated reading list of industry-standard textbooks on DDD, Concurrency, Distributed Systems, Multi-Tenancy, and Marketplace Economics. |
 
 ---

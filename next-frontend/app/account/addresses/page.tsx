@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MapPin, Plus, Trash2 } from "lucide-react";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { AuthFormField } from "@/components/account/AuthFormField";
@@ -15,19 +15,6 @@ type Address = {
   gps?: string;
 };
 
-// Mock saved addresses
-const INITIAL_ADDRESSES: Address[] = [
-  {
-    id: "addr-1",
-    label: "Home",
-    name: "Kwame Mensah",
-    street: "12 Independence Avenue",
-    city: "Accra",
-    region: "Greater Accra",
-    gps: "GA-123-4567",
-  },
-];
-
 const GHANA_REGIONS = [
   "Greater Accra", "Ashanti", "Western", "Central", "Eastern", "Northern",
   "Upper East", "Upper West", "Volta", "Brong-Ahafo", "Western North",
@@ -37,12 +24,34 @@ const GHANA_REGIONS = [
 type AddressFormValues = Omit<Address, "id">;
 const EMPTY_FORM: AddressFormValues = { label: "Home", name: "", street: "", city: "", region: "", gps: "" };
 
+const STORAGE_KEY = "nextdor_user_addresses";
+
 export default function AddressesPage() {
-  const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<AddressFormValues>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<AddressFormValues>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        setAddresses(JSON.parse(stored));
+      }
+    } catch {
+      // Ignored
+    }
+  }, []);
+
+  function persistAddresses(updated: Address[]) {
+    setAddresses(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // Ignored
+    }
+  }
 
   function validate() {
     const errs: Partial<AddressFormValues> = {};
@@ -59,16 +68,16 @@ export default function AddressesPage() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     setIsSaving(true);
-    // Simulate save delay
-    await new Promise((r) => setTimeout(r, 600));
-    setAddresses((prev) => [...prev, { ...form, id: `addr-${Date.now()}` }]);
+    await new Promise((r) => setTimeout(r, 400));
+    const newAddress: Address = { ...form, id: `addr-${Date.now()}` };
+    persistAddresses([...addresses, newAddress]);
     setForm(EMPTY_FORM);
     setShowForm(false);
     setIsSaving(false);
   }
 
   function handleDelete(id: string) {
-    setAddresses((prev) => prev.filter((a) => a.id !== id));
+    persistAddresses(addresses.filter((a) => a.id !== id));
   }
 
   return (

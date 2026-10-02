@@ -250,4 +250,67 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       });
     }
   );
+
+  /**
+   * PATCH /products/:id
+   * Updates product details (name, price, stock, category, etc.).
+   * Requires ADMIN, SUPER_ADMIN, or VENDOR_OWNER role.
+   */
+  app.patch(
+    "/:id",
+    {
+      schema: {
+        description: "Update product details (Admin or Vendor)",
+        tags: ["Products"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: {
+            id: { type: "string" },
+          },
+        },
+        body: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            description: { type: "string" },
+            price: { type: "number" },
+            salePrice: { type: "number", nullable: true },
+            currency: { type: "string" },
+            stockStatus: { type: "string", enum: ["IN_STOCK", "OUT_OF_STOCK", "LOW_STOCK"] },
+            stockQty: { type: "integer", nullable: true },
+            category: { type: "string" },
+            image: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "Authentication required" },
+        });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (!["ADMIN", "SUPER_ADMIN", "VENDOR_OWNER"].includes(payload.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: "FORBIDDEN", message: "Insufficient permissions to update product" },
+        });
+      }
+
+      const { id } = req.params as { id: string };
+      const body = req.body as any;
+      const updated = await productService.updateProduct(id, body);
+
+      return reply.send({
+        success: true,
+        data: { product: updated },
+      });
+    }
+  );
 };

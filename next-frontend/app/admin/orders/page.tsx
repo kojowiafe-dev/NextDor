@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Eye, RefreshCw } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
-import { MOCK_ORDERS, type AdminOrder } from "@/lib/admin/mockData";
+import { type AdminOrder } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
 import { adminOrdersCache } from "@/lib/cache/adminCache";
 import { API_BASE } from "@/lib/api-config";
@@ -34,9 +34,9 @@ export default function AdminOrdersPage() {
   const { token } = useAuth();
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [orders, setOrders] = useState<AdminOrder[]>(() => {
-    return adminOrdersCache.get("all_orders") ?? MOCK_ORDERS;
+    return adminOrdersCache.get("all_orders") ?? [];
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!adminOrdersCache.get("all_orders"));
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   async function loadOrders(forceRefresh = false) {
@@ -59,13 +59,13 @@ export default function AdminOrdersPage() {
     try {
       const liveOrders = await adminOrdersCache.fetchDedupe(cacheKey, async () => {
         try {
-          if (!token) return MOCK_ORDERS;
+          if (!token) return [];
 
           const res = await fetch(`${API_BASE}/admin/orders?limit=100`, {
             headers: { Authorization: `Bearer ${token}` },
           });
 
-          if (!res.ok) return MOCK_ORDERS;
+          if (!res.ok) return [];
 
           const json = await res.json();
           if (json.success && Array.isArray(json.data)) {
@@ -100,9 +100,9 @@ export default function AdminOrdersPage() {
             }));
           }
 
-          return MOCK_ORDERS;
+          return [];
         } catch {
-          return MOCK_ORDERS;
+          return [];
         }
       });
 

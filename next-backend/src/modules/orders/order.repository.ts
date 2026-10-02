@@ -186,10 +186,14 @@ export class OrderRepository {
    * Includes the full status timeline, items, and vendor sub-orders.
    * Optionally scoped to a userId for customer access control.
    */
-  async findByNumber(number: string, userId?: string) {
+  async findByNumber(numberOrId: string, userId?: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(numberOrId);
     return prisma.order.findFirst({
       where: {
-        number,
+        OR: [
+          { number: numberOrId },
+          ...(isUuid ? [{ id: numberOrId }] : []),
+        ],
         ...(userId ? { userId } : {}),
       },
       include: {
