@@ -140,8 +140,54 @@ export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<AdminOrder[]>(() => {
     return adminOrdersCache.get("all_orders") ?? [];
   });
+  const [customerCount, setCustomerCount] = useState<number>(0);
+  const [productCount, setProductCount] = useState<number>(0);
   const [isApproving, setIsApproving] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  async function loadPlatformCounts() {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/analytics/overview`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data?.metrics) {
+          if (typeof json.data.metrics.totalCustomers === "number") {
+            setCustomerCount(json.data.metrics.totalCustomers);
+          }
+          if (typeof json.data.metrics.totalProducts === "number") {
+            setProductCount(json.data.metrics.totalProducts);
+          }
+          return;
+        }
+      }
+    } catch {}
+
+    // Secondary fallback directly to customer list count if analytics endpoint fails
+    try {
+      const custRes = await fetch(`${API_BASE}/admin/customers?limit=1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (custRes.ok) {
+        const custJson = await custRes.json();
+        if (custJson.meta?.total !== undefined) {
+          setCustomerCount(custJson.meta.total);
+        }
+      }
+    } catch {}
+
+    try {
+      const prodRes = await fetch(`${API_BASE}/products?limit=1`);
+      if (prodRes.ok) {
+        const prodJson = await prodRes.json();
+        if (prodJson.data?.pagination?.total !== undefined) {
+          setProductCount(prodJson.data.pagination.total);
+        }
+      }
+    } catch {}
+  }
 
   async function fetchAlerts(forceRefresh = false) {
     if (!token) return;
@@ -236,6 +282,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     fetchAlerts();
     loadDashboardOrders();
+    loadPlatformCounts();
   }, [token]);
 
   async function handleApprove(id: string) {
@@ -446,7 +493,7 @@ export default function AdminDashboardPage() {
             <StatCard
               title="Gross Marketplace GMV"
               value={formatPrice(totalRevenue, "GHS")}
-              trend="14% vs last month"
+              trend="Gross sales volume"
               trendDirection="up"
               icon={DollarSign}
               iconBg="bg-green-50"
@@ -455,7 +502,7 @@ export default function AdminDashboardPage() {
             <StatCard
               title="Platform Revenue (10%)"
               value={formatPrice(platformFee, "GHS")}
-              trend="10% standard rake"
+              trend="10% platform share"
               trendDirection="up"
               icon={Percent}
               iconBg="bg-amber-50"
@@ -464,7 +511,7 @@ export default function AdminDashboardPage() {
             <StatCard
               title="MoMo Escrow Pool"
               value={formatPrice(escrowHold, "GHS")}
-              trend="48h delivery hold"
+              trend="Merchant escrow balance"
               trendDirection="neutral"
               icon={Lock}
               iconBg="bg-indigo-50"
@@ -481,9 +528,9 @@ export default function AdminDashboardPage() {
             />
             <StatCard
               title="Registered Customers"
-              value="186"
-              trend="14 new this month"
-              trendDirection="up"
+              value={String(customerCount)}
+              trend={`${customerCount} verified accounts`}
+              trendDirection={customerCount > 0 ? "up" : "neutral"}
               icon={Users}
               iconBg="bg-blue-50"
               iconColor="text-blue-600"
@@ -495,26 +542,26 @@ export default function AdminDashboardPage() {
             <StatCard
               title="Orders in Pipeline"
               value={String(pipelineOrders.length)}
-              trend="Needs fulfillment"
-              trendDirection="neutral"
+              trend={pipelineOrders.length > 0 ? "Needs fulfillment" : "Queue clear"}
+              trendDirection={pipelineOrders.length > 0 ? "neutral" : "up"}
               icon={Truck}
               iconBg="bg-blue-50"
               iconColor="text-blue-600"
             />
             <StatCard
-              title="Monthly Orders"
+              title="Total Orders"
               value={String(orders.length)}
-              trend="8% vs last month"
-              trendDirection="up"
+              trend="Orders placed"
+              trendDirection="neutral"
               icon={ShoppingBag}
               iconBg="bg-green-50"
               iconColor="text-green-600"
             />
             <StatCard
               title="Catalog Products"
-              value="48"
-              trend="3 added recently"
-              trendDirection="up"
+              value={String(productCount)}
+              trend="Active products"
+              trendDirection={productCount > 0 ? "up" : "neutral"}
               icon={Package}
               iconBg="bg-amber-50"
               iconColor="text-amber-600"
@@ -530,9 +577,9 @@ export default function AdminDashboardPage() {
             />
             <StatCard
               title="Active Shoppers"
-              value="186"
-              trend="Customer accounts"
-              trendDirection="up"
+              value={String(customerCount)}
+              trend={`${customerCount} customer accounts`}
+              trendDirection={customerCount > 0 ? "up" : "neutral"}
               icon={Users}
               iconBg="bg-zinc-100"
               iconColor="text-zinc-700"

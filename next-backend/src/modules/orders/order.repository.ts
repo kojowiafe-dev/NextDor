@@ -80,12 +80,12 @@ export class OrderRepository {
     const orderNumber = await this.generateOrderNumber();
 
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 1. Decrement stock for each product (Optimistic Concurrency Control)
+      // 1. Decrement stock for tracked products only (where stockQty is not null)
       for (const item of input.items) {
         await tx.product.updateMany({
           where: {
             id: item.productId,
-            stockQty: { gte: item.quantity }, // ensures stock doesn't go negative
+            stockQty: { not: null, gte: item.quantity },
           },
           data: { stockQty: { decrement: item.quantity } },
         });
@@ -155,27 +155,47 @@ export class OrderRepository {
   ): Promise<{ orders: Order[]; total: number }> {
     const skip = (page - 1) * limit;
 
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
+    const where: Prisma.OrderWhereInput = user?.email
+      ? {
+          OR: [
+            { userId },
+            { guestEmail: { equals: user.email, mode: "insensitive" } },
+          ],
+        }
+      : { userId };
+
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
-        where: { userId },
+        where,
         orderBy: { createdAt: "desc" },
         skip,
         take: limit,
         include: {
           items: {
-            select: {
-              productName: true,
-              productImage: true,
-              quantity: true,
-              unitPrice: true,
+            include: {
+              product: {
+                select: { slug: true },
+              },
             },
           },
           vendorOrders: {
-            select: { status: true, vendorId: true },
+            include: {
+              vendor: {
+                select: { name: true, slug: true, logoUrl: true },
+              },
+            },
+          },
+          statusHistory: {
+            orderBy: { createdAt: "asc" },
           },
         },
       }),
-      prisma.order.count({ where: { userId } }),
+      prisma.order.count({ where }),
     ]);
 
     return { orders, total };
@@ -188,13 +208,29 @@ export class OrderRepository {
    */
   async findByNumber(numberOrId: string, userId?: string) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(numberOrId);
+
+    let userClause: Prisma.OrderWhereInput = {};
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      userClause = user?.email
+        ? { OR: [{ userId }, { guestEmail: { equals: user.email, mode: "insensitive" } }] }
+        : { userId };
+    }
+
     return prisma.order.findFirst({
       where: {
-        OR: [
-          { number: numberOrId },
-          ...(isUuid ? [{ id: numberOrId }] : []),
+        AND: [
+          {
+            OR: [
+              { number: numberOrId },
+              ...(isUuid ? [{ id: numberOrId }] : []),
+            ],
+          },
+          userClause,
         ],
-        ...(userId ? { userId } : {}),
       },
       include: {
         items: {
@@ -337,10 +373,27 @@ export class OrderRepository {
   /**
    * Loads products needed during checkout (price, stock, vendorId, vendor commission).
    */
-  async findProductsForCheckout(productIds: string[]) {
+  async findProductsForCheckout(productIdentifiers: string[]) {
+    const isUuid = (str: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+    const uuids = productIdentifiers.filter(isUuid);
+    const numericWcIds = productIdentifiers
+      .map((id) => Number(id))
+      .filter((n) => !isNaN(n) && Number.isInteger(n) && n > 0);
+    const slugs = productIdentifiers.filter((id) => !isUuid(id) && isNaN(Number(id)));
+
+    const orClauses: Prisma.ProductWhereInput[] = [
+      ...(uuids.length > 0 ? [{ id: { in: uuids } }] : []),
+      ...(numericWcIds.length > 0 ? [{ wcId: { in: numericWcIds } }] : []),
+      ...(slugs.length > 0 ? [{ slug: { in: slugs } }] : []),
+    ];
+
+    if (orClauses.length === 0) return [];
+
     return prisma.product.findMany({
       where: {
-        id: { in: productIds },
+        OR: orClauses,
         deletedAt: null,
       },
       include: {

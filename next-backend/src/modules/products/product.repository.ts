@@ -148,6 +148,22 @@ export class ProductRepository {
   }
 
   /**
+   * Creates a new product record with associated categories and images.
+   */
+  async createProduct(data: Prisma.ProductCreateInput): Promise<any> {
+    return prisma.product.create({
+      data,
+      include: {
+        images: { orderBy: { sortOrder: "asc" } },
+        categories: true,
+        vendor: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
+    });
+  }
+
+  /**
    * Updates product fields by primary key ID.
    */
   async updateProduct(id: string, data: Prisma.ProductUpdateInput): Promise<any> {

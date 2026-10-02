@@ -4,10 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { AuthFormField } from "@/components/account/AuthFormField";
-
 
 type FormErrors = {
   email?: string;
@@ -25,6 +24,14 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [redirectParam, setRedirectParam] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const r = new URLSearchParams(window.location.search).get("redirect");
+      setRedirectParam(r);
+    }
+  }, []);
 
   // If already authenticated, redirect to appropriate portal immediately
   useEffect(() => {
@@ -135,6 +142,25 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-[calc(100vh-200px)] items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
+        {/* Checkout Redirect Callout */}
+        {redirectParam === "/checkout" && (
+          <div className="mb-4 rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50 to-orange-50/80 p-4 text-amber-950 shadow-xs ring-1 ring-amber-300/40">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ff9900] text-zinc-900 shadow-xs">
+                <ShoppingBag className="h-4 w-4" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-zinc-900">
+                  Sign in to complete your checkout
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-600">
+                  Your cart items are saved. Sign in to access saved addresses, track live courier dispatch, and view order history.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Card */}
         <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-zinc-100">
           {/* Logo */}
@@ -288,7 +314,7 @@ export default function LoginPage() {
           <p className="mt-6 text-center text-sm text-zinc-600">
             Don&apos;t have an account?{" "}
             <Link
-              href="/register"
+              href={redirectParam ? `/register?redirect=${encodeURIComponent(redirectParam)}` : "/register"}
               className="font-semibold text-[#007185] hover:text-[#c7511f] hover:underline"
             >
               Create one

@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { AuthFormField } from "@/components/account/AuthFormField";
 
@@ -74,6 +74,14 @@ export default function RegisterPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [redirectParam, setRedirectParam] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const r = new URLSearchParams(window.location.search).get("redirect");
+      setRedirectParam(r);
+    }
+  }, []);
 
   // If already authenticated, redirect to appropriate portal immediately
   useEffect(() => {
@@ -166,6 +174,25 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-[calc(100vh-200px)] items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
+        {/* Checkout Redirect Callout */}
+        {redirectParam === "/checkout" && (
+          <div className="mb-4 rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50 to-orange-50/80 p-4 text-amber-950 shadow-xs ring-1 ring-amber-300/40">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ff9900] text-zinc-900 shadow-xs">
+                <ShoppingBag className="h-4 w-4" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-zinc-900">
+                  Create your account to complete checkout
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-600">
+                  Your cart items are saved. Create your account in seconds to unlock live courier dispatch tracking and order receipts.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-zinc-100">
           {/* Logo */}
           <div className="mb-8 text-center">
@@ -357,7 +384,10 @@ export default function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-zinc-600">
             Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-[#007185] hover:text-[#c7511f] hover:underline">
+            <Link
+              href={redirectParam ? `/login?redirect=${encodeURIComponent(redirectParam)}` : "/login"}
+              className="font-semibold text-[#007185] hover:text-[#c7511f] hover:underline"
+            >
               Sign in
             </Link>
           </p>

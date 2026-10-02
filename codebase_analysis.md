@@ -163,9 +163,56 @@ To ensure sub-100ms page transitions without stale data or duplicate network rou
 
 ---
 
-## 8. Verification & Operational Health
+## 9. Checkout & Customer Order Visibility Lifecycle
+
+### Problem Identified
+Previously, customers completing checkout might see a "Success" redirect while zero orders appeared in their Account Overview (`/account`) or My Orders (`/account/orders`) page. Root cause investigation revealed:
+1. **Schema Rejection on WooCommerce IDs**: Fastify's route body schema strictly enforced `format: "uuid"` on `cart.items.productId`. Products from WooCommerce had numeric IDs (e.g. `"1245"`), which caused Fastify to reject requests with `400 Bad Request`.
+2. **PostgreSQL Type Mismatch**: `findProductsForCheckout` queried `where: { id: { in: productIds } }`. Passing numeric strings like `"1245"` to a PostgreSQL UUID column caused query failures or `NotFoundError`.
+3. **Silent Client Fallback**: The frontend `checkout/page.tsx` caught errors from `placeOrder`, logged a console warning, generated an ephemeral random order number (`ND-XXXXX`), cleared the cart, and redirected to `/checkout/success`. The database never received the order.
+4. **Untracked Stock Decrement**: The transaction in `order.repository.ts` ran `stockQty: { gte: item.quantity }`, which threw a constraint violation on WooCommerce products where `stockQty` is `null`.
+5. **Guest vs. Authenticated Account Decoupling**: If an order was placed without an active JWT token, the order had `userId: null`, preventing the customer from viewing it when logged in.
+6. **Stale SWR Caching & Token Hydration**: Client order caches were not invalidated on checkout completion, and account pages skipped fetching when `token` was hydrating.
+
+### Robust Solutions Implemented
+- **Polymorphic Product Resolution & Auto-Upsert**:
+  - `findProductsForCheckout` dynamically partitions incoming identifiers into UUIDs (`id`), numeric IDs (`wcId`), and slugs (`slug`).
+  - If a catalog product is missing from the local database, it is automatically upserted under the flagship vendor (`nextdor`) with snapshots of its name, price, and image.
+  - The immutable database UUID is always snapshotted in `OrderItem.productId`.
+- **Untracked Stock Resilience**:
+  - Stock decrement only applies to products where `stockQty: { not: null, gte: item.quantity }`. Untracked products never fail checkout.
+- **Account Linking & Case-Insensitive Order Retrieval**:
+  - In `OrderService.checkout`, if `userId` is missing but `guestEmail` matches an existing registered user, `finalUserId` is automatically linked to `user.id`.
+  - In `OrderRepository.findByUserId` and `findByNumber`, queries search for `{ OR: [{ userId }, { guestEmail: { equals: user.email, mode: "insensitive" } }] }`. Even if a customer checked out as a guest or before logging in, all orders placed under their email appear in their order history.
+- **Strict Frontend Error Handling & Cache Eviction**:
+  - Removed silent error-swallowing in `app/checkout/page.tsx`. If an API error occurs, a prominent alert banner displays the exact issue to the user, and cart contents remain intact.
+  - Upon successful order placement, `ordersCache.invalidateAll()` is triggered immediately, ensuring the Overview and My Orders pages reflect the new order upon navigation.
+  - Both `/account` and `/account/orders` use an effective token fallback (`token || localStorage.getItem("nextdor-token")`) and synchronize with `authLoading` so order lists never fail to render due to mount timing.
+
+---
+
+## 10. Mandatory Authenticated Checkout Gateway
+
+To completely eradicate ghost orders, prevent customer delivery confusion, and guarantee courier tracking:
+1. **Frictionless Auth Gateway**:
+   - Guests clicking **"Proceed to Checkout"** in `/cart` are dynamically routed to `/login?redirect=/checkout`.
+   - Direct visits to `/checkout` without an active session seamlessly redirect to `/login?redirect=/checkout` while preserving cart contents.
+2. **Reassuring Contextual Login / Register UI**:
+   - Both `/login` and `/register` display an amber alert banner when `redirect=/checkout`:
+     > *"Sign in to complete your checkout: Your cart items are saved. Sign in or create an account in seconds to unlock live courier dispatch tracking and order receipts."*
+   - Switching between "Sign In" and "Create one" preserves `?redirect=/checkout`.
+3. **Backend Enforcement**:
+   - `POST /api/v1/orders` strictly enforces `preHandler: requireAuth`.
+   - `OrderService.checkout` strictly validates `input.userId`, rejecting any unauthenticated order creation attempts at the API level with `401 Unauthorized`.
+4. **Verified Account Banner on Checkout**:
+   - `/checkout` displays the buyer's authenticated badge:
+     > *"Verified Account · Kwame Mensah (kwame@example.com) — Your order and courier dispatch timeline will be permanently linked to your dashboard."*
+
+---
+
+## 11. Verification & Operational Health
 
 The entire platform is fully verified and compiling cleanly:
 - **`next-backend`**: `npm run build` and `npx tsc --noEmit` pass with **0 errors**.
 - **`next-frontend`**: `npm run build` generates all **34 routes** (SSG + SSR + Turbopack) with **0 errors**.
-- **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`) are synchronized with the live code.
+- **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`, `codebase_analysis.md`) are synchronized with the live code.

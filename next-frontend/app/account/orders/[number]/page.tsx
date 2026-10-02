@@ -176,7 +176,7 @@ export default function OrderDetailPage({
   params: Promise<{ number: string }>;
 }) {
   const { number } = use(params);
-  const { token } = useAuth();
+  const { token, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -185,7 +185,16 @@ export default function OrderDetailPage({
   const [cancelling, setCancelling] = useState(false);
 
   const load = async (forceRefresh = false) => {
-    if (!token) return;
+    const effectiveToken =
+      token ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem("nextdor-token") || localStorage.getItem("vendor_token")
+        : null);
+
+    if (!effectiveToken) {
+      if (!authLoading) setLoading(false);
+      return;
+    }
     setError(null);
 
     const { data: cached, isStale, hasData } = orderDetailCache.getEntry(number);
@@ -198,7 +207,7 @@ export default function OrderDetailPage({
     }
 
     try {
-      const data = await fetchOrderByNumber(number, token);
+      const data = await fetchOrderByNumber(number, effectiveToken);
       orderDetailCache.set(data, number);
       setOrder(data);
     } catch (e: any) {
@@ -213,7 +222,7 @@ export default function OrderDetailPage({
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, number]);
+  }, [token, number, authLoading]);
 
   const handleCancel = async () => {
     if (!token || !order) return;

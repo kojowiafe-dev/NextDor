@@ -204,6 +204,64 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   );
 
   /**
+   * POST /products
+   * Creates a new product in the catalog.
+   * Requires ADMIN or SUPER_ADMIN role.
+   */
+  app.post(
+    "/",
+    {
+      schema: {
+        description: "Create a new product (Admin only)",
+        tags: ["Products"],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          required: ["name", "price", "category"],
+          properties: {
+            name: { type: "string", minLength: 2 },
+            description: { type: "string" },
+            shortDesc: { type: "string" },
+            price: { type: "number", minimum: 0 },
+            salePrice: { type: "number", nullable: true },
+            currency: { type: "string" },
+            stockStatus: { type: "string", enum: ["IN_STOCK", "OUT_OF_STOCK", "LOW_STOCK"] },
+            stockQty: { type: "integer", nullable: true },
+            category: { type: "string" },
+            vendorId: { type: "string" },
+            image: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "Authentication required" },
+        });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: "FORBIDDEN", message: "Admin privileges required" },
+        });
+      }
+
+      const body = req.body as any;
+      const product = await productService.createProduct(body);
+
+      return reply.status(201).send({
+        success: true,
+        data: { product },
+      });
+    }
+  );
+
+  /**
    * DELETE /products/:id
    * Soft-deletes a product by its primary key ID.
    * Requires ADMIN or SUPER_ADMIN role.

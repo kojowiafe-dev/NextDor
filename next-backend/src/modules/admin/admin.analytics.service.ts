@@ -99,14 +99,15 @@ export class AdminAnalyticsService {
       })
       .filter((cat) => cat.revenue > 0);
 
-    // 5. Total customers and conversion rate
-    const [totalCustomers, totalCompletedOrders] = await Promise.all([
+    // 5. Total customers, completed orders, and catalog products
+    const [totalCustomers, totalCompletedOrders, totalProducts] = await Promise.all([
       prisma.user.count({ where: { role: "CUSTOMER", deletedAt: null } }),
       prisma.order.count({
         where: {
           status: { in: ["CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED"] },
         },
       }),
+      prisma.product.count({ where: { deletedAt: null } }),
     ]);
 
     const conversionRate =
@@ -124,6 +125,7 @@ export class AdminAnalyticsService {
         totalOrders: recentOrders.length,
         totalRevenue: revenueBuckets.reduce((acc, v) => acc + v, 0),
         totalCustomers,
+        totalProducts,
       },
     };
   }

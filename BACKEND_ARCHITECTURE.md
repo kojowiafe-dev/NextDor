@@ -798,11 +798,12 @@ Products (Catalog)
   GET    /products/grouped-by-merchant ?limitMerchants=6&productsPerMerchant=4
   GET    /products/:slug               (Single product detail by slug)
   GET    /products/:slug/reviews       (Product reviews)
+  POST   /products                     (Create new product - Admin or Super Admin)
   PATCH  /products/:id                 (Update product details - Admin or Vendor)
   DELETE /products/:id                 (Soft-delete product - Admin)
 
 Orders
-  POST   /orders                       (Place order / checkout - auth or guest)
+  POST   /orders                       (Place order / checkout - Authenticated user required)
   GET    /orders                       (List my orders - paginated)
   GET    /orders/:number               (Order detail & tracking: supports polymorphic lookup by order number ND-XXXXX or UUID)
   POST   /orders/:number/cancel        (Cancel customer order)

@@ -88,16 +88,15 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/",
     {
-      preHandler: optionalAuth,
+      preHandler: requireAuth,
       schema: {
-        description: "Place a new order (checkout - supports authenticated or guest)",
+        description: "Place a new order (checkout - authenticated customers)",
         tags: ["Orders"],
         security: [{ bearerAuth: [] }],
         body: {
           type: "object",
           required: ["cart", "shippingAddress"],
           properties: {
-            guestEmail: { type: "string" },
             cart: {
               type: "array",
               minItems: 1,
@@ -105,8 +104,12 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
                 type: "object",
                 required: ["productId", "quantity"],
                 properties: {
-                  productId: { type: "string", format: "uuid" },
+                  productId: { type: "string" },
                   quantity: { type: "integer", minimum: 1 },
+                  name: { type: "string" },
+                  price: { type: "number" },
+                  slug: { type: "string" },
+                  image: { type: "string" },
                 },
               },
             },
@@ -134,21 +137,11 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authUser = (req as any).authUser;
+      const { userId } = (req as any).authUser;
       const body = req.body as any;
-      const userId = authUser?.userId;
-      const guestEmail = body.guestEmail;
-
-      if (!userId && !guestEmail) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: "BAD_REQUEST", message: "Email is required for checkout" },
-        });
-      }
 
       const order = await orderService.checkout({
         userId,
-        guestEmail,
         cart: body.cart,
         shippingAddress: body.shippingAddress,
         addressId: body.addressId,

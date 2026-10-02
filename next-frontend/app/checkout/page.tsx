@@ -13,15 +13,11 @@ import {
   Banknote,
   ChevronRight,
   Lock,
-  LogIn,
-  UserCheck,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatPrice } from "@/lib/utils";
-import { placeOrder } from "@/lib/orders/api";
+import { placeOrder, ordersCache } from "@/lib/orders/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,8 +40,6 @@ type FormData = {
   cardExpiry: string;
   cardCvv: string;
   cardName: string;
-  createAccount: boolean;
-  password: string;
 };
 
 const REGIONS = [
@@ -121,8 +115,15 @@ const inputCls =
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
-  const { user, token, register } = useAuth();
+  const { user, token, isLoading: authLoading, isAuthenticated } = useAuth();
   const currency = items[0]?.currency ?? "GHS";
+
+  // Redirect guest users to login with redirect back to checkout
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login?redirect=/checkout");
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   const [form, setForm] = useState<FormData>({
     firstName: user?.name.split(" ")[0] ?? "",
@@ -140,12 +141,10 @@ export default function CheckoutPage() {
     cardExpiry: "",
     cardCvv: "",
     cardName: "",
-    createAccount: false,
-    password: "",
   });
 
-  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPlacing, setIsPlacing] = useState(false);
 
   // Pre-fill from auth when it hydrates
@@ -183,12 +182,6 @@ export default function CheckoutPage() {
     if (!form.city.trim()) errs.city = "Required";
     if (!form.region) errs.region = "Required";
 
-    if (!user && form.createAccount) {
-      if (!form.password || form.password.length < 6) {
-        errs.password = "Password must be at least 6 characters";
-      }
-    }
-
     if (form.payment === "momo" && !form.momoNumber.trim()) {
       errs.momoNumber = "Enter your MoMo number";
     }
@@ -210,63 +203,70 @@ export default function CheckoutPage() {
       document.querySelector("[data-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    setSubmitError(null);
     setIsPlacing(true);
 
     try {
-      let activeToken = token;
+      const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("nextdor-token") : null);
 
-      // If customer opted to create an account, register them automatically
-      if (!user && form.createAccount && form.password) {
-        try {
-          const registered = await register({
-            name: `${form.firstName} ${form.lastName}`.trim(),
-            email: form.email.trim(),
-            password: form.password,
-            phone: form.phone.trim(),
-          });
-          if (registered && (registered as any).token) {
-            activeToken = (registered as any).token;
-          }
-        } catch (regError) {
-          console.warn("Silent registration during checkout warning:", regError);
-        }
+      if (!activeToken) {
+        router.replace("/login?redirect=/checkout");
+        return;
       }
 
-      let orderNumber = `ND-${Math.floor(10000 + Math.random() * 90000)}`;
-
-      // Attempt to place order through backend API
-      try {
-        const result = await placeOrder(
-          {
-            guestEmail: !user ? form.email.trim() : undefined,
-            cart: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-            shippingAddress: {
-              street: form.address,
-              city: form.city,
-              region: form.region,
-              recipientName: `${form.firstName} ${form.lastName}`.trim(),
-              recipientPhone: form.phone,
-            },
-            deliveryMethod: form.delivery.toUpperCase() as any,
-            notes: `Payment method: ${form.payment}${
-              form.payment === "momo" ? ` (${form.momoNetwork} - ${form.momoNumber})` : ""
-            }`,
+      // Send order to backend API
+      const result = await placeOrder(
+        {
+          cart: items.map((i) => ({
+            productId: String(i.productId),
+            quantity: Number(i.quantity) || 1,
+            name: i.name,
+            price: Number(i.price) || 0,
+            slug: i.slug,
+            image: i.image,
+          })),
+          shippingAddress: {
+            street: form.address.trim(),
+            city: form.city.trim(),
+            region: form.region.trim(),
+            recipientName: `${form.firstName} ${form.lastName}`.trim(),
+            recipientPhone: form.phone.trim(),
           },
-          activeToken,
-        );
-        if (result?.orderNumber) {
-          orderNumber = result.orderNumber;
-        }
-      } catch (orderApiError) {
-        // Fallback gracefully for local dev/preview
-        console.warn("Backend order placement fallback:", orderApiError);
-      }
+          deliveryMethod: form.delivery.toUpperCase() as any,
+          notes: `Payment method: ${form.payment}${
+            form.payment === "momo" ? ` (${form.momoNetwork} - ${form.momoNumber})` : ""
+          }`,
+        },
+        activeToken,
+      );
 
-      clearCart();
-      router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}`);
-    } catch {
+      if (result?.orderNumber) {
+        ordersCache.invalidateAll();
+        clearCart();
+        router.push(`/checkout/success?order=${result.orderNumber}&total=${total}&currency=${currency}`);
+      } else {
+        throw new Error("Unable to confirm your order. Please try again.");
+      }
+    } catch (orderApiError: any) {
+      console.error("Order placement failed:", orderApiError);
+      setSubmitError(orderApiError?.message || "Failed to place order. Please check your details and try again.");
       setIsPlacing(false);
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="mx-auto flex min-h-[400px] max-w-6xl items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-[#ff9900]" />
+          <p className="text-sm font-medium text-zinc-600">Verifying your secure session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return null;
   }
 
   if (items.length === 0) {
@@ -293,48 +293,28 @@ export default function CheckoutPage() {
         <span className="font-medium text-zinc-900">Checkout</span>
       </div>
 
-      {/* Smart Hybrid Checkout Banner */}
-      {!user ? (
-        <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#ff9900]/10 via-[#ff9900]/5 to-transparent p-4 sm:p-5 ring-1 ring-[#ff9900]/25">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#fff3e0] text-[#ff9900]">
-                <UserCheck className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-900">
-                  Already have a NextDor account?
-                </h3>
-                <p className="text-xs text-zinc-600">
-                  Sign in to use your saved addresses, stored details, and express checkout.
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/login?redirect=/checkout"
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#ff9900] px-4 py-2.5 text-xs font-bold text-zinc-900 transition-colors hover:bg-[#f08804] shadow-xs"
-            >
-              <LogIn className="h-3.5 w-3.5" />
-              <span>Sign In</span>
-            </Link>
+      {/* Account Verification & Tracking Assurance Banner */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-50/60 to-white p-4 ring-1 ring-emerald-200/80 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-emerald-950">
+              Verified Account · <span className="font-bold">{user.name}</span> ({user.email})
+            </p>
+            <p className="text-[11px] text-emerald-700">
+              Your order and courier dispatch timeline will be permanently linked to your dashboard.
+            </p>
           </div>
         </div>
-      ) : (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-xs text-emerald-800 ring-1 ring-emerald-200">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            <span>
-              Checking out as <strong className="font-semibold text-emerald-950">{user.name}</strong> ({user.email})
-            </span>
-          </div>
-          <Link
-            href="/login?redirect=/checkout"
-            className="font-medium text-emerald-700 underline hover:text-emerald-900"
-          >
-            Switch account
-          </Link>
-        </div>
-      )}
+        <Link
+          href="/login?redirect=/checkout"
+          className="text-xs font-semibold text-emerald-800 underline hover:text-emerald-950"
+        >
+          Switch account
+        </Link>
+      </div>
 
       <form onSubmit={handlePlaceOrder} noValidate>
         <div className="grid gap-6 lg:grid-cols-3">
@@ -388,55 +368,6 @@ export default function CheckoutPage() {
                   {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
                 </Field>
               </div>
-
-              {/* Guest account creation option */}
-              {!user && (
-                <div className="mt-5 rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-4 transition-all">
-                  <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={form.createAccount}
-                      onChange={(e) => set("createAccount", e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-[#ff9900] focus:ring-[#ff9900]"
-                    />
-                    <div className="flex-1">
-                      <span className="text-sm font-semibold text-zinc-900">
-                        Create an account to track this order
-                      </span>
-                      <p className="text-xs text-zinc-500">
-                        Save your details for 1-click checkout next time and easily track live order updates.
-                      </p>
-                    </div>
-                  </label>
-
-                  {form.createAccount && (
-                    <div className="mt-3.5 border-t border-zinc-200 pt-3">
-                      <Field label="Create a password" id="chk-password" required>
-                        <div className="relative">
-                          <input
-                            id="chk-password"
-                            type={showPassword ? "text" : "password"}
-                            value={form.password}
-                            onChange={(e) => set("password", e.target.value)}
-                            className={`${inputCls} pr-10 ${errors.password ? "border-red-400" : ""}`}
-                            placeholder="At least 6 characters"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                          >
-                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
-                        </div>
-                        {errors.password && (
-                          <p className="mt-1 text-xs text-red-600">{errors.password}</p>
-                        )}
-                      </Field>
-                    </div>
-                  )}
-                </div>
-              )}
             </Section>
 
             {/* 2. Shipping address */}
@@ -690,6 +621,14 @@ export default function CheckoutPage() {
                 </div>
               </dl>
             </div>
+
+            {/* Error display */}
+            {submitError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <p className="font-semibold">Unable to place order</p>
+                <p className="mt-0.5">{submitError}</p>
+              </div>
+            )}
 
             {/* Place order */}
             <button

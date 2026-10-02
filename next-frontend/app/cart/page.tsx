@@ -4,11 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { formatPrice } from "@/lib/utils";
 
 export default function CartPage() {
   const { items, subtotal, updateQty, removeItem } = useCart();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const currency = items[0]?.currency ?? "GHS";
+  const checkoutHref = !authLoading && !isAuthenticated ? "/login?redirect=/checkout" : "/checkout";
 
   if (items.length === 0) {
     return (
@@ -112,10 +115,10 @@ export default function CartPage() {
             Shipping and taxes calculated at checkout.
           </p>
           <Link
-            href="/checkout"
+            href={checkoutHref}
             className="mt-4 block w-full rounded-lg bg-[#ff9900] px-6 py-3 text-center text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f08804]"
           >
-            Proceed to Checkout
+            {!authLoading && !isAuthenticated ? "Sign In to Checkout" : "Proceed to Checkout"}
           </Link>
           <Link
             href="/shop"

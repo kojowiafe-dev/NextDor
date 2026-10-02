@@ -16,6 +16,7 @@
  * and raises an UnprocessableError — one buyer wins, one gets a clear error.
  */
 
+import { prisma } from "../../lib/prisma.js";
 import { OrderRepository } from "./order.repository.js";
 import { Money } from "../../domain/Money.js";
 import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
@@ -25,6 +26,7 @@ import {
   BadRequestError,
   UnprocessableError,
   ForbiddenError,
+  UnauthorizedError,
 } from "../../lib/errors.js";
 import { Prisma } from "@prisma/client";
 import type { OrderStatus, VendorOrderStatus, DeliveryMethod } from "@prisma/client";
@@ -34,6 +36,10 @@ import type { OrderStatus, VendorOrderStatus, DeliveryMethod } from "@prisma/cli
 export type CartItem = {
   productId: string;
   quantity: number;
+  name?: string;
+  price?: number;
+  slug?: string;
+  image?: string;
 };
 
 export type CheckoutInput = {
@@ -97,12 +103,75 @@ export class OrderService {
       throw new BadRequestError("Cart is empty");
     }
 
-    const productIds = input.cart.map((i) => i.productId);
-    const products = await this.repo.findProductsForCheckout(productIds);
+    if (!input.userId) {
+      throw new UnauthorizedError("You must be signed in to complete checkout.");
+    }
+    const finalUserId = input.userId;
+
+    // ── Find products in database (by UUID, WooCommerce wcId, or slug) ────────
+    const productIdentifiers = input.cart.map((i) => i.productId);
+    let products = await this.repo.findProductsForCheckout(productIdentifiers);
+
+    // If any item was not found in PostgreSQL (e.g. from live WooCommerce catalog)
+    // auto-upsert a database record under the flagship vendor
+    let flagshipVendorId: string | null = null;
+    for (const cartItem of input.cart) {
+      let product = products.find(
+        (p: any) =>
+          p.id === cartItem.productId ||
+          (p.wcId !== null && String(p.wcId) === String(cartItem.productId)) ||
+          p.slug === cartItem.productId,
+      );
+
+      if (!product) {
+        if (!flagshipVendorId) {
+          const flagship = await prisma.vendor.findFirst({
+            where: { slug: "nextdor" },
+            select: { id: true },
+          });
+          flagshipVendorId = flagship?.id ?? null;
+        }
+
+        const numericWcId = Number(cartItem.productId);
+        const isNumeric = !isNaN(numericWcId) && Number.isInteger(numericWcId) && numericWcId > 0;
+        const fallbackSlug = cartItem.slug || (isNumeric ? `wc-product-${numericWcId}` : `product-${Date.now()}`);
+        const fallbackName = cartItem.name || (isNumeric ? `Catalog Item #${numericWcId}` : `Product #${cartItem.productId}`);
+        const fallbackPrice = cartItem.price && cartItem.price > 0 ? cartItem.price : 50;
+
+        const created = await prisma.product.upsert({
+          where: isNumeric ? { wcId: numericWcId } : { slug: fallbackSlug },
+          update: {},
+          create: {
+            wcId: isNumeric ? numericWcId : undefined,
+            slug: fallbackSlug,
+            name: fallbackName,
+            description: fallbackName,
+            price: fallbackPrice,
+            currency: "GHS",
+            stockStatus: "IN_STOCK",
+            vendorId: flagshipVendorId,
+            images: cartItem.image
+              ? { create: [{ url: cartItem.image, alt: fallbackName }] }
+              : undefined,
+          },
+          include: {
+            images: { take: 1, orderBy: { sortOrder: "asc" } },
+            vendor: { select: { id: true, commissionRate: true, status: true } },
+          },
+        });
+
+        products.push(created);
+      }
+    }
 
     // ── Validate each cart item ──────────────────────────────────────────────
     const enrichedItems = input.cart.map((cartItem) => {
-      const product = products.find((p: { id: string; [key: string]: any }) => p.id === cartItem.productId);
+      const product = products.find(
+        (p: { id: string; [key: string]: any }) =>
+          p.id === cartItem.productId ||
+          (p.wcId !== null && String(p.wcId) === String(cartItem.productId)) ||
+          p.slug === cartItem.productId,
+      );
 
       if (!product) {
         throw new NotFoundError(`Product ${cartItem.productId}`);
@@ -134,10 +203,10 @@ export class OrderService {
       const subtotal = unitPrice.multiply(cartItem.quantity);
 
       return {
-        productId: product.id,
+        productId: product.id, // always the real UUID primary key
         vendorId: product.vendorId,
         productName: product.name,
-        productImage: product.images[0]?.url ?? null,
+        productImage: product.images[0]?.url ?? cartItem.image ?? null,
         unitPrice: unitPrice.toDecimal(),
         quantity: cartItem.quantity,
         subtotal: subtotal.toDecimal(),
@@ -189,8 +258,7 @@ export class OrderService {
 
     // ── Persist order ──────────────────────────────────────────────────────
     const order = await this.repo.placeOrder({
-      userId: input.userId,
-      guestEmail: input.guestEmail,
+      userId: finalUserId,
       addressId: input.addressId,
       shippingAddress: input.shippingAddress,
       deliveryMethod,
@@ -205,7 +273,7 @@ export class OrderService {
     });
 
     logger.info(
-      { orderId: order.id, number: order.number, userId: input.userId, total: total.format() },
+      { orderId: order.id, number: order.number, userId: finalUserId, total: total.format() },
       "order: checkout completed",
     );
 

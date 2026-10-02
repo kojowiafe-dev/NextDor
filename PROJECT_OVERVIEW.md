@@ -190,7 +190,9 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Admin Customer Aggregates** | Admin Customer Service | `src/modules/admin/admin.customer.service.ts` | `GET /api/v1/admin/customers`<br>`GET /api/v1/admin/customers/:id` |
 | **Admin Platform Analytics** | Admin Analytics Service | `src/modules/admin/admin.analytics.service.ts` | `GET /api/v1/admin/analytics/overview` (30-day revenue series, status counts, conversion rate) |
 | **Public Catalog & Search** | Products Controller | `src/modules/products/product.routes.ts` | `GET /api/v1/products`<br>`GET /api/v1/products/:slugOrId` |
+| **Admin Product Creation** | Products Service | `src/modules/products/product.service.ts` | `POST /api/v1/products` (Admin & Super Admin) |
 | **Product Mutation & OCC** | Products Service | `src/modules/products/product.service.ts` | `PATCH /api/v1/products/:id` (Admin & Vendor Owner) |
+| **Product Soft-Deletion** | Products Service | `src/modules/products/product.service.ts` | `DELETE /api/v1/products/:id` (Admin & Super Admin) |
 | **Product Categories** | Products Service | `src/modules/products/product.service.ts` | `GET /api/v1/products/categories` |
 | **WooCommerce Sync Engine** | Sync Service | `src/modules/sync/sync.service.ts` | `POST /api/v1/sync/products`<br>`GET /api/v1/sync/status/:jobId` |
 | **Public Marketplace Directory** | Vendor Controller | `src/modules/vendors/vendor.routes.ts` | `GET /api/v1/vendors` |

@@ -10,9 +10,20 @@
  * instantiate the database directly, making it 100% unit-testable.
  */
 
+import type { Prisma } from "@prisma/client";
+import { prisma } from "../../lib/prisma.js";
 import { ProductRepository, type FindProductsFilter } from "./product.repository.js";
-import { NotFoundError } from "../../lib/errors.js";
+import { BadRequestError, NotFoundError } from "../../lib/errors.js";
 import { cacheGet, cacheSet, cacheDel, flushPattern, CacheKey } from "../../lib/redis.js";
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 
 export class ProductService {
@@ -99,6 +110,120 @@ export class ProductService {
 
     await cacheSet(cacheKey, product, 10 * 60);
     return product;
+  }
+
+  /**
+   * Admin creates a new product in the catalog.
+   */
+  async createProduct(input: {
+    name: string;
+    description: string;
+    shortDesc?: string;
+    price: number;
+    salePrice?: number | null;
+    currency?: string;
+    stockStatus?: "IN_STOCK" | "OUT_OF_STOCK" | "LOW_STOCK";
+    stockQty?: number | null;
+    category?: string;
+    vendorId?: string;
+    image?: string;
+  }) {
+    if (!input.name || !input.name.trim()) {
+      throw new BadRequestError("Product name is required.");
+    }
+    if (input.price === undefined || input.price < 0) {
+      throw new BadRequestError("Valid product price is required.");
+    }
+
+    let slug = slugify(input.name);
+    const existing = await this.productRepo.findBySlug(slug);
+    if (existing) {
+      slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    // Resolve vendor: connect specified vendor or default to flagship "NextDor Direct"
+    let vendorConnect: Prisma.VendorCreateNestedOneWithoutProductsInput | undefined;
+    if (input.vendorId) {
+      vendorConnect = { connect: { id: input.vendorId } };
+    } else {
+      const flagship = await prisma.vendor.findFirst({
+        where: { slug: "nextdor" },
+        select: { id: true },
+      });
+      if (flagship) {
+        vendorConnect = { connect: { id: flagship.id } };
+      }
+    }
+
+    // Resolve category
+    let categoryConnect: Prisma.CategoryCreateNestedManyWithoutProductsInput | undefined;
+    if (input.category) {
+      const cleanCat = input.category.trim();
+      const existingCats = await this.productRepo.listCategoriesWithCounts();
+      const match = existingCats.find(
+        (c) =>
+          c.name.toLowerCase() === cleanCat.toLowerCase() ||
+          c.slug.toLowerCase() === cleanCat.toLowerCase() ||
+          c.id === cleanCat
+      );
+
+      if (match) {
+        categoryConnect = { connect: [{ id: match.id }] };
+      } else {
+        const catSlug = slugify(cleanCat);
+        categoryConnect = {
+          connectOrCreate: [
+            {
+              where: { slug: catSlug },
+              create: { name: cleanCat, slug: catSlug },
+            },
+          ],
+        };
+      }
+    }
+
+    const stockStatus =
+      input.stockStatus ||
+      (input.stockQty !== undefined && input.stockQty !== null && input.stockQty <= 0
+        ? "OUT_OF_STOCK"
+        : input.stockQty !== undefined && input.stockQty !== null && input.stockQty <= 3
+        ? "LOW_STOCK"
+        : "IN_STOCK");
+
+    const created = await this.productRepo.createProduct({
+      name: input.name.trim(),
+      slug,
+      description: input.description?.trim() || "",
+      shortDesc: input.shortDesc?.trim() || null,
+      price: input.price,
+      salePrice: input.salePrice ?? null,
+      currency: input.currency || "GHS",
+      stockStatus,
+      stockQty: input.stockQty ?? null,
+      version: 1,
+      vendor: vendorConnect,
+      categories: categoryConnect,
+      images: input.image?.trim()
+        ? {
+            create: [
+              {
+                url: input.image.trim(),
+                alt: input.name.trim(),
+                sortOrder: 0,
+              },
+            ],
+          }
+        : undefined,
+    });
+
+    await Promise.allSettled([
+      cacheDel(CacheKey.categories()),
+      cacheDel(CacheKey.trendingProducts()),
+      cacheDel(CacheKey.groupedByMerchant()),
+      flushPattern("products:list:*"),
+    ]);
+
+    return created;
   }
 
   /**

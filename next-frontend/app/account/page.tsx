@@ -16,20 +16,30 @@ const quickLinks = [
 ];
 
 export default function AccountPage() {
-  const { user, token } = useAuth();
+  const { user, token, isLoading: authLoading } = useAuth();
   const [recentOrders, setRecentOrders] = useState<AccountOrderSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     async function loadOrders() {
-      if (!token) {
-        setRecentOrders([]);
+      const effectiveToken =
+        token ||
+        (typeof window !== "undefined"
+          ? localStorage.getItem("nextdor-token") || localStorage.getItem("vendor_token")
+          : null);
+
+      if (!effectiveToken) {
+        if (!authLoading) {
+          setRecentOrders([]);
+          setIsLoading(false);
+        }
         return;
       }
+
       setIsLoading(true);
       try {
-        const res = await fetchMyOrders(token, 1, 3);
+        const res = await fetchMyOrders(effectiveToken, 1, 5);
         if (!isMounted) return;
         if (Array.isArray(res.orders)) {
           const mapped: AccountOrderSummary[] = res.orders.map((o: any) => ({
@@ -63,7 +73,7 @@ export default function AccountPage() {
     return () => {
       isMounted = false;
     };
-  }, [token]);
+  }, [token, authLoading]);
 
   return (
     <AccountLayout>

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, AlertCircle } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AuthFormField } from "@/components/account/AuthFormField";
 import { ImageUpload } from "@/components/ui/ImageUpload";
+import { API_BASE } from "@/lib/api-config";
 import type { AdminProduct } from "@/lib/admin/mockData";
 
 type ProductFormData = Omit<AdminProduct, "id" | "slug">;
@@ -30,12 +31,34 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<ProductFormData>({ ...EMPTY_FORM, ...initial });
   const [errors, setErrors] = useState<Partial<Record<keyof ProductFormData, string>>>({});
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>(CATEGORIES);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch(`${API_BASE}/products/categories`);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.data)) {
+            const names = json.data.map((c: any) => c.name).filter(Boolean);
+            const combined = Array.from(new Set([...CATEGORIES, ...names]));
+            setCategories(combined);
+          }
+        }
+      } catch {
+        // fallback to default categories
+      }
+    }
+    loadCategories();
+  }, []);
 
   function set<K extends keyof ProductFormData>(key: K, value: ProductFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
+    setServerError(null);
   }
 
   function validate() {
@@ -53,10 +76,13 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setIsSaving(true);
     setSaved(false);
+    setServerError(null);
     try {
       await onSave(form);
       setSaved(true);
       setTimeout(() => router.push("/admin/products"), 1000);
+    } catch (err: any) {
+      setServerError(err?.message || "Failed to save product. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -69,6 +95,13 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
           <ArrowLeft className="h-4 w-4" /> Products
         </Link>
       </div>
+
+      {serverError && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700 ring-1 ring-red-200">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          {serverError}
+        </div>
+      )}
 
       {saved && (
         <div className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700 ring-1 ring-green-200">
@@ -172,7 +205,7 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
                     }`}
                   >
                     <option value="">Select category</option>
-                    {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                    {categories.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                   {errors.category && <p className="text-xs text-red-600">{errors.category}</p>}
                 </div>

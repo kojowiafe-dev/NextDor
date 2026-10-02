@@ -5,12 +5,10 @@ import { Package, ChevronRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { useAuth } from "@/context/AuthContext";
-import { fetchMyOrders, type Order } from "@/lib/orders/api";
-import { createSWRCache } from "@/lib/cache/clientCache";
+import { fetchMyOrders, ordersCache, type Order, type OrdersPageCache } from "@/lib/orders/api";
 
-export type OrdersPageCache = { orders: Order[]; meta: { total: number; pages: number } };
-// Cache user order pages with 2-min SWR TTL
-export const ordersCache = createSWRCache<OrdersPageCache>("nextdor_my_orders", 2 * 60_000);
+export { ordersCache };
+export type { OrdersPageCache };
 
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
@@ -86,7 +84,7 @@ function OrderRow({ order }: { order: Order }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
-  const { token } = useAuth();
+  const { token, isLoading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -96,7 +94,19 @@ export default function OrdersPage() {
   const LIMIT = 10;
 
   const load = async (p: number, forceRefresh = false) => {
-    if (!token) return;
+    const effectiveToken =
+      token ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem("nextdor-token") || localStorage.getItem("vendor_token")
+        : null);
+
+    if (!effectiveToken) {
+      if (!authLoading) {
+        setLoading(false);
+      }
+      return;
+    }
+
     setError(null);
 
     const subKey = String(p);
@@ -114,7 +124,7 @@ export default function OrdersPage() {
     }
 
     try {
-      const res = await fetchMyOrders(token, p, LIMIT);
+      const res = await fetchMyOrders(effectiveToken, p, LIMIT);
       ordersCache.set({ orders: res.orders, meta: res.meta }, subKey);
       setOrders(res.orders);
       setTotal(res.meta.total);
@@ -130,7 +140,7 @@ export default function OrdersPage() {
   useEffect(() => {
     load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, authLoading]);
 
   return (
     <AccountLayout>

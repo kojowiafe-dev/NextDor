@@ -1,9 +1,10 @@
-/**
- * Orders API client — typed fetch wrappers for the order endpoints.
- */
+import { API_BASE } from "@/lib/api-config";
+import { createSWRCache } from "@/lib/cache/clientCache";
 
-const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://nextdor.onrender.com";
-const API_BASE = RAW_API_BASE.replace(/\/api\/v1\/?$/, "");
+// ─── Cache ────────────────────────────────────────────────────────────────────
+
+export type OrdersPageCache = { orders: Order[]; meta: { total: number; pages: number } };
+export const ordersCache = createSWRCache<OrdersPageCache>("nextdor_my_orders", 2 * 60_000);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,10 @@ export type Order = {
 export type CartItem = {
   productId: string;
   quantity: number;
+  name?: string;
+  price?: number;
+  slug?: string;
+  image?: string;
 };
 
 export type CheckoutPayload = {
@@ -90,6 +95,19 @@ export type CheckoutPayload = {
   notes?: string;
 };
 
+// ─── Token Helper ─────────────────────────────────────────────────────────────
+
+function getStoredToken(): string | null {
+  if (typeof window !== "undefined") {
+    return (
+      localStorage.getItem("nextdor-token") ||
+      localStorage.getItem("vendor_token") ||
+      null
+    );
+  }
+  return null;
+}
+
 // ─── API functions ────────────────────────────────────────────────────────────
 
 async function authFetch(
@@ -97,15 +115,17 @@ async function authFetch(
   token?: string | null,
   options: RequestInit = {},
 ): Promise<Response> {
+  const authToken = token || getStoredToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> | undefined),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
   }
 
-  return fetch(`${API_BASE}${path}`, {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return fetch(`${API_BASE}${cleanPath}`, {
     ...options,
     headers,
   });
@@ -118,13 +138,15 @@ export async function placeOrder(
   payload: CheckoutPayload,
   token?: string | null,
 ): Promise<{ orderId: string; orderNumber: string; total: string; status: string }> {
-  const res = await authFetch("/api/v1/orders", token, {
+  const res = await authFetch("/orders", token, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message ?? "Checkout failed");
+  if (!res.ok || !data.success) {
+    throw new Error(data?.error?.message ?? "Checkout failed. Please verify your details.");
+  }
   return data.data;
 }
 
@@ -132,17 +154,19 @@ export async function placeOrder(
  * List the current user's orders (paginated).
  */
 export async function fetchMyOrders(
-  token: string,
+  token?: string | null,
   page = 1,
   limit = 10,
 ): Promise<{ orders: Order[]; meta: { total: number; pages: number; page: number } }> {
   const res = await authFetch(
-    `/api/v1/orders?page=${page}&limit=${limit}`,
+    `/orders?page=${page}&limit=${limit}`,
     token,
   );
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message ?? "Failed to load orders");
+  if (!res.ok || !data.success) {
+    throw new Error(data?.error?.message ?? "Failed to load orders");
+  }
   return { orders: data.data, meta: data.meta };
 }
 
@@ -151,11 +175,13 @@ export async function fetchMyOrders(
  */
 export async function fetchOrderByNumber(
   number: string,
-  token: string,
+  token?: string | null,
 ): Promise<Order> {
-  const res = await authFetch(`/api/v1/orders/${number}`, token);
+  const res = await authFetch(`/orders/${number}`, token);
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message ?? "Order not found");
+  if (!res.ok || !data.success) {
+    throw new Error(data?.error?.message ?? "Order not found");
+  }
   return data.data;
 }
 
@@ -164,11 +190,13 @@ export async function fetchOrderByNumber(
  */
 export async function cancelOrder(
   number: string,
-  token: string,
+  token?: string | null,
 ): Promise<void> {
-  const res = await authFetch(`/api/v1/orders/${number}/cancel`, token, {
+  const res = await authFetch(`/orders/${number}/cancel`, token, {
     method: "POST",
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message ?? "Failed to cancel order");
+  if (!res.ok || !data.success) {
+    throw new Error(data?.error?.message ?? "Failed to cancel order");
+  }
 }

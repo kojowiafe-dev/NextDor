@@ -52,29 +52,29 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
 
   return (
     <aside
-      className={`flex h-full flex-col bg-[#0d1117] transition-all ${
-        collapsed ? "w-16" : "w-60"
+      className={`flex h-full flex-col bg-[#0d1117] transition-all overflow-hidden ${
+        collapsed ? "w-16" : "w-56"
       }`}
     >
       {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 px-3">
+      <div className="flex h-13 shrink-0 items-center justify-between border-b border-white/5 px-3 py-2">
         <Link href="/admin" className="flex items-center gap-2 overflow-hidden">
           {collapsed ? (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-xs font-bold text-zinc-900 shadow-sm">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-xs font-bold text-zinc-900 shadow-sm">
               N
             </div>
           ) : (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-0.5">
               <Image
                 src="/logo.png"
                 alt="NextDor Admin"
-                width={110}
-                height={28}
-                className="h-6 w-auto object-contain"
+                width={100}
+                height={24}
+                className="h-5 w-auto object-contain"
                 priority
               />
               <span
-                className={`w-fit rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase tracking-wider ${
+                className={`w-fit rounded px-1 py-0.2 text-[8px] font-semibold uppercase tracking-wider ${
                   user?.role === "super_admin"
                     ? "bg-[#ff9900]/20 text-[#ff9900]"
                     : "bg-blue-500/20 text-blue-400"
@@ -88,9 +88,9 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-2 py-4">
+      <nav className="flex-1 overflow-hidden px-2 py-1.5">
         {!collapsed && (
-          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+          <p className="mb-1 px-2.5 text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
             Main Menu
           </p>
         )}
@@ -102,14 +102,14 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
                 <Link
                   href={item.href}
                   title={collapsed ? item.label : undefined}
-                  className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                  className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
                     active
                       ? "bg-[#ff9900]/15 text-[#ff9900]"
                       : "text-zinc-400 hover:bg-white/5 hover:text-white"
                   } ${collapsed ? "justify-center" : ""}`}
                 >
                   <item.icon
-                    className={`h-4 w-4 shrink-0 ${active ? "text-[#ff9900]" : "text-zinc-500 group-hover:text-white"}`}
+                    className={`h-3.5 w-3.5 shrink-0 ${active ? "text-[#ff9900]" : "text-zinc-500 group-hover:text-white"}`}
                   />
                   {!collapsed && (
                     <>
@@ -125,15 +125,15 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
       </nav>
 
       {/* User + logout */}
-      <div className="shrink-0 border-t border-white/5 p-3">
+      <div className="shrink-0 border-t border-white/5 p-2">
         {!collapsed && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg px-2 py-1.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-xs font-bold text-[#ff9900]">
+          <div className="mb-1.5 flex items-center gap-2 rounded-lg px-2 py-1 bg-white/[0.02]">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-[10px] font-bold text-[#ff9900]">
               {user?.avatarInitials}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-white">{user?.name}</p>
-              <p className="truncate text-[10px] text-zinc-400">
+              <p className="truncate text-[9px] text-zinc-400">
                 {user?.role === "super_admin" ? "Platform Root (Super Admin)" : "Operations Administrator"}
               </p>
             </div>
@@ -142,22 +142,22 @@ export function AdminSidebar({ collapsed = false }: AdminSidebarProps) {
         <Link
           href="/"
           title={collapsed ? "Back to Storefront" : undefined}
-          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/5 hover:text-white ${
+          className={`mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-white/5 hover:text-white ${
             collapsed ? "justify-center" : ""
           }`}
         >
-          <ExternalLink className="h-4 w-4 shrink-0 text-[#ff9900]" />
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#ff9900]" />
           {!collapsed && "Back to Storefront"}
         </Link>
         <button
           type="button"
           onClick={logout}
           title={collapsed ? "Sign Out" : undefined}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-400 ${
+          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-400 ${
             collapsed ? "justify-center" : ""
           }`}
         >
-          <LogOut className="h-4 w-4 shrink-0" />
+          <LogOut className="h-3.5 w-3.5 shrink-0" />
           {!collapsed && "Sign Out"}
         </button>
       </div>

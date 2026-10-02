@@ -37,24 +37,24 @@ export function StatCard({
   return (
     <div className="flex flex-col justify-between rounded-xl bg-white p-4 sm:p-5 shadow-sm ring-1 ring-zinc-100 hover:shadow-md transition-shadow min-w-0">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs sm:text-sm font-medium leading-snug text-zinc-500 truncate" title={title}>
+        <p className="text-xs sm:text-sm font-medium leading-snug text-zinc-600" title={title}>
           {title}
         </p>
         <div
-          className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg ${iconBg}`}
+          className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}
         >
-          <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${iconColor}`} />
+          <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
         </div>
       </div>
 
-      <div className="mt-2 min-w-0">
+      <div className="mt-3 min-w-0">
         <p
-          className={`font-bold tracking-tight text-zinc-900 truncate ${
+          className={`font-bold tracking-tight text-zinc-900 ${
             isLargeNumber
-              ? "text-base sm:text-lg xl:text-xl"
+              ? "text-sm sm:text-base"
               : isMediumNumber
-                ? "text-lg sm:text-xl xl:text-2xl"
-                : "text-xl sm:text-2xl"
+                ? "text-base sm:text-lg"
+                : "text-lg sm:text-xl"
           }`}
           title={value}
         >
@@ -62,7 +62,7 @@ export function StatCard({
         </p>
         {trend && (
           <p
-            className={`mt-1 text-xs font-medium truncate ${trendColor}`}
+            className={`mt-1 text-xs font-medium ${trendColor}`}
             title={`${trendPrefix} ${trend}`}
           >
             {trendPrefix} {trend}
