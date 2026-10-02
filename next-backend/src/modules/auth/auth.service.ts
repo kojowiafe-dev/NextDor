@@ -4,10 +4,7 @@
  * DESIGN PATTERN: Domain Service / Clean Architecture Use Case
  * ─────────────────────────────────────────────────────────────
  * Encapsulates password hashing (bcrypt), JWT access token issuance,
- * opaque refresh token rotation, and family-based theft detection.
- *
- * DEPENDENCY INVERSION (SOLID - D):
- * Injected with UserRepository via constructor injection.
+ * opaque refresh token rotation, email verification OTPs, and password recovery.
  */
 
 import crypto from "node:crypto";
@@ -19,8 +16,10 @@ import {
   UnauthorizedError,
   ConflictError,
   NotFoundError,
+  BadRequestError,
 } from "../../lib/errors.js";
 import { UserRepository } from "./user.repository.js";
+import { EmailService } from "../../lib/email.js";
 import type { User } from "@prisma/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,6 +45,10 @@ function generateOpaqueToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function generateOtp(): string {
+  return crypto.randomInt(100000, 1000000).toString();
+}
+
 function verifyAccessToken(token: string): { sub: string; role: string; email?: string; vendorId?: string } {
   try {
     return jwt.verify(token, config.JWT_SECRET) as { sub: string; role: string; email?: string; vendorId?: string };
@@ -66,23 +69,30 @@ export class AuthService {
   public static signAccessToken = signAccessToken;
 
   /**
-   * Register a new customer account.
+   * Register a new customer account and dispatch a 6-digit email verification code.
    */
   async register(input: {
     name: string;
     email: string;
     password: string;
     phone?: string;
-  }): Promise<{ user: AuthUser; tokens: AuthTokens }> {
+  }): Promise<{ user: AuthUser; requiresVerification: boolean; email: string }> {
+    const normalizedEmail = input.email.toLowerCase().trim();
+    const existing = await this.userRepo.findByEmail(normalizedEmail);
+    if (existing) {
+      throw new ConflictError("An account with this email already exists");
+    }
+
     const passwordHash = await bcrypt.hash(input.password, 12);
 
     let user: User;
     try {
       user = await this.userRepo.create({
-        name: input.name,
-        email: input.email.toLowerCase().trim(),
+        name: input.name.trim(),
+        email: normalizedEmail,
         phone: input.phone,
         passwordHash,
+        emailVerified: false,
       });
     } catch (err: any) {
       if (err?.code === "P2002") {
@@ -91,9 +101,189 @@ export class AuthService {
       throw err;
     }
 
-    const tokens = await this._issueTokens(user.id);
-    logger.info({ userId: user.id }, "auth: new user registered");
-    return { user: this._safeUser(user), tokens };
+    // Generate 6-digit OTP code
+    const code = generateOtp();
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    await this.userRepo.createAuthCode({
+      email: normalizedEmail,
+      codeHash,
+      type: "VERIFY_EMAIL",
+      expiresAt,
+    });
+
+    // Send verification email
+    await EmailService.sendVerificationCode(normalizedEmail, user.name, code);
+    logger.info({ userId: user.id, email: normalizedEmail }, "auth: verification code dispatched on register");
+
+    return {
+      user: this._safeUser(user),
+      requiresVerification: true,
+      email: normalizedEmail,
+    };
+  }
+
+  /**
+   * Verifies the 6-digit OTP code, marks emailVerified = true, and issues login tokens.
+   */
+  async verifyEmail(input: {
+    email: string;
+    code: string;
+  }): Promise<{ user: AuthUser; tokens: AuthTokens }> {
+    const normalizedEmail = input.email.toLowerCase().trim();
+    const user = await this.userRepo.findByEmail(normalizedEmail);
+    if (!user) {
+      throw new NotFoundError("Account not found");
+    }
+
+    if (user.emailVerified) {
+      const tokens = await this._issueTokens(user.id);
+      return { user: this._safeUser(user), tokens };
+    }
+
+    const authCode = await this.userRepo.findLatestValidAuthCode(normalizedEmail, "VERIFY_EMAIL");
+    if (!authCode) {
+      throw new BadRequestError("Verification code has expired or is invalid. Please request a new code.");
+    }
+
+    if (authCode.attempts >= 5) {
+      throw new BadRequestError("Too many incorrect attempts. Please request a new verification code.");
+    }
+
+    const isValid = await bcrypt.compare(input.code, authCode.code_hash);
+    if (!isValid) {
+      await this.userRepo.incrementAuthCodeAttempts(authCode.id);
+      throw new BadRequestError("Invalid verification code. Please check and try again.");
+    }
+
+    // Mark code used and user as verified
+    await this.userRepo.markAuthCodeUsed(authCode.id);
+    const updatedUser = await this.userRepo.markEmailVerified(user.id);
+
+    const tokens = await this._issueTokens(updatedUser.id);
+    logger.info({ userId: updatedUser.id, email: normalizedEmail }, "auth: email verified successfully");
+
+    return { user: this._safeUser(updatedUser), tokens };
+  }
+
+  /**
+   * Resends a 6-digit verification code with a 60-second cooldown rate limit.
+   */
+  async resendVerificationCode(email: string): Promise<{ success: boolean; message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await this.userRepo.findByEmail(normalizedEmail);
+    if (!user) {
+      throw new NotFoundError("Account not found");
+    }
+
+    if (user.emailVerified) {
+      throw new BadRequestError("This email address is already verified. You can log in.");
+    }
+
+    // Enforce 60-second cooldown
+    const recent = await this.userRepo.findRecentAuthCode(normalizedEmail, "VERIFY_EMAIL", 60);
+    if (recent) {
+      throw new BadRequestError("Please wait at least 60 seconds before requesting a new verification code.");
+    }
+
+    const code = generateOtp();
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    await this.userRepo.createAuthCode({
+      email: normalizedEmail,
+      codeHash,
+      type: "VERIFY_EMAIL",
+      expiresAt,
+    });
+
+    await EmailService.sendVerificationCode(normalizedEmail, user.name, code);
+    logger.info({ email: normalizedEmail }, "auth: verification code resent");
+
+    return {
+      success: true,
+      message: "A new 6-digit verification code has been sent to your email.",
+    };
+  }
+
+  /**
+   * Sends a 6-digit password reset recovery code to the user's email.
+   */
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await this.userRepo.findByEmail(normalizedEmail);
+
+    if (user && !user.deletedAt) {
+      // 60-second cooldown
+      const recent = await this.userRepo.findRecentAuthCode(normalizedEmail, "RESET_PASSWORD", 60);
+      if (!recent) {
+        const code = generateOtp();
+        const codeHash = await bcrypt.hash(code, 10);
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+        await this.userRepo.createAuthCode({
+          email: normalizedEmail,
+          codeHash,
+          type: "RESET_PASSWORD",
+          expiresAt,
+        });
+
+        await EmailService.sendPasswordResetCode(normalizedEmail, user.name, code);
+        logger.info({ email: normalizedEmail }, "auth: password reset code dispatched");
+      }
+    }
+
+    // Always return generic success to prevent account enumeration
+    return {
+      success: true,
+      message: "If an account exists with this email address, a password reset code has been sent.",
+    };
+  }
+
+  /**
+   * Validates reset code, updates password, and revokes all active session tokens.
+   */
+  async resetPassword(input: {
+    email: string;
+    code: string;
+    password: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const normalizedEmail = input.email.toLowerCase().trim();
+    const user = await this.userRepo.findByEmail(normalizedEmail);
+    if (!user || user.deletedAt) {
+      throw new NotFoundError("Account not found");
+    }
+
+    const authCode = await this.userRepo.findLatestValidAuthCode(normalizedEmail, "RESET_PASSWORD");
+    if (!authCode) {
+      throw new BadRequestError("Reset code has expired or is invalid. Please request a new code.");
+    }
+
+    if (authCode.attempts >= 5) {
+      throw new BadRequestError("Too many incorrect attempts. Please request a new reset code.");
+    }
+
+    const isValid = await bcrypt.compare(input.code, authCode.code_hash);
+    if (!isValid) {
+      await this.userRepo.incrementAuthCodeAttempts(authCode.id);
+      throw new BadRequestError("Invalid reset code. Please check and try again.");
+    }
+
+    // Update password
+    const passwordHash = await bcrypt.hash(input.password, 12);
+    await this.userRepo.updatePassword(user.id, passwordHash);
+
+    // Mark code used & revoke all sessions
+    await this.userRepo.markAuthCodeUsed(authCode.id);
+    await this.userRepo.revokeAllUserTokens(user.id);
+
+    logger.info({ userId: user.id, email: normalizedEmail }, "auth: password reset successfully");
+
+    return {
+      success: true,
+      message: "Your password has been reset successfully. Please sign in with your new password.",
+    };
   }
 
   /**
@@ -103,7 +293,8 @@ export class AuthService {
     email: string;
     password: string;
   }): Promise<{ user: AuthUser; tokens: AuthTokens }> {
-    const user = await this.userRepo.findByEmail(input.email);
+    const normalizedEmail = input.email.toLowerCase().trim();
+    const user = await this.userRepo.findByEmail(normalizedEmail);
 
     // Constant-time comparison padding against timing attacks
     const passwordToCheck = user?.passwordHash ?? "$2b$12$invalidhashpadding";
@@ -115,6 +306,30 @@ export class AuthService {
 
     if (user.status === "SUSPENDED") {
       throw new UnauthorizedError("Your account has been suspended. Contact support.");
+    }
+
+    // Check if email is verified
+    if (!user.emailVerified) {
+      // Automatically send a fresh verification code
+      try {
+        const code = generateOtp();
+        const codeHash = await bcrypt.hash(code, 10);
+        await this.userRepo.createAuthCode({
+          email: normalizedEmail,
+          codeHash,
+          type: "VERIFY_EMAIL",
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        });
+        await EmailService.sendVerificationCode(normalizedEmail, user.name, code);
+      } catch (err) {
+        logger.warn({ err }, "Could not auto-dispatch verification code on unverified login attempt");
+      }
+
+      const err: any = new UnauthorizedError("Please verify your email address before logging in. A new 6-digit code has been sent.");
+      err.code = "EMAIL_NOT_VERIFIED";
+      err.requiresVerification = true;
+      err.email = normalizedEmail;
+      throw err;
     }
 
     const tokens = await this._issueTokens(user.id);

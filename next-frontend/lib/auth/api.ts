@@ -73,6 +73,12 @@ export async function signIn(payload: SignInPayload): Promise<AuthResponse> {
 
   const json = await res.json();
   if (!res.ok || !json.success) {
+    if (res.status === 403 && json.error?.code === "EMAIL_NOT_VERIFIED") {
+      const err = new Error(json.error?.message || "Please verify your email address to continue.");
+      (err as any).code = "EMAIL_NOT_VERIFIED";
+      (err as any).email = json.data?.email || payload.email;
+      throw err;
+    }
     throw new Error(json.error?.message || "Invalid email or password.");
   }
 
@@ -94,10 +100,16 @@ export async function signIn(payload: SignInPayload): Promise<AuthResponse> {
   };
 }
 
+export type SignUpResult = {
+  user: AuthUser;
+  requiresVerification: boolean;
+  email: string;
+};
+
 /**
  * Register a new account via backend POST /api/v1/auth/register.
  */
-export async function signUp(payload: SignUpPayload): Promise<AuthResponse> {
+export async function signUp(payload: SignUpPayload): Promise<SignUpResult> {
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -108,6 +120,38 @@ export async function signUp(payload: SignUpPayload): Promise<AuthResponse> {
   const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.error?.message || "Failed to create account.");
+  }
+
+  const rawUser = json.data.user;
+  return {
+    user: {
+      id: rawUser.id,
+      name: rawUser.name,
+      email: rawUser.email,
+      phone: rawUser.phone ?? undefined,
+      role: normalizeRole(rawUser.role),
+      vendorId: rawUser.vendorId ?? undefined,
+      avatarInitials: makeInitials(rawUser.name),
+    },
+    requiresVerification: Boolean(json.data.requiresVerification),
+    email: json.data.email || rawUser.email,
+  };
+}
+
+/**
+ * Verify email address with 6-digit OTP code via POST /api/v1/auth/verify-email.
+ */
+export async function verifyEmail(payload: { email: string; code: string }): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Invalid or expired verification code.");
   }
 
   const rawUser = json.data.user;
@@ -126,6 +170,64 @@ export async function signUp(payload: SignUpPayload): Promise<AuthResponse> {
     },
     accessToken: json.data.accessToken,
   };
+}
+
+/**
+ * Resends a 6-digit verification code with 60s cooldown via POST /api/v1/auth/resend-code.
+ */
+export async function resendCode(
+  email: string,
+  type: "VERIFY_EMAIL" | "RESET_PASSWORD" = "VERIFY_EMAIL",
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/resend-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, type }),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Failed to resend code.");
+  }
+  return { success: true, message: json.message };
+}
+
+/**
+ * Request password recovery code via POST /api/v1/auth/forgot-password.
+ */
+export async function forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Failed to submit password reset request.");
+  }
+  return { success: true, message: json.message };
+}
+
+/**
+ * Reset password using 6-digit code via POST /api/v1/auth/reset-password.
+ */
+export async function resetPassword(payload: {
+  email: string;
+  code: string;
+  password: string;
+}): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Failed to reset password.");
+  }
+  return { success: true, message: json.message };
 }
 
 /**

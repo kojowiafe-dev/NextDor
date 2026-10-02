@@ -108,8 +108,12 @@ src/
 ## 🌐 API Route Index
 
 ### 🔐 Authentication (`/api/v1/auth`)
-- `POST /register`: Register a new customer account
-- `POST /login`: Authenticate and receive access token + refresh cookie
+- `POST /register`: Register a new customer account (dispatches 6-digit OTP verification code)
+- `POST /verify-email`: Verify 6-digit OTP code, activate account, and issue session tokens
+- `POST /resend-code`: Resend verification OTP code (protected by 60s cooldown)
+- `POST /login`: Authenticate and receive access token + refresh cookie (intercepts unverified users with `EMAIL_NOT_VERIFIED`)
+- `POST /forgot-password`: Request 6-digit recovery code sent via email (constant-time response)
+- `POST /reset-password`: Validate recovery code, set new password, and invalidate all active session tokens
 - `POST /refresh`: Rotate refresh token family and issue new access token
 - `POST /logout`: Revoke active refresh token family
 

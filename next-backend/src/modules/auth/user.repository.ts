@@ -133,4 +133,117 @@ export class UserRepository {
     });
     return res.count;
   }
+
+  /**
+   * Saves a hashed one-time verification or recovery code in the auth_codes table.
+   */
+  async createAuthCode(data: {
+    email: string;
+    codeHash: string;
+    type: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await prisma.$executeRaw`
+      INSERT INTO auth_codes (id, email, code_hash, type, expires_at, created_at)
+      VALUES (gen_random_uuid(), ${data.email.toLowerCase().trim()}, ${data.codeHash}, ${data.type}, ${data.expiresAt}, NOW())
+    `;
+  }
+
+  /**
+   * Finds the latest active, non-expired, and unused auth code for an email and type.
+   */
+  async findLatestValidAuthCode(
+    email: string,
+    type: string,
+  ): Promise<{
+    id: string;
+    email: string;
+    code_hash: string;
+    type: string;
+    expires_at: Date;
+    used_at: Date | null;
+    attempts: number;
+    created_at: Date;
+  } | null> {
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT id, email, code_hash, type, expires_at, used_at, attempts, created_at
+      FROM auth_codes
+      WHERE email = ${email.toLowerCase().trim()}
+        AND type = ${type}
+        AND used_at IS NULL
+        AND expires_at > NOW()
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    return rows[0] || null;
+  }
+
+  /**
+   * Finds any code created within the last N seconds (for rate-limiting resend).
+   */
+  async findRecentAuthCode(
+    email: string,
+    type: string,
+    withinSeconds = 60,
+  ): Promise<any | null> {
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT id, created_at
+      FROM auth_codes
+      WHERE email = ${email.toLowerCase().trim()}
+        AND type = ${type}
+        AND created_at > NOW() - (${withinSeconds} || ' seconds')::interval
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    return rows[0] || null;
+  }
+
+  /**
+   * Increments attempt counter on an auth code.
+   */
+  async incrementAuthCodeAttempts(id: string): Promise<void> {
+    await prisma.$executeRaw`
+      UPDATE auth_codes SET attempts = attempts + 1 WHERE id = ${id}::uuid
+    `;
+  }
+
+  /**
+   * Marks an auth code as used.
+   */
+  async markAuthCodeUsed(id: string): Promise<void> {
+    await prisma.$executeRaw`
+      UPDATE auth_codes SET used_at = NOW() WHERE id = ${id}::uuid
+    `;
+  }
+
+  /**
+   * Marks a user's email as verified.
+   */
+  async markEmailVerified(userId: string): Promise<User> {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { emailVerified: true },
+    });
+  }
+
+  /**
+   * Updates user's password hash.
+   */
+  async updatePassword(userId: string, passwordHash: string): Promise<User> {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+  }
+
+  /**
+   * Revokes all active refresh tokens for a user (security invalidate all sessions).
+   */
+  async revokeAllUserTokens(userId: string): Promise<number> {
+    const res = await prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return res.count;
+  }
 }

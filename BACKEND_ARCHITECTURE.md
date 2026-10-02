@@ -227,6 +227,25 @@ model RefreshToken {
   @@index([family])
 }
 
+model AuthCode {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String
+  codeHash  String       @map("code_hash")
+  type      AuthCodeType
+  expiresAt DateTime     @map("expires_at")
+  usedAt    DateTime?    @map("used_at")
+  attempts  Int          @default(0)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([email, type])
+  @@map("auth_codes")
+}
+
+enum AuthCodeType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
 model Address {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String   @db.Uuid
@@ -597,32 +616,76 @@ PATCH /admin/products/:id
 ### Auth flow
 
 ```
-Register
-  → validate with Zod
-  → check email unique
+Register (POST /api/v1/auth/register)
+  → validate with Zod (registerSchema)
+  → check email unique (throws ConflictError if exists)
   → bcrypt(password, rounds=12)
-  → INSERT User
-  → enqueue email verification job
-  → return 201
+  → INSERT User { emailVerified: false }
+  → generate CSPRNG 6-digit OTP code (crypto.randomInt(100000, 999999))
+  → SHA-256 hash code & INSERT AuthCode { type: VERIFY_EMAIL, expiresAt: +15min }
+  → dispatch branded HTML email via EmailService (Resend API or console fallback in dev)
+  → return 201 { message, email, requiresVerification: true }
 
-Login
+Verify Email (POST /api/v1/auth/verify-email)
+  → validate email & 6-digit code
+  → lookup active, unexpired AuthCode (type: VERIFY_EMAIL)
+  → check attempts <= 5 (rate limit brute force attempts)
+  → verify SHA-256 hash
+  → UPDATE AuthCode { usedAt: now() }
+  → UPDATE User { emailVerified: true }
+  → generate accessToken (JWT, 15 min, HS256) & refreshToken
+  → INSERT RefreshToken { tokenHash, family: uuid(), expiresAt: +30d }
+  → set httpOnly cookie: refresh_token=<raw_token>; SameSite=Strict; Secure
+  → return 200 { user, accessToken, message }
+
+Resend Verification Code (POST /api/v1/auth/resend-code)
+  → find User by email
+  → check if already verified (returns friendly 200)
+  → check 60-second cooldown from last issued code (rate limit protection)
+  → generate fresh 6-digit OTP & save AuthCode (15-min TTL)
+  → dispatch email via EmailService
+  → return 200 { message }
+
+Login (POST /api/v1/auth/login)
   → find User by email
   → bcrypt.compare(password, hash)
-  → generate accessToken  (JWT, 15 min, HS256)
+  → verify emailVerified === true
+      → if false: auto-dispatch fresh 6-digit OTP
+      → return 403 { code: "EMAIL_NOT_VERIFIED", message, email }
+  → generate accessToken (JWT, 15 min, HS256)
   → generate refreshToken (crypto.randomBytes(64).toString('hex'))
   → hash refresh token with bcrypt
   → INSERT RefreshToken { tokenHash, family: uuid(), expiresAt: +30d }
   → set httpOnly cookie: refresh_token=<raw_token>; SameSite=Strict; Secure
-  → return { accessToken, user }
+  → return 200 { accessToken, user }
 
-Refresh
+Forgot Password (POST /api/v1/auth/forgot-password)
+  → validate email with Zod
+  → find User by email
+  → if user exists:
+      → generate 6-digit OTP (crypto.randomInt)
+      → SHA-256 hash & save AuthCode { type: RESET_PASSWORD, expiresAt: +15min }
+      → dispatch recovery email via EmailService
+  → always return 200 { message: "If an account exists..." } (constant-time enumeration protection)
+
+Reset Password (POST /api/v1/auth/reset-password)
+  → validate email, 6-digit code, new password (min 8 chars)
+  → lookup active AuthCode (type: RESET_PASSWORD, unexpired, attempts <= 5)
+  → verify SHA-256 hash
+  → UPDATE AuthCode { usedAt: now() }
+  → bcrypt(newPassword, rounds=12)
+  → UPDATE User { passwordHash }
+  → REVOKE ALL active refresh token families for user across all devices (session invalidation)
+  → return 200 { message: "Password reset successfully. Please sign in." }
+
+Refresh (POST /api/v1/auth/refresh)
   → read refresh_token cookie
   → find RefreshToken where tokenHash = bcrypt.compare(...)
   → if not found → 401
   → if revokedAt set → revoke entire family → 401 (reuse attack detected)
   → if expired → 401
   → REVOKE old token, ISSUE new token pair (rotation)
-  → return { accessToken }
+  → return 200 { accessToken }
 ```
 
 ### Token family rotation (theft detection)

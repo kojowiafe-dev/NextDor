@@ -37,7 +37,14 @@ declare module "fastify" {
   }
 }
 import { AuthService, authService } from "./auth.service.js";
-import { registerSchema, loginSchema, forgotPasswordSchema } from "@nextdor/shared";
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyEmailSchema,
+  resendCodeSchema,
+} from "@nextdor/shared";
 import { prisma } from "../../lib/prisma.js";
 import bcrypt from "bcryptjs";
 import { AuditService } from "../audit/audit.service.js";
@@ -61,14 +68,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   /**
    * POST /auth/register
-   * Rate limit: 5 per 15 minutes per IP (stricter than global 200/min)
+   * Rate limit: 5 per 15 minutes per IP
    */
   app.post(
     "/register",
     {
       config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
       schema: {
-        description: "Register a new user account",
+        description: "Register a new user account and receive verification OTP",
         tags: ["Auth"],
         body: {
           type: "object",
@@ -86,24 +93,22 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const body = registerSchema.parse(req.body);
 
       try {
-        const { user, tokens } = await authService.register(body);
+        const result = await authService.register(body);
 
         req.log.info(
-          { ip: req.ip, userId: user.id, email: user.email, userAgent: req.headers["user-agent"] },
-          "security: user registered successfully"
+          { ip: req.ip, userId: result.user.id, email: result.user.email, userAgent: req.headers["user-agent"] },
+          "security: user registered, verification code dispatched"
         );
 
-        reply
-          .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
-          .status(201)
-          .send({
-            success: true,
-            data: {
-              user,
-              accessToken: tokens.accessToken,
-              refreshToken: tokens.refreshToken,
-            },
-          });
+        reply.status(201).send({
+          success: true,
+          data: {
+            user: result.user,
+            requiresVerification: true,
+            email: result.email,
+            message: "Account created! A 6-digit verification code has been sent to your email.",
+          },
+        });
       } catch (err: any) {
         req.log.warn(
           { ip: req.ip, email: body.email, err: err.message, userAgent: req.headers["user-agent"] },
@@ -115,13 +120,123 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   );
 
   /**
+   * POST /auth/verify-email
+   * Validates 6-digit OTP code, activates user account, and issues authentication tokens.
+   */
+  app.post(
+    "/verify-email",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Verify email address using 6-digit OTP code",
+        tags: ["Auth"],
+      },
+    },
+    async (req, reply) => {
+      const body = verifyEmailSchema.parse(req.body);
+
+      try {
+        const { user, tokens } = await authService.verifyEmail(body);
+
+        req.log.info(
+          { ip: req.ip, userId: user.id, email: user.email, userAgent: req.headers["user-agent"] },
+          "security: email verified and session activated"
+        );
+
+        reply
+          .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
+          .status(200)
+          .send({
+            success: true,
+            data: {
+              user,
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+            },
+          });
+      } catch (err: any) {
+        req.log.warn(
+          { ip: req.ip, email: body.email, err: err.message, userAgent: req.headers["user-agent"] },
+          "security: email verification failed"
+        );
+        throw err;
+      }
+    },
+  );
+
+  /**
+   * POST /auth/resend-code
+   * Resends a 6-digit verification or reset code (rate-limited with 60s cooldown).
+   */
+  app.post(
+    "/resend-code",
+    {
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Resend 6-digit verification or reset code",
+        tags: ["Auth"],
+      },
+    },
+    async (req, reply) => {
+      const body = resendCodeSchema.parse(req.body);
+
+      if (body.type === "RESET_PASSWORD") {
+        const result = await authService.forgotPassword(body.email);
+        return reply.send({ success: true, message: result.message });
+      }
+
+      const result = await authService.resendVerificationCode(body.email);
+      return reply.send({ success: true, message: result.message });
+    },
+  );
+
+  /**
+   * POST /auth/forgot-password
+   * Dispatches 6-digit password recovery code to registered email.
+   */
+  app.post(
+    "/forgot-password",
+    {
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Request password reset code",
+        tags: ["Auth"],
+      },
+    },
+    async (req, reply) => {
+      const body = forgotPasswordSchema.parse(req.body);
+      const result = await authService.forgotPassword(body.email);
+      return reply.send({ success: true, message: result.message });
+    },
+  );
+
+  /**
+   * POST /auth/reset-password
+   * Validates 6-digit reset code, sets new password, and revokes all active sessions.
+   */
+  app.post(
+    "/reset-password",
+    {
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Reset password using 6-digit recovery code",
+        tags: ["Auth"],
+      },
+    },
+    async (req, reply) => {
+      const body = resetPasswordSchema.parse(req.body);
+      const result = await authService.resetPassword({
+        email: body.email,
+        code: body.code,
+        password: body.password,
+      });
+      return reply.send({ success: true, message: result.message });
+    },
+  );
+
+  /**
    * POST /auth/login
-   * Rate limit: 10 per 15 minutes per IP (brute-force protection)
-   *
-   * WHAT IF: A user fat-fingers their password 10 times?
-   * They're rate-limited for 15 minutes. To prevent locking out
-   * legitimate users, consider "per IP + per email" rate limiting
-   * instead of "per IP only". Phase 2 hardening will add this.
+   * Rate limit: 10 per 15 minutes per IP
    */
   app.post(
     "/login",
@@ -162,6 +277,20 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
             },
           });
       } catch (err: any) {
+        if (err?.code === "EMAIL_NOT_VERIFIED") {
+          return reply.status(403).send({
+            success: false,
+            error: {
+              code: "EMAIL_NOT_VERIFIED",
+              message: "Please verify your email address to continue. A fresh 6-digit code has been sent.",
+            },
+            data: {
+              requiresVerification: true,
+              email: err.email,
+            },
+          });
+        }
+
         req.log.warn(
           { ip: req.ip, email: body.email, err: err.message, userAgent: req.headers["user-agent"] },
           "security: failed login attempt"
@@ -255,48 +384,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  /**
-   * POST /auth/forgot-password
-   * Always returns 200 — even if the email doesn't exist.
-   *
-   * SECURITY: If we returned 404 for unknown emails, an attacker could
-   * use this endpoint to discover which emails are registered. Always
-   * respond with the same message regardless of whether the email exists.
-   *
-   * The actual OTP email is enqueued as a background job (Phase 2).
-   */
-  app.post(
-    "/forgot-password",
-    {
-      config: { rateLimit: { max: 3, timeWindow: "15 minutes" } },
-      schema: {
-        description: "Request a password reset link (idempotent)",
-        tags: ["Auth"],
-        body: {
-          type: "object",
-          required: ["email"],
-          properties: {
-            email: { type: "string", format: "email", example: "kojo@nextdor.com" },
-          },
-        },
-      },
-    },
-    async (req, reply) => {
-      const body = forgotPasswordSchema.parse(req.body);
 
-      // TODO Phase 2: enqueue email job with OTP
-      // await emailQueue.add("forgot-password", { email: body.email });
-      req.log.info({ email: body.email }, "auth: forgot password requested");
-
-      // Always the same response
-      return reply.send({
-        success: true,
-        data: {
-          message: "If an account with that email exists, a reset link has been sent.",
-        },
-      });
-    },
-  );
 
   /**
    * GET /auth/me

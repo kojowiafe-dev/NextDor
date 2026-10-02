@@ -58,7 +58,7 @@ The frontend will run at [http://localhost:3000](http://localhost:3000).
 
 The application features 34 active routes organized into four distinct operational portals:
 
-### 1. 🛍️ Storefront (Public & Customers)
+### 1. 🛍️ Storefront & Authentication (Public & Customers)
 | Route | Description |
 | :--- | :--- |
 | `/` | Homepage with hero discounts, category tiles, Deal of the Day, and trending products |
@@ -69,6 +69,11 @@ The application features 34 active routes organized into four distinct operation
 | `/cart` | Client-side cart with quantity adjustments and real-time subtotal calculation |
 | `/checkout` | Order checkout with delivery options (Standard, Express, Pickup) and Paystack initiation |
 | `/track-order` | Public order tracking lookup by order number (`ND-XXXXX`) or UUID |
+| `/login` | Customer login with checkout redirection preservation and unverified account detection |
+| `/register` | Customer sign-up automatically forwarding to 6-digit OTP verification |
+| `/verify-email` | 6-digit OTP verification screen with large letter-spaced input and resend countdown |
+| `/forgot-password` | Password recovery initiation sending a 6-digit reset code to user's email |
+| `/reset-password` | Password reset screen with OTP entry, real-time strength validation, and confirmation |
 
 ### 2. 👤 Customer Account (`/account`)
 | Route | Description |
@@ -109,7 +114,8 @@ The frontend is optimized for seamless one-handed mobile commerce in Ghana:
 - **Horizontal Swipeable Category Pills (`components/layout/CategoryNav.tsx`)**: Touch-friendly swipeable category bar directly below the header for instantaneous category browsing without opening menus.
 - **High-Contrast Quick Search (`components/layout/SearchBar.tsx`)**: White background, dark text, and a 1-tap clear button (`X`) for rapid mobile product queries.
 - **Mobile Navigation Drawer (`components/layout/MobileNav.tsx`)**: Slide-out menu with direct shortcuts to Admin/Vendor portals, customer orders, wishlist, and categorized directory.
-- **Admin Mobile Usability (`components/admin/AdminSidebar.tsx` & `AdminLayout.tsx`)**: Auto-dismissing drawer on link navigation, visible close (`X`) control, single-row mobile top bar, and real-time alert notifications popover (`AdminNotificationsPopover.tsx`).
+- **Mobile Auth Ergonomics**: Clean vertical single-column layouts for `/verify-email`, `/forgot-password`, and `/reset-password` with `inputMode="numeric"`, prominent CTA buttons, and clear countdown feedback.
+- **Admin Mobile Usability (`components/admin/AdminSidebar.tsx` & `AdminLayout.tsx`)**: Auto-dismissing drawer on link navigation, visible close (`X`) control, single-row mobile top bar, and real-time alert notifications popover (`AdminNotificationsPopover.tsx`) with 1-click "Mark read", "Clear all", and item dismissal.
 
 ---
 

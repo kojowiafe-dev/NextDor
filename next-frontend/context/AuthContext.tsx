@@ -17,6 +17,8 @@ import {
   refreshAccessToken,
   signOutApi,
   updateUserProfile as apiUpdateProfile,
+  verifyEmail as apiVerifyEmail,
+  SignUpResult,
 } from "@/lib/auth/api";
 
 type AuthContextValue = {
@@ -29,7 +31,8 @@ type AuthContextValue = {
   isVendor: boolean;
   isLoading: boolean;
   login: (payload: SignInPayload) => Promise<AuthUser>;
-  register: (payload: SignUpPayload) => Promise<AuthUser>;
+  register: (payload: SignUpPayload) => Promise<SignUpResult>;
+  verifyEmailSession: (payload: { email: string; code: string }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
 };
@@ -154,21 +157,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return authUser;
   }, []);
 
-  const register = useCallback(async (payload: SignUpPayload): Promise<AuthUser> => {
-    const { user: authUser, accessToken } = await apiSignUp(payload);
-    setUser(authUser);
-    setToken(accessToken);
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
-      localStorage.setItem(TOKEN_KEY, accessToken);
-      if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
-        localStorage.setItem("vendor_token", accessToken);
-      }
-    }
-
-    return authUser;
+  const register = useCallback(async (payload: SignUpPayload): Promise<SignUpResult> => {
+    return apiSignUp(payload);
   }, []);
+
+  const verifyEmailSession = useCallback(
+    async (payload: { email: string; code: string }): Promise<AuthUser> => {
+      const { user: authUser, accessToken } = await apiVerifyEmail(payload);
+      setUser(authUser);
+      setToken(accessToken);
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+        localStorage.setItem(TOKEN_KEY, accessToken);
+        if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
+          localStorage.setItem("vendor_token", accessToken);
+        }
+      }
+
+      return authUser;
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
     setUser(null);
@@ -208,10 +218,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: !hydrated,
       login,
       register,
+      verifyEmailSession,
       logout,
       updateProfile,
     }),
-    [user, token, hydrated, login, register, logout, updateProfile],
+    [user, token, hydrated, login, register, verifyEmailSession, logout, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -11,15 +11,6 @@
  * When the requirement changes to 12+ characters, someone inevitably
  * updates one but not the other. The shared schema lives in
  * `packages/shared` and is imported by both — one change, both updated.
- *
- * WHAT IF: The frontend and backend need slightly different validation?
- * (e.g., frontend shows stricter UI hints but backend accepts more)
- * → Extend the base schema: `backendSchema = frontendSchema.extend({...})`
- *    The base schema is the minimum both agree on.
- *
- * 📚 Read: The concept of "contract-first design" — you define the
- *    interface (Zod schema) before implementation. This is the TypeScript
- *    equivalent of OpenAPI schema-first development.
  */
 
 import { z } from "zod";
@@ -63,16 +54,37 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(128).max(128), // 64 bytes hex = 128 chars
 });
 
+export const verifyEmailSchema = z.object({
+  email: z.string().email().transform((v) => v.toLowerCase().trim()),
+  code: z
+    .string()
+    .length(6, "Verification code must be 6 digits")
+    .regex(/^\d{6}$/, "Code must contain only digits"),
+});
+
+export const resendCodeSchema = z.object({
+  email: z.string().email().transform((v) => v.toLowerCase().trim()),
+  type: z.enum(["VERIFY_EMAIL", "RESET_PASSWORD"]).default("VERIFY_EMAIL"),
+});
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email().transform((v) => v.toLowerCase().trim()),
 });
 
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1, "Reset token is required"),
+  email: z.string().email().transform((v) => v.toLowerCase().trim()),
+  code: z
+    .string()
+    .length(6, "Reset code must be 6 digits")
+    .regex(/^\d{6}$/, "Code must contain only digits"),
   password: passwordSchema,
 });
 
 // ─── Inferred TypeScript types ────────────────────────────────────────────────
 
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput    = z.infer<typeof loginSchema>;
+export type RegisterInput       = z.infer<typeof registerSchema>;
+export type LoginInput          = z.infer<typeof loginSchema>;
+export type VerifyEmailInput    = z.infer<typeof verifyEmailSchema>;
+export type ResendCodeInput     = z.infer<typeof resendCodeSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput  = z.infer<typeof resetPasswordSchema>;

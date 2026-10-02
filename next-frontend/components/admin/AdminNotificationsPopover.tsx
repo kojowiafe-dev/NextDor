@@ -14,6 +14,8 @@ import {
   Clock,
   Sparkles,
   RefreshCw,
+  Trash2,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { API_BASE } from "@/lib/api-config";
@@ -37,12 +39,38 @@ export function AdminNotificationsPopover() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Read and dismissed state persisted across sessions
   const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("nextdor_admin_last_read_notif");
       return stored ? Number(stored) : 0;
     }
     return 0;
+  });
+
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("nextdor_admin_read_ids");
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+      } catch {
+        return new Set();
+      }
+    }
+    return new Set();
+  });
+
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("nextdor_admin_dismissed_ids");
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+      } catch {
+        return new Set();
+      }
+    }
+    return new Set();
   });
 
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -103,40 +131,41 @@ export function AdminNotificationsPopover() {
         console.warn("Could not load vendor alerts:", err);
       }
 
-      // 2. Fetch recent real platform audit logs from the database
+      // 2. Fetch security audit logs for administrative events
       try {
-        const auditRes = await fetch(`${API_BASE}/auth/audit-logs?limit=8`, {
+        const auditRes = await fetch(`${API_BASE}/auth/audit-logs?limit=15`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (auditRes.ok) {
           const json = await auditRes.json();
           if (json.success && Array.isArray(json.data?.logs)) {
             for (const log of json.data.logs) {
-              let title = "Platform Security Event";
-              let description = `Action ${log.action} logged by ${log.userEmail || "System"}.`;
+              // Convert audit actions into notifications
+              let title = "Platform Event";
+              let description = log.action;
               let icon = ShieldCheck;
-              let badgeLabel = "System";
-              let badgeColor = "bg-zinc-100 text-zinc-700 border-zinc-200";
+              let badgeLabel = "Security";
+              let badgeColor = "bg-blue-100 text-blue-800 border-blue-200";
 
-              if (log.action === "VENDOR_REGISTERED") {
-                title = "New Merchant Registered";
-                description = `Store '${log.details?.storeName || log.entityId}' signed up on the platform.`;
+              if (log.action === "AUTH_LOGIN_SUCCESS") {
+                title = "Administrator Sign-In";
+                description = `Staff member signed in from IP ${log.ip || "unknown"}.`;
+                icon = ShieldCheck;
+                badgeLabel = "Login";
+                badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+              } else if (log.action === "AUTH_PASSWORD_FAILED") {
+                title = "Failed Login Warning";
+                description = `Suspicious authentication attempt recorded from ${log.ip || "unknown"}.`;
+                icon = AlertTriangle;
+                badgeLabel = "Warning";
+                badgeColor = "bg-rose-100 text-rose-800 border-rose-200";
+              } else if (log.action === "VENDOR_STATUS_CHANGE") {
+                title = "Vendor Status Modified";
+                description = `Merchant ${log.details?.vendorName || ""} updated to ${log.details?.newStatus || "updated"}.`;
                 icon = Store;
                 badgeLabel = "Merchant";
-                badgeColor = "bg-blue-100 text-blue-800 border-blue-200";
-              } else if (log.action === "MERCHANT_APPROVED") {
-                title = "Merchant Store Approved";
-                description = `Store '${log.details?.storeName || "Vendor"}' was approved and is now active.`;
-                icon = CheckCircle2;
-                badgeLabel = "Approval";
-                badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
-              } else if (log.action === "MERCHANT_SUSPENDED") {
-                title = "Merchant Suspended";
-                description = `Store '${log.details?.storeName || "Vendor"}' was temporarily suspended.`;
-                icon = AlertTriangle;
-                badgeLabel = "Suspension";
-                badgeColor = "bg-red-100 text-red-800 border-red-200";
-              } else if (log.action === "ORDER_DISPATCH_UPDATED") {
+                badgeColor = "bg-indigo-100 text-indigo-800 border-indigo-200";
+              } else if (log.action === "ORDER_STATUS_UPDATE") {
                 title = "Order Dispatch Transition";
                 description = `Order ${log.details?.orderNumber || ""} status updated to ${log.details?.newStatus || "updated"}.`;
                 icon = Truck;
@@ -165,11 +194,15 @@ export function AdminNotificationsPopover() {
 
       // Sort by timestamp descending
       items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setNotifications(items);
 
-      // Calculate unread count based on items newer than lastReadTimestamp
-      const unread = items.filter((it) => {
-        if (it.isUrgent) return true; // Urgent items always count until resolved
+      // Filter out dismissed items
+      const activeItems = items.filter((it) => !dismissedIds.has(it.id));
+      setNotifications(activeItems);
+
+      // Calculate unread count (items not marked read and newer than lastReadTimestamp)
+      const unread = activeItems.filter((it) => {
+        if (readIds.has(it.id)) return false;
+        if (it.isUrgent) return true;
         return new Date(it.timestamp).getTime() > lastReadTimestamp;
       }).length;
 
@@ -183,15 +216,70 @@ export function AdminNotificationsPopover() {
     loadNotifications();
   }, [token]);
 
+  // Mark all notifications as read
   function handleMarkAllAsRead() {
     const now = Date.now();
     setLastReadTimestamp(now);
+
+    const updatedReadIds = new Set(readIds);
+    notifications.forEach((item) => updatedReadIds.add(item.id));
+    setReadIds(updatedReadIds);
+
     if (typeof window !== "undefined") {
       localStorage.setItem("nextdor_admin_last_read_notif", String(now));
+      localStorage.setItem("nextdor_admin_read_ids", JSON.stringify(Array.from(updatedReadIds)));
     }
-    // Only urgent items remaining if any
-    const urgentCount = notifications.filter((it) => it.isUrgent).length;
-    setUnreadCount(urgentCount);
+    setUnreadCount(0);
+  }
+
+  // Clear / dismiss all current notifications from view
+  function handleClearAll() {
+    const updatedDismissedIds = new Set(dismissedIds);
+    notifications.forEach((item) => updatedDismissedIds.add(item.id));
+    setDismissedIds(updatedDismissedIds);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "nextdor_admin_dismissed_ids",
+        JSON.stringify(Array.from(updatedDismissedIds))
+      );
+    }
+    setNotifications([]);
+    setUnreadCount(0);
+  }
+
+  // Dismiss a single notification
+  function handleDismissItem(e: React.MouseEvent, id: string) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const updatedDismissedIds = new Set(dismissedIds);
+    updatedDismissedIds.add(id);
+    setDismissedIds(updatedDismissedIds);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "nextdor_admin_dismissed_ids",
+        JSON.stringify(Array.from(updatedDismissedIds))
+      );
+    }
+
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+  }
+
+  // Mark single item read on click
+  function handleItemClick(id: string) {
+    if (!readIds.has(id)) {
+      const updatedReadIds = new Set(readIds);
+      updatedReadIds.add(id);
+      setReadIds(updatedReadIds);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("nextdor_admin_read_ids", JSON.stringify(Array.from(updatedReadIds)));
+      }
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+    setIsOpen(false);
   }
 
   function formatTimeAgo(isoString: string): string {
@@ -230,9 +318,9 @@ export function AdminNotificationsPopover() {
 
       {/* Popover Dropdown Drawer */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+        <div className="absolute right-0 top-full mt-2 w-84 sm:w-96 rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 bg-zinc-50/70">
+          <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 bg-zinc-50/80">
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-sm text-zinc-900">Notifications</h3>
               {unreadCount > 0 ? (
@@ -246,27 +334,39 @@ export function AdminNotificationsPopover() {
               )}
             </div>
 
-            <div className="flex items-center gap-1.5">
+            {/* Header Action Buttons */}
+            <div className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllAsRead}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900 transition"
+                  title="Mark all notifications as read"
+                >
+                  <CheckCheck className="h-3.5 w-3.5 text-[#ff9900]" />
+                  <span>Mark read</span>
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:text-red-600 transition"
+                  title="Clear all notifications"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Clear all</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => loadNotifications()}
                 disabled={isLoading}
                 title="Refresh notifications"
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200/60 hover:text-zinc-700 disabled:opacity-50"
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-200/60 hover:text-zinc-700 disabled:opacity-50 transition"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin text-[#ff9900]" : ""}`} />
               </button>
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={handleMarkAllAsRead}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-200/60 hover:text-zinc-900 transition"
-                  title="Mark all as read"
-                >
-                  <CheckCheck className="h-3.5 w-3.5" />
-                  <span>Mark read</span>
-                </button>
-              )}
             </div>
           </div>
 
@@ -290,47 +390,69 @@ export function AdminNotificationsPopover() {
             ) : (
               notifications.map((item) => {
                 const ItemIcon = item.icon;
-                const isNew = item.isUrgent || new Date(item.timestamp).getTime() > lastReadTimestamp;
+                const isRead = readIds.has(item.id);
+                const isNew = !isRead && (item.isUrgent || new Date(item.timestamp).getTime() > lastReadTimestamp);
 
                 return (
-                  <Link
+                  <div
                     key={item.id}
-                    href={item.href}
-                    onClick={() => setIsOpen(false)}
-                    className={`flex items-start gap-3 p-3.5 transition hover:bg-zinc-50 group ${
-                      isNew ? "bg-amber-50/20" : ""
+                    className={`group relative flex items-start gap-3 p-3.5 transition hover:bg-zinc-50 ${
+                      isNew ? "bg-amber-50/25" : ""
                     }`}
                   >
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                        item.isUrgent
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-zinc-100 text-zinc-600 group-hover:bg-[#ff9900]/10 group-hover:text-[#ff9900]"
-                      }`}
+                    <Link
+                      href={item.href}
+                      onClick={() => handleItemClick(item.id)}
+                      className="flex flex-1 items-start gap-3 min-w-0"
                     >
-                      <ItemIcon className="h-4 w-4" />
-                    </div>
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                          item.isUrgent
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-zinc-100 text-zinc-600 group-hover:bg-[#ff9900]/10 group-hover:text-[#ff9900]"
+                        }`}
+                      >
+                        <ItemIcon className="h-4 w-4" />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className="text-xs font-semibold text-zinc-900 group-hover:text-[#ff9900] transition-colors truncate">
-                          {item.title}
+                      <div className="min-w-0 flex-1 pr-6">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <p
+                            className={`text-xs truncate ${
+                              isNew
+                                ? "font-bold text-zinc-950"
+                                : "font-medium text-zinc-700 group-hover:text-[#ff9900]"
+                            }`}
+                          >
+                            {item.title}
+                          </p>
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.2 text-[9px] font-semibold border ${item.badgeColor}`}
+                          >
+                            {item.badgeLabel}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed">
+                          {item.description}
                         </p>
-                        <span
-                          className={`shrink-0 rounded px-1.5 py-0.2 text-[9px] font-semibold border ${item.badgeColor}`}
-                        >
-                          {item.badgeLabel}
-                        </span>
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatTimeAgo(item.timestamp)}</span>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed">
-                        {item.description}
-                      </p>
-                      <div className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400">
-                        <Clock className="h-3 w-3" />
-                        <span>{formatTimeAgo(item.timestamp)}</span>
-                      </div>
-                    </div>
-                  </Link>
+                    </Link>
+
+                    {/* Single notification dismiss button */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleDismissItem(e, item.id)}
+                      title="Dismiss notification"
+                      className="absolute right-2.5 top-3.5 p-1 text-zinc-300 hover:text-zinc-600 hover:bg-zinc-200/50 rounded transition"
+                      aria-label="Dismiss notification"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 );
               })
             )}

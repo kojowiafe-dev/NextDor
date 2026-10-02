@@ -1,140 +1,145 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
-import { CheckCircle } from "lucide-react";
-import { requestPasswordReset } from "@/lib/auth/api";
-import { AuthFormField } from "@/components/account/AuthFormField";
+import { KeyRound, ArrowRight, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { forgotPassword } from "@/lib/auth/api";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [generalError, setGeneralError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    setEmailError("");
-    setGeneralError("");
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
 
-    if (!email.trim()) {
-      setEmailError("Email address is required.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setEmailError("Please enter a valid email address.");
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError("Please enter a valid email address.");
       return;
     }
 
+    setError(null);
     setIsSubmitting(true);
+
     try {
-      await requestPasswordReset(email);
-      setSubmitted(true);
-    } catch (error) {
-      setGeneralError(
-        error instanceof Error ? error.message : "An unexpected error occurred.",
-      );
+      const res = await forgotPassword(cleanEmail);
+      setSuccessMsg(res.message || "A 6-digit recovery code has been sent to your email.");
+
+      setTimeout(() => {
+        router.push(`/reset-password?email=${encodeURIComponent(cleanEmail)}`);
+      }, 1200);
+    } catch (err: any) {
+      setError(err?.message || "Failed to process request. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-200px)] items-center justify-center px-4 py-12">
+    <div className="flex min-h-[calc(100vh-180px)] items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-zinc-100">
-          <div className="mb-8 text-center">
-            <Link href="/" className="inline-block rounded-xl bg-[#131921] px-5 py-2.5 shadow-md transition hover:bg-black">
+        <div className="rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-zinc-200/80">
+          {/* Logo */}
+          <div className="mb-6 text-center">
+            <Link
+              href="/"
+              className="inline-block rounded-xl bg-[#131921] px-5 py-2.5 shadow-md transition hover:bg-black"
+            >
               <Image
                 src="/logo.png"
                 alt="NextDor"
-                width={140}
-                height={38}
-                className="h-8 w-auto object-contain mx-auto"
+                width={120}
+                height={32}
                 priority
+                className="h-7 w-auto object-contain"
               />
             </Link>
-            <h1 className="mt-4 text-xl font-semibold text-zinc-900">Reset your password</h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              Enter your email and we&apos;ll send you a reset link.
+          </div>
+
+          {/* Header */}
+          <div className="text-center mb-6">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ff9900]/15 text-[#ff9900] ring-4 ring-[#ff9900]/10">
+              <KeyRound className="h-7 w-7" />
+            </div>
+            <h1 className="text-xl font-bold text-zinc-900">Forgot your password?</h1>
+            <p className="mt-1 text-xs sm:text-sm text-zinc-500 leading-relaxed">
+              Enter your registered email address and we'll send you a 6-digit recovery code to reset your password.
             </p>
           </div>
 
-          {submitted ? (
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-                <CheckCircle className="h-8 w-8 text-green-500" />
-              </div>
-              <h2 className="text-lg font-semibold text-zinc-900">Check your email</h2>
-              <p className="mt-2 text-sm text-zinc-500">
-                We&apos;ve sent a password reset link to{" "}
-                <span className="font-medium text-zinc-700">{email}</span>. It may take a
-                few minutes to arrive.
-              </p>
-              <p className="mt-2 text-xs text-zinc-400">
-                Didn&apos;t receive it? Check your spam folder or{" "}
-                <button
-                  type="button"
-                  onClick={() => setSubmitted(false)}
-                  className="text-[#007185] hover:underline"
-                >
-                  try again
-                </button>
-                .
-              </p>
-              <Link
-                href="/login"
-                className="mt-6 inline-block rounded-lg bg-[#ff9900] px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f08804]"
-              >
-                Back to Sign In
-              </Link>
+          {/* Feedback */}
+          {error && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+              <span>{error}</span>
             </div>
-          ) : (
-            <>
-              {generalError && (
-                <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-200">
-                  {generalError}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} noValidate className="space-y-4">
-                <AuthFormField
-                  label="Email address"
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  error={emailError}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                />
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#ff9900] px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-[#f08804] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSubmitting && (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-900/30 border-t-zinc-900" />
-                  )}
-                  {isSubmitting ? "Sending..." : "Send Reset Link"}
-                </button>
-              </form>
-
-              <p className="mt-6 text-center text-sm text-zinc-600">
-                Remember your password?{" "}
-                <Link
-                  href="/login"
-                  className="font-semibold text-[#007185] hover:text-[#c7511f] hover:underline"
-                >
-                  Sign in
-                </Link>
-              </p>
-            </>
           )}
+
+          {successMsg && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5"
+              >
+                Account Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
+                placeholder="you@example.com"
+                required
+                autoComplete="email"
+                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/20"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !email.trim()}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#ff9900] py-3 text-sm font-bold text-zinc-950 shadow-sm transition hover:bg-[#f08804] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Sending recovery code...</span>
+                </>
+              ) : (
+                <>
+                  <span>Send Recovery Code</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Footer Back Link */}
+          <div className="mt-6 pt-5 border-t border-zinc-100 text-center">
+            <Link
+              href="/login"
+              className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 transition inline-flex items-center gap-1"
+            >
+              <span>Remember your password?</span>
+              <span className="text-[#ff9900] hover:underline">Sign In</span>
+            </Link>
+          </div>
         </div>
       </div>
     </div>

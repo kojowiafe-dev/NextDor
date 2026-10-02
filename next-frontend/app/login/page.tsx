@@ -121,7 +121,19 @@ export default function LoginPage() {
           router.replace("/account");
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === "EMAIL_NOT_VERIFIED") {
+        const searchRedirect =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("redirect")
+            : null;
+        router.push(
+          `/verify-email?email=${encodeURIComponent(error.email || email)}${
+            searchRedirect ? `&redirect=${encodeURIComponent(searchRedirect)}` : ""
+          }`
+        );
+        return;
+      }
       setErrors({
         general:
           error instanceof Error ? error.message : "An unexpected error occurred.",

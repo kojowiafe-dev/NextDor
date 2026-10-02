@@ -139,6 +139,21 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+/// One-time verification and password recovery codes stored as secure hashes.
+model AuthCode {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String    @db.VarChar(255)
+  codeHash  String    @map("code_hash") @db.VarChar(255)
+  type      String    @db.VarChar(50) // "VERIFY_EMAIL" | "RESET_PASSWORD"
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([email, type])
+  @@map("auth_codes")
+}
+
 /// Saved delivery addresses for a user.
 model Address {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

@@ -19,8 +19,8 @@ The system is architected as a high-performance monorepo:
 | **Frontend Styling** | Tailwind CSS v4, Lucide React, Google Outfit Font | Brand Amazon/NextDor palette (`#ff9900`, `#131921`), responsive layouts |
 | **Frontend Caching** | Multi-Tier SWR (`clientCache.ts`, `adminCache.ts`), `fetchDedupe` | Instant navigation, memory + localStorage persistence, deduplication |
 | **Backend Framework** | Fastify v5, `@fastify/cors`, `@fastify/helmet`, `@fastify/swagger` | High-throughput async HTTP server (~76k req/s), OpenAPI documentation |
-| **Database & ORM** | PostgreSQL 16 (Neon Serverless), Prisma ORM 5 | 14 relational models, migrations, ACID transactions, UUID v4 keys |
-| **Authentication** | JWT (HS256), RFC 6749 Opaque Refresh Tokens, bcryptjs | 15-min access tokens, 30-day token family rotation, replay detection |
+| **Database & ORM** | PostgreSQL 16 (Neon Serverless), Prisma ORM 5 | 15 relational models (including `AuthCode`), migrations, ACID transactions, UUID v4 keys |
+| **Authentication** | JWT (HS256), RFC 6749 Opaque Refresh Tokens, bcryptjs | 15-min access tokens, 30-day token family rotation, 6-digit OTP email verification, full session revocation on password reset |
 | **Access Control (RBAC)**| 5-Tier Roles (`CUSTOMER`, `VENDOR_OWNER`, `VENDOR_STAFF`, `ADMIN`, `SUPER_ADMIN`) | Route guards, tenant isolation, admin oversight |
 | **Payments & Escrow** | Paystack (Node SDK), Mobile Money (MTN, Telecel, AT), Cards | Webhooks with HMAC-SHA512 verification, 48-hour delivery escrow |
 | **Media & CDN** | Cloudinary v2, Next.js Image Optimization | Serverless signed image uploads (`/api/upload`), edge transcoding |
@@ -33,8 +33,9 @@ The system is architected as a high-performance monorepo:
 ```
 NextDor/
 ├── next-frontend/                      # Next.js 16 App Router Client
-│   ├── app/                            # 34 active routes
+│   ├── app/                            # 37 active routes
 │   │   ├── (storefront)/               # Customer shopping routes (/, /shop, /product/[slug], /cart, /checkout)
+│   │   ├── (auth)/                     # /login, /register, /verify-email, /forgot-password, /reset-password
 │   │   ├── account/                    # Customer portal (/account, /account/orders, /account/addresses)
 │   │   ├── vendor/                     # Merchant portal (/vendor/dashboard, /vendor/register)
 │   │   ├── admin/                      # Super admin & staff console (/admin, /admin/customers, /admin/analytics)
@@ -57,8 +58,9 @@ NextDor/
 │   │   ├── server.ts                   # Startup entry point (port 4000)
 │   │   ├── config/                     # Environment validation with Zod
 │   │   ├── domain/                     # Martin Fowler Money Value Object & CommissionCalculator
+│   │   ├── lib/                        # EmailService (Resend + console fallback), Prisma, Logger
 │   │   └── modules/                    # Feature vertical slices (Clean Architecture)
-│   │       ├── auth/                   # Register, login, refresh rotation, RBAC guards
+│   │       ├── auth/                   # Register, login, OTP verify, password recovery, refresh rotation
 │   │       ├── users/                  # Customer profile and address repository & service
 │   │       ├── products/               # Catalog, categories, OCC locking, soft delete
 │   │       ├── orders/                 # Checkout, multi-vendor sub-orders, polymorphic findByNumber
@@ -89,6 +91,9 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 - **`/cart`**: Interactive shopping cart with quantity adjustment, price calculation, and subtotal updates.
 - **`/checkout`**: Multi-step checkout with delivery address selection, Ghana delivery options (Standard, Express, Pickup), and Paystack payment initiation.
 - **`/track-order`**: Public order status lookup accepting order numbers (e.g. `ND-00001`) or tracking UUIDs.
+- **`/login` & `/register`**: Seamless customer sign-in with auto-redirect back to checkout or original location.
+- **`/verify-email`**: Mobile-optimized 6-digit OTP entry screen with large numeric keypad spacing, resend cooldown timer, and auto-session start.
+- **`/forgot-password` & `/reset-password`**: Secure password recovery flow with time-limited OTP code verification and password strength enforcement.
 
 ### 👤 Customer Account Portal (`/account`)
 - **`/account`**: Central customer overview with recent orders, default shipping address, and quick shortcuts.
@@ -107,7 +112,7 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 
 ### 🛡️ Admin Management Console (`/admin`)
 - **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), and recent audit activity.
-- **Admin Notifications Center**: Interactive header bell popover (`AdminNotificationsPopover.tsx`) with real-time unread badge, polling vendor KYC alerts (`/vendors/admin/alerts`) and security audit logs (`/auth/audit-logs`).
+- **Admin Notifications Center**: Interactive header bell popover (`AdminNotificationsPopover.tsx`) with real-time unread badge, one-click "Mark read" (zeroes unread count), one-click "Clear all" (switches to empty state), and individual item dismissal with persistent storage.
 - **Admin Navigation**: Zero-scrollbar non-scrollable desktop sidebar (`AdminSidebar.tsx`) with large NextDor logo and full-text action buttons, paired with a touch-friendly auto-dismissing mobile drawer with close (`X`) control.
 - **`/admin/orders`**: Global order management across all marketplace transactions, search by customer or order number, and manual status override with audit logging.
 - **`/admin/products`**: Global catalog directory, pricing audits, admin product creation (`POST /api/v1/products` via `AdminProductCreateForm`), and soft-delete controls.
@@ -122,6 +127,7 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 - **Horizontal Swipeable Category Pills (`CategoryNav.tsx`)**: Responsive mobile category strip right beneath the header enabling instant category switching with horizontal touch swipe, without requiring menu drawer interaction.
 - **Accessible Mobile Drawer (`MobileNav.tsx`)**: Streamlined slide-out navigation with quick portal shortcuts (Admin Portal / Vendor Portal), account management, category directory, and touch-optimized tap targets.
 - **High-Contrast Quick Search (`SearchBar.tsx`)**: High-visibility white search input with instant clear (`X`) button for rapid query adjustments on mobile screens.
+- **Touch-Optimized Verification Screens**: Single-column vertical form layouts with `inputMode="numeric"`, high-contrast buttons, and clear countdown feedback for mobile screens.
 
 ---
 
@@ -163,6 +169,8 @@ To ensure sub-100ms page transitions without stale data or duplicate network rou
 | Area | Implementation Details |
 | :--- | :--- |
 | **Authentication** | Dual-token authentication: short-lived (15 min) JWT access tokens + long-lived (30 day) cryptographically secure opaque refresh tokens stored hashed in the database. |
+| **Email Verification** | 6-digit cryptographic OTP codes stored SHA-256 hashed with 15-minute TTL and max 5 attempts. Unverified accounts cannot authenticate and are redirected to verification with automatic code re-dispatch. |
+| **Password Recovery** | Forgot password endpoint uses constant-time response to prevent email harvesting. Password reset updates bcrypt hash (cost 12), marks code used, and permanently revokes all active refresh token families across all devices. |
 | **Token Family Rotation** | RFC 6749 token family rotation. If a previously used refresh token is presented again (indicating token theft), the entire family is instantly revoked, forcing re-authentication. |
 | **Tenant Isolation** | All vendor operations enforce database isolation: queries are hard-filtered by `vendorId = req.authUser.vendorId`. Merchants cannot view, modify, or delete another merchant's data. |
 | **Optimistic Concurrency**| Product updates include `version: product.version`. If another process updated the product concurrently, the database returns 0 rows updated, throwing `ConflictError` instead of overwriting data. |

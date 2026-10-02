@@ -51,8 +51,9 @@ npm run dev
 3. **Multi-Tenant Security & OCC**: Hardened tenant isolation (`WHERE id = productId AND vendorId = currentVendorId`) for viewing, editing, and soft-deleting products, paired with Optimistic Concurrency Control versioning.
 4. **Cloudinary Asset Storage**: High-speed, signed media pipeline with client-side drag-and-drop uploads and edge CDN delivery.
 5. **Brand Consistency**: Unified Amazon/NextDor orange theme (`#ff9900` / `#f08804`) and motto *"Shop More, Wait Less"*.
-6. **Mobile-First Commerce Navigation**: Persistent thumb bottom bar (`BottomNav.tsx`) with animated cart badge, horizontal swipeable category chips (`CategoryNav.tsx`), quick-clear search bar (`SearchBar.tsx`), and responsive slide-out drawer (`MobileNav.tsx`).
-7. **Super Admin Operations Center**: Live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), real-time notification popover (`AdminNotificationsPopover.tsx`), non-scrollable desktop sidebar with auto-dismissing mobile drawer, and complete product CRUD (`POST /api/v1/products`).
+6. **Verified Email Onboarding & Recovery**: 6-digit OTP code email verification before account activation (`/verify-email`), 60-second cooldown protection, and full password recovery (`/forgot-password` $\rightarrow$ `/reset-password`) that invalidates all active sessions across devices upon password reset.
+7. **Mobile-First Commerce Navigation**: Persistent thumb bottom bar (`BottomNav.tsx`) with animated cart badge, horizontal swipeable category chips (`CategoryNav.tsx`), quick-clear search bar (`SearchBar.tsx`), and responsive slide-out drawer (`MobileNav.tsx`).
+8. **Super Admin Operations Center**: Live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), real-time notification popover (`AdminNotificationsPopover.tsx`) with 1-click "Mark read" and "Clear all", zero-scrollbar non-scrollable desktop sidebar with auto-dismissing mobile drawer, and complete product CRUD (`POST /api/v1/products`).
 
 ---
 

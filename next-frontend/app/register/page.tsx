@@ -133,27 +133,16 @@ export default function RegisterPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      const registeredUser = await register({ name, email, password, phone: phone || undefined });
+      await register({ name, email, password, phone: phone || undefined });
       const searchRedirect =
         typeof window !== "undefined"
           ? new URLSearchParams(window.location.search).get("redirect")
           : null;
 
-      if (registeredUser.role === "admin" || registeredUser.role === "super_admin") {
-        router.replace("/admin");
-      } else if (registeredUser.role === "vendor_owner" || registeredUser.role === "vendor_staff") {
-        router.replace("/vendor/dashboard");
-      } else {
-        if (
-          searchRedirect &&
-          !searchRedirect.startsWith("/admin") &&
-          !searchRedirect.startsWith("/vendor")
-        ) {
-          router.replace(searchRedirect);
-        } else {
-          router.replace("/account");
-        }
-      }
+      const verifyUrl = `/verify-email?email=${encodeURIComponent(email)}${
+        searchRedirect ? `&redirect=${encodeURIComponent(searchRedirect)}` : ""
+      }`;
+      router.replace(verifyUrl);
     } catch (error) {
       setErrors({
         general: error instanceof Error ? error.message : "An unexpected error occurred.",

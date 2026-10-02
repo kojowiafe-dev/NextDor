@@ -145,6 +145,9 @@ NextDor/
 | **Order Confirmation Page** | `next-frontend/app/checkout/success/page.tsx` | `http://localhost:3000/checkout/success` |
 | **Customer Login** | `next-frontend/app/login/page.tsx` | `http://localhost:3000/login` |
 | **Customer Registration** | `next-frontend/app/register/page.tsx` | `http://localhost:3000/register` |
+| **Email Verification (6-Digit OTP)** | `next-frontend/app/verify-email/page.tsx` | `http://localhost:3000/verify-email?email=...` |
+| **Forgot Password Request** | `next-frontend/app/forgot-password/page.tsx` | `http://localhost:3000/forgot-password` |
+| **Reset Password (OTP + New Password)**| `next-frontend/app/reset-password/page.tsx` | `http://localhost:3000/reset-password?email=...` |
 | **User Account Overview** | `next-frontend/app/account/page.tsx` | `http://localhost:3000/account` |
 | **User Saved Delivery Addresses** | `next-frontend/app/account/addresses/page.tsx` | `http://localhost:3000/account/addresses` |
 | **User Wishlist** | `next-frontend/app/account/wishlist/page.tsx` | `http://localhost:3000/account/wishlist` |
@@ -173,7 +176,7 @@ NextDor/
 | **Swipeable Category Pills** | `next-frontend/components/layout/CategoryNav.tsx` | Instant horizontal touch category navigation on mobile + desktop bar |
 | **Mobile Drawer Navigation** | `next-frontend/components/layout/MobileNav.tsx` | Responsive slide-out drawer with quick portal shortcuts & categories |
 | **Interactive Search Input** | `next-frontend/components/layout/SearchBar.tsx` | High-contrast search with instant one-tap clear button |
-| **Admin Notifications Center** | `next-frontend/components/admin/AdminNotificationsPopover.tsx` | Real-time bell popover with unread badge & live alert feeds |
+| **Admin Notifications Center** | `next-frontend/components/admin/AdminNotificationsPopover.tsx` | Real-time bell popover with unread badge, "Mark read" (zero unread), "Clear all" (empty state), and individual item dismissal |
 | **Admin Operations Sidebar** | `next-frontend/components/admin/AdminSidebar.tsx` | Zero-scrollbar non-scrollable desktop sidebar + auto-closing mobile drawer |
 | **Global Footer & Auth Status** | `next-frontend/components/layout/Footer.tsx` | Rendered on all pages ("Shop More, Wait Less") |
 
@@ -188,6 +191,8 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Interactive API Documentation** | OpenAPI UI | `next-backend/src/app.ts` | `GET http://127.0.0.1:4000/docs` |
 | **Server Health & DB Ping** | Health | `src/modules/health/health.routes.ts` | `GET /health` |
 | **User Registration & Login** | Auth Controller | `src/modules/auth/auth.routes.ts` | `POST /api/v1/auth/register`<br>`POST /api/v1/auth/login` |
+| **Email Verification & Resend**| Auth Controller | `src/modules/auth/auth.routes.ts` | `POST /api/v1/auth/verify-email`<br>`POST /api/v1/auth/resend-code` |
+| **Forgot & Reset Password** | Auth Controller | `src/modules/auth/auth.routes.ts` | `POST /api/v1/auth/forgot-password`<br>`POST /api/v1/auth/reset-password` |
 | **Token Refresh & Logout** | Auth Service | `src/modules/auth/auth.service.ts` | `POST /api/v1/auth/refresh`<br>`POST /api/v1/auth/logout` |
 | **Customer Order Placement** | Orders Service | `src/modules/orders/order.service.ts` | `POST /api/v1/orders` (Splits into `VendorOrder` records) |
 | **Customer Orders List** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/orders?page=1&limit=10` |
@@ -221,8 +226,9 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 
 All models are defined in [`next-backend/prisma/schema.prisma`](./next-backend/prisma/schema.prisma):
 
-- **`User`**: Accounts for customers, vendors, and admins (`role`: `CUSTOMER`, `VENDOR_OWNER`, `VENDOR_STAFF`, `ADMIN`, `SUPER_ADMIN`).
-- **`RefreshToken`**: Opaque session tokens tracked by `family` for replay attack detection.
+- **`User`**: Accounts for customers, vendors, and admins (`role`: `CUSTOMER`, `VENDOR_OWNER`, `VENDOR_STAFF`, `ADMIN`, `SUPER_ADMIN`), with `emailVerified` boolean gating access.
+- **`AuthCode`**: Time-limited 6-digit OTP verification codes (`codeHash`, `type`: `VERIFY_EMAIL` / `RESET_PASSWORD`, `expiresAt`, `usedAt`, `attempts`) protecting registrations and password resets.
+- **`RefreshToken`**: Opaque session tokens tracked by `family` for replay attack detection. All active families are revoked on password reset.
 - **`Vendor`**: Merchant entity with `name`, `slug`, `logoUrl`, `momoNumber`, `momoNetwork`, and `commissionRate`.
 - **`Product`**: Catalog item with price, stock, `vendorId` (tenant key), `version` (OCC counter), and `deletedAt` (soft-delete).
 - **`ProductImage`**: Multi-image gallery with sort order.
