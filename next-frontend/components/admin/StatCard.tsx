@@ -30,20 +30,41 @@ export function StatCard({
 
   const trendPrefix = trendDirection === "up" ? "↑" : trendDirection === "down" ? "↓" : "";
 
+  // Adapt font sizing dynamically if value is a long currency string
+  const isLargeNumber = value.length > 11;
+  const isMediumNumber = value.length > 8;
+
   return (
-    <div className="flex items-center gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
-      <div
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconBg}`}
-      >
-        <Icon className={`h-6 w-6 ${iconColor}`} />
+    <div className="flex flex-col justify-between rounded-xl bg-white p-4 sm:p-5 shadow-sm ring-1 ring-zinc-100 hover:shadow-md transition-shadow min-w-0">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs sm:text-sm font-medium leading-snug text-zinc-500 truncate" title={title}>
+          {title}
+        </p>
+        <div
+          className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg ${iconBg}`}
+        >
+          <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${iconColor}`} />
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug text-zinc-500">{title}</p>
-        <p className="mt-1 text-lg font-bold leading-tight text-zinc-900">
+
+      <div className="mt-2 min-w-0">
+        <p
+          className={`font-bold tracking-tight text-zinc-900 truncate ${
+            isLargeNumber
+              ? "text-base sm:text-lg xl:text-xl"
+              : isMediumNumber
+                ? "text-lg sm:text-xl xl:text-2xl"
+                : "text-xl sm:text-2xl"
+          }`}
+          title={value}
+        >
           {value}
         </p>
         {trend && (
-          <p className={`mt-0.5 text-xs font-medium ${trendColor}`}>
+          <p
+            className={`mt-1 text-xs font-medium truncate ${trendColor}`}
+            title={`${trendPrefix} ${trend}`}
+          >
             {trendPrefix} {trend}
           </p>
         )}

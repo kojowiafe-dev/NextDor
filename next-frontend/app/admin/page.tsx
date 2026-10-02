@@ -424,7 +424,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ─── Differentiated KPI Cards ─── */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {isSuperAdmin ? (
           /* SUPER ADMIN METRICS: Financial & Platform Governance */
           <>
@@ -549,34 +549,36 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 p-4">
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 p-4 min-w-0">
               <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
                 <span>COMMISSION RAKE</span>
                 <Percent className="h-4 w-4 text-amber-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-zinc-900">10.0%</p>
+              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 truncate">10.0%</p>
               <p className="mt-1 text-xs text-zinc-500">
                 Standard cut automatically deducted from all third-party merchant checkouts. Flagship store exempt (0%).
               </p>
             </div>
 
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 p-4">
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 p-4 min-w-0">
               <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
                 <span>ESCROW SAFEGUARD</span>
                 <Clock className="h-4 w-4 text-indigo-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-zinc-900">48 Hours</p>
+              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 truncate">48 Hours</p>
               <p className="mt-1 text-xs text-zinc-500">
                 MoMo vendor payout balance held in escrow until 48 hours post customer delivery confirmation to protect against disputes.
               </p>
             </div>
 
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 p-4">
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 p-4 min-w-0">
               <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
                 <span>ESCROW RESERVE DISBURSAL</span>
                 <Lock className="h-4 w-4 text-emerald-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-zinc-900">{formatPrice(escrowHold, "GHS")}</p>
+              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 truncate" title={formatPrice(escrowHold, "GHS")}>
+                {formatPrice(escrowHold, "GHS")}
+              </p>
               <p className="mt-1 text-xs text-zinc-500">
                 Current escrow pool earmarked for merchant Mobile Money settlement (MTN MoMo, Telecel, AT Money).
               </p>

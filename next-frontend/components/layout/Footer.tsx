@@ -1,29 +1,27 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useAuth } from "@/context/AuthContext";
 
-const footerLinks = {
-  shop: [
-    { label: "All Products", href: "/shop" },
-    { label: "Electronics", href: "/category/electronics" },
-    { label: "Laptops", href: "/category/laptop" },
-    { label: "Beauty & Personal Care", href: "/category/beauty-personal-care" },
-    { label: "Bakery", href: "/category/bakery" },
-  ],
-  help: [
-    { label: "Customer Service", href: "/contact" },
-    { label: "Shipping Info", href: "/shipping-info" },
-    { label: "Returns & Refunds", href: "/returns" },
-    { label: "Contact Us", href: "/contact" },
-  ],
-  account: [
-    { label: "Sign In", href: "/login" },
-    { label: "Create Account", href: "/register" },
-    { label: "Your Cart", href: "/cart" },
-    { label: "Track Order", href: "/account/orders" },
-  ],
-};
+const shopLinks = [
+  { label: "All Products", href: "/shop" },
+  { label: "Electronics", href: "/category/electronics" },
+  { label: "Laptops", href: "/category/laptop" },
+  { label: "Beauty & Personal Care", href: "/category/beauty-personal-care" },
+  { label: "Bakery", href: "/category/bakery" },
+];
+
+const helpLinks = [
+  { label: "Customer Service", href: "/contact" },
+  { label: "Shipping Info", href: "/shipping-info" },
+  { label: "Returns & Refunds", href: "/returns" },
+  { label: "Contact Us", href: "/contact" },
+];
 
 export function Footer() {
+  const { isAuthenticated, isAdmin, isVendor, logout } = useAuth();
+
   return (
     <footer className="mt-auto bg-[#131921] text-white">
       <div className="bg-[#37475a] py-3 text-center text-sm hover:bg-[#485769]">
@@ -34,7 +32,7 @@ export function Footer() {
         <div>
           <h3 className="mb-3 font-semibold">Shop</h3>
           <ul className="space-y-2 text-sm text-zinc-300">
-            {footerLinks.shop.map((link) => (
+            {shopLinks.map((link) => (
               <li key={link.href}>
                 <Link href={link.href} className="hover:underline">
                   {link.label}
@@ -46,7 +44,7 @@ export function Footer() {
         <div>
           <h3 className="mb-3 font-semibold">Help</h3>
           <ul className="space-y-2 text-sm text-zinc-300">
-            {footerLinks.help.map((link) => (
+            {helpLinks.map((link) => (
               <li key={link.label}>
                 <Link href={link.href} className="hover:underline">
                   {link.label}
@@ -58,13 +56,81 @@ export function Footer() {
         <div>
           <h3 className="mb-3 font-semibold">Account</h3>
           <ul className="space-y-2 text-sm text-zinc-300">
-            {footerLinks.account.map((link) => (
-              <li key={link.href}>
-                <Link href={link.href} className="hover:underline">
-                  {link.label}
-                </Link>
-              </li>
-            ))}
+            {isAuthenticated ? (
+              <>
+                <li>
+                  <Link href="/account" className="hover:underline">
+                    Your Account
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/account/orders" className="hover:underline">
+                    Your Orders
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/account/wishlist" className="hover:underline">
+                    Wishlist
+                  </Link>
+                </li>
+                {isAdmin && (
+                  <li>
+                    <Link href="/admin" className="font-medium text-[#ff9900] hover:underline">
+                      Admin Portal
+                    </Link>
+                  </li>
+                )}
+                {isVendor && (
+                  <li>
+                    <Link href="/vendor/dashboard" className="font-medium text-purple-400 hover:underline">
+                      Vendor Dashboard
+                    </Link>
+                  </li>
+                )}
+                <li>
+                  <Link href="/cart" className="hover:underline">
+                    Your Cart
+                  </Link>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => logout()}
+                    className="text-left text-zinc-400 hover:text-white hover:underline transition"
+                  >
+                    Sign Out
+                  </button>
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <Link href="/login" className="hover:underline">
+                    Sign In
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/register" className="hover:underline">
+                    Create Account
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/cart" className="hover:underline">
+                    Your Cart
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/account/orders" className="hover:underline">
+                    Track Order
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/vendor/register" className="font-medium text-purple-400 hover:underline">
+                    Sell on Nextdor
+                  </Link>
+                </li>
+              </>
+            )}
           </ul>
         </div>
       </div>
