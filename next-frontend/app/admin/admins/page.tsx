@@ -18,6 +18,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { createSWRCache } from "@/lib/cache/clientCache";
+import { API_BASE } from "@/lib/api-config";
 
 export interface AdminUser {
   id: string;
@@ -46,8 +47,6 @@ export default function AdminTeamPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   useEffect(() => {
     // Only Super Admin has access to team management

@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { MOCK_ORDERS, type AdminOrder } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
 import { adminOrdersCache } from "@/lib/cache/adminCache";
+import { API_BASE } from "@/lib/api-config";
 
 type StatusFilter = "all" | "processing" | "shipped" | "delivered" | "cancelled";
 
@@ -37,8 +38,6 @@ export default function AdminOrdersPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   async function loadOrders(forceRefresh = false) {
     const cacheKey = "all_orders";

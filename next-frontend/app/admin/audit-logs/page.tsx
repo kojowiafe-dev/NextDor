@@ -17,6 +17,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { createSWRCache } from "@/lib/cache/clientCache";
+import { API_BASE } from "@/lib/api-config";
 
 export interface AuditLogEntry {
   id: string;
@@ -55,8 +56,6 @@ export default function AdminAuditLogsPage() {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("ALL");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   useEffect(() => {
     if (!isSuperAdmin) {

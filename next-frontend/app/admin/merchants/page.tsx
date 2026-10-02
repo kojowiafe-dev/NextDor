@@ -19,6 +19,7 @@ import {
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
 import { createSWRCache } from "@/lib/cache/clientCache";
+import { API_BASE } from "@/lib/api-config";
 
 export interface MerchantItem {
   id: string;
@@ -65,8 +66,6 @@ export default function AdminMerchantsPage() {
   // Commission Edit Modal State
   const [editingMerchant, setEditingMerchant] = useState<MerchantItem | null>(null);
   const [newCommissionRate, setNewCommissionRate] = useState<string>("10.0");
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   async function loadMerchants(forceRefresh = false) {
     if (!token) return;

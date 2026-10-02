@@ -28,8 +28,7 @@ interface ProductItem {
   images?: { id: string; url: string; alt?: string }[];
   categories?: { id: string; name: string; slug: string }[];
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
+import { API_BASE } from "@/lib/api-config";
 
 async function getVendorData(slug: string): Promise<{ vendor: VendorDetails; products: ProductItem[] } | null> {
   try {

@@ -23,6 +23,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
+import { API_BASE } from "@/lib/api-config";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { StatCard } from "@/components/admin/StatCard";
 import { useAuth } from "@/context/AuthContext";
@@ -141,8 +142,6 @@ export default function AdminDashboardPage() {
   });
   const [isApproving, setIsApproving] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   async function fetchAlerts(forceRefresh = false) {
     if (!token) return;

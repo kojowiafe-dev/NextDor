@@ -22,8 +22,7 @@ import {
   mapWCProduct,
   mapWCProducts,
 } from "@/lib/woocommerce/mappers";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
+import { API_BASE } from "@/lib/api-config";
 
 function sortToWCParams(sort?: ProductSort): {
   orderby?: string;

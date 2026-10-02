@@ -90,12 +90,27 @@ export async function buildApp() {
       }
 
       // Allow Vercel production & preview deployments (*.vercel.app)
-      if (/^https:\/\/([a-z0-9-]+)\.vercel\.app$/i.test(origin)) {
+      if (/^https:\/\/([a-z0-9-.]+)\.vercel\.app$/i.test(origin)) {
         return cb(null, true);
       }
 
-      // Allow NextDor production custom domains
-      if (/^https:\/\/(www\.)?nextdor\.online$/i.test(origin)) {
+      // Allow Render production & preview deployments (*.onrender.com)
+      if (/^https:\/\/([a-z0-9-.]+)\.onrender\.com$/i.test(origin)) {
+        return cb(null, true);
+      }
+
+      // Allow Netlify deployments (*.netlify.app)
+      if (/^https:\/\/([a-z0-9-.]+)\.netlify\.app$/i.test(origin)) {
+        return cb(null, true);
+      }
+
+      // Allow Cloudflare Pages deployments (*.pages.dev)
+      if (/^https:\/\/([a-z0-9-.]+)\.pages\.dev$/i.test(origin)) {
+        return cb(null, true);
+      }
+
+      // Allow NextDor custom domain and all subdomains (*.nextdor.online)
+      if (/^https:\/\/([a-z0-9-.]+\.)?nextdor\.online$/i.test(origin)) {
         return cb(null, true);
       }
 

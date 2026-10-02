@@ -12,6 +12,7 @@ import {
   isProductsCacheStale,
   invalidateProductsCache,
 } from "@/lib/cache/adminCache";
+import { API_BASE } from "@/lib/api-config";
 
 
 interface ProductImage {
@@ -51,8 +52,6 @@ const stockConfig = {
   LOW_STOCK: { label: "Low Stock", classes: "bg-amber-100 text-amber-700 whitespace-nowrap" },
   OUT_OF_STOCK: { label: "Out of Stock", classes: "bg-red-100 text-red-700 whitespace-nowrap" },
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<ProductItem[]>([]);

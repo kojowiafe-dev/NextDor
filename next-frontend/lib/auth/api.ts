@@ -1,8 +1,7 @@
 /**
  * Real API authentication layer connecting next-frontend to Fastify next-backend.
  */
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
+import { API_BASE } from "@/lib/api-config";
 
 export type AuthRole = "customer" | "admin" | "vendor_owner" | "vendor_staff" | "super_admin";
 

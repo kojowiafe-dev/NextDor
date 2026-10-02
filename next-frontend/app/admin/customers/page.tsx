@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { MOCK_CUSTOMERS, type AdminCustomer } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
 import { createSWRCache } from "@/lib/cache/clientCache";
+import { API_BASE } from "@/lib/api-config";
 
 export const adminCustomersCache = createSWRCache<AdminCustomer[]>("nextdor_admin_customers", 5 * 60_000);
 
@@ -17,8 +18,6 @@ export default function AdminCustomersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   async function loadCustomers(forceRefresh = false) {
     // 1. Instant Cache Retrieval (Stale-While-Revalidate)

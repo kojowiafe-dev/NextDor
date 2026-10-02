@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, ShieldAlert } from "lucide-react";
@@ -41,7 +42,14 @@ export default function AdminLoginPage() {
         setAccessDenied(true);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed.");
+      const msg = err instanceof Error ? err.message : "Sign in failed.";
+      if (msg.toLowerCase().includes("failed to fetch")) {
+        setError(
+          "Failed to reach the backend API (Failed to fetch). The backend may be waking up from sleep, blocked by CORS, or unreachable. Please check backend status and environment variables."
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -67,9 +75,16 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ff9900]">
-            <span className="text-2xl font-black text-zinc-900">N</span>
-          </div>
+          <Link href="/" className="inline-block mb-3 transition hover:opacity-90">
+            <Image
+              src="/logo.png"
+              alt="NextDor"
+              width={160}
+              height={44}
+              priority
+              className="h-10 w-auto object-contain mx-auto"
+            />
+          </Link>
           <h1 className="text-xl font-bold text-white">Admin Portal</h1>
           <p className="mt-1 text-sm text-zinc-500">Nextdor Operations Dashboard</p>
         </div>
@@ -158,9 +173,9 @@ export default function AdminLoginPage() {
               </form>
 
               <div className="mt-6 rounded-lg bg-white/5 p-3 text-center text-xs text-zinc-500">
-                <p className="font-medium text-zinc-400">Demo credentials</p>
-                <p className="mt-1">Email: <span className="text-zinc-300">admin@nextdor.online</span></p>
-                <p>Password: <span className="text-zinc-300">any 6+ chars</span></p>
+                <p className="font-medium text-zinc-400">Default Super Admin credentials</p>
+                <p className="mt-1">Email: <span className="text-zinc-300">admin@nextdor.com</span></p>
+                <p>Password: <span className="text-zinc-300">Admin@NextDor2026!</span></p>
               </div>
             </>
           )}

@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { MOCK_ORDERS, type AdminOrder } from "@/lib/admin/mockData";
 import { formatPrice } from "@/lib/utils";
 import { adminOrdersCache } from "@/lib/cache/adminCache";
+import { API_BASE } from "@/lib/api-config";
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
   delivered: { label: "Delivered", classes: "bg-green-100 text-green-700" },
@@ -33,8 +34,6 @@ export default function AdminOrderDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isLoading, setIsLoading] = useState(!order);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   useEffect(() => {
     if (order) {

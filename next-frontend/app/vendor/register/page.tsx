@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { API_BASE } from "@/lib/api-config";
 import {
   Store,
   CheckCircle2,
@@ -47,8 +48,6 @@ export default function VendorRegisterPage() {
   // Status State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1";
 
   // Real-time Slug Generator
   const previewSlug = storeName
