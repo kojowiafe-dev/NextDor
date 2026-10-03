@@ -44,7 +44,7 @@ export class EmailService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: config.EMAIL_FROM || "NextDor <hello@nextdor.online>",
+          from: config.EMAIL_FROM || "NextDor <nextdor@nextdor.online>",
           to: [to],
           subject,
           html,
