@@ -89,27 +89,45 @@ The application features 34 active routes organized into four distinct operation
 | Route | Description |
 | :--- | :--- |
 | `/vendor/register` | Public vendor application form with MoMo payout registration |
-| `/vendor/dashboard` | 4-tab merchant console (Inventory, Orders & Dispatch, MoMo Escrow Payouts, Settings) |
+| `/vendor/dashboard` | 4-tab merchant console (Inventory, Orders & Dispatch, MoMo Escrow Payouts, Settings) with 3-tier catalog ingestion, responsive mobile cards, and inline OCC edit drawer |
+
+#### Key Vendor Components
+- **`components/vendor/BulkUploadModal.tsx`**: High-speed RFC 4180 CSV/Excel bulk product upload modal with delimiter autodetection, downloadable template, and row validation.
+- **`components/vendor/StoreSyncModal.tsx`**: Per-vendor WooCommerce REST API live synchronization modal with credential storage and one-click manual sync trigger.
+- **`components/vendor/ProductForm.tsx`**: Full product authoring form with compare-at pricing (`regularPrice`), Cloudinary multi-image uploader, and category selector.
 
 ### 4. 🛡️ Admin Management Console (`/admin`)
 | Route | Description |
 | :--- | :--- |
-| `/admin` | Executive dashboard with platform KPIs, gross sales, vendor volume, live database metrics (`totalCustomers`, `totalProducts`), and recent audit logs |
+| `/admin` | Executive dashboard with platform KPIs, gross sales, vendor volume, live database metrics (`totalCustomers`, `totalProducts`), and recent audit logs (excludes cancelled/refunded orders from revenue) |
 | `/admin/orders` | Global marketplace order list with search and manual status overrides |
 | `/admin/products` | Platform product catalog directory, price auditing, and soft delete |
 | `/admin/products/new` | Admin product creation form with Cloudinary upload and flagship vendor assignment |
 | `/admin/customers` | Customer directory with spend history and order counts |
 | `/admin/customers/[id]` | Individual customer profile, order breakdown, and address list |
-| `/admin/analytics` | 30-day revenue charts, daily orders, category sales, and vendor performance |
+| `/admin/analytics` | 30-day revenue charts, daily orders, category sales, and vendor performance (strictly excluding cancelled/refunded orders) |
 | `/admin/merchants` | Merchant verification queue, KYC review, and commission rate adjustment |
 | `/admin/admins` | Internal staff directory and role management |
 | `/admin/settings` | Platform operational settings and escrow parameters |
 
 ---
 
+## 🏷️ Dynamic Pricing & Discount Engine
+
+NextDor features native compare-at pricing and automatic discount calculations across all storefront and portal views:
+- **Pricing Rule**: When `regularPrice > price`, the UI highlights the current selling price, strikes through the previous price (`line-through text-neutral-400`), and computes a percentage-off badge:
+  $$\text{Discount \%} = \text{round}\left(\frac{\text{regularPrice} - \text{price}}{\text{regularPrice}} \times 100\right)\%$$
+- **Omission Rule**: When `regularPrice` is null, undefined, or $\le \text{price}$, only the current selling price is shown, omitting strikethrough styling and discount tags.
+- **Shared Component**: Encapsulated in `components/product/PriceDisplay.tsx` and mirrored on the PDP, search results, storefront cards, and merchant/admin product tables.
+
+---
+
 ## 📱 Mobile-First Commerce & Navigation
 
 The frontend is optimized for seamless one-handed mobile commerce in Ghana:
+- **Responsive Mobile Product Cards (`< md`)**: Bulky 7-column desktop tables cleanly transform into touch-friendly stacked cards displaying thumbnail, title, price, stock status badge, and action drawer controls.
+- **Bottom-Sheet Catalog Ingestion**: Tapping "+ Add Product" opens a non-congested bottom sheet allowing merchants to choose between Single Product Entry, Bulk CSV Upload, or WooCommerce Sync.
+- **Slide-Over OCC Edit Drawer**: Quick price and stock edits happen in an inline drawer with OCC version concurrency checks without page reloads.
 - **Persistent Bottom Navigation (`components/layout/BottomNav.tsx`)**: Fixed at bottom of screen with safe-area padding. 1-tap navigation to Home, Shop, Search, Cart (with live animated item count badge), and Account/Sign In.
 - **Horizontal Swipeable Category Pills (`components/layout/CategoryNav.tsx`)**: Touch-friendly swipeable category bar directly below the header for instantaneous category browsing without opening menus.
 - **High-Contrast Quick Search (`components/layout/SearchBar.tsx`)**: White background, dark text, and a 1-tap clear button (`X`) for rapid mobile product queries.

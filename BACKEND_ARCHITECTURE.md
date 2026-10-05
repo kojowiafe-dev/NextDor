@@ -209,22 +209,30 @@ model User {
   @@index([deletedAt])
 }
 
-enum UserRole   { CUSTOMER ADMIN }
+enum UserRole {
+  CUSTOMER
+  VENDOR_OWNER
+  VENDOR_STAFF
+  ADMIN
+  SUPER_ADMIN
+}
 enum UserStatus { ACTIVE SUSPENDED }
 
 model RefreshToken {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String    @db.Uuid
-  tokenHash String    @unique   // bcrypt hash of the opaque token
-  family    String              // token family for rotation detection
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique   // bcrypt hash of the opaque token
+  lookupHash String?   @unique @db.VarChar(64) // SHA-256 fingerprint for O(1) indexed lookup
+  family     String              // token family for rotation detection
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([family])
+  @@index([lookupHash])
 }
 
 model AuthCode {
@@ -298,16 +306,20 @@ model Product {
   averageRating Decimal       @default(0) @db.Decimal(3, 2)
   reviewCount   Int           @default(0)
   sortOrder     Int           @default(0)
+  version       Int           @default(1)  // Optimistic Concurrency Control (OCC) counter
+  vendorId      String?       @db.Uuid     // Multi-tenant isolation key
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   deletedAt     DateTime?
 
+  vendor        Vendor?       @relation(fields: [vendorId], references: [id])
   categories    Category[]    @relation("ProductCategories")
   images        ProductImage[]
   orderItems    OrderItem[]
   reviews       Review[]
 
   @@index([slug])
+  @@index([vendorId])
   @@index([deletedAt])
   @@index([stockStatus])
 }
@@ -494,6 +506,15 @@ model Vendor {
   payoutMethod          PayoutMethod  @default(MOMO)
   momoNumber            String?
   momoNetwork           String?       // "MTN" | "TELECEL" | "AT"
+  bankName              String?
+  bankAccountNumber     String?
+  bankAccountName       String?
+  // Store integration (WooCommerce / External Sync)
+  wcStoreUrl            String?
+  wcConsumerKey         String?
+  wcConsumerSecret      String?
+  wcLastSyncAt          DateTime?
+  wcSyncStatus          String?       @default("IDLE")
   ownerId               String        @unique @db.Uuid
   owner                 User          @relation(fields: [ownerId], references: [id])
   products              Product[]
@@ -578,6 +599,7 @@ model AuditLog {
 | Rate limit counter | `rl:{ip}:{route}` | 1 min sliding | Auto-expire |
 | Server-side cart | `cart:{sessionId}` | 7 days | Checkout / clear |
 | WC sync lock | `lock:wc-sync` | 30 sec | Released after sync |
+| Vendor WC sync lock | `lock:wc-sync:vendor:{vendorId}` | 10 min | Released after sync completion or failure |
 
 ### Redis data structures used
 
@@ -862,6 +884,7 @@ Products (Catalog)
   GET    /products/:slug               (Single product detail by slug)
   GET    /products/:slug/reviews       (Product reviews)
   POST   /products                     (Create new product - Admin or Super Admin)
+  POST   /products/bulk                (Batch product upload - Admin)
   PATCH  /products/:id                 (Update product details - Admin or Vendor)
   DELETE /products/:id                 (Soft-delete product - Admin)
 
@@ -877,6 +900,10 @@ Vendors (Merchant Portal & Onboarding)
   PATCH  /vendors/portal/me            (Update merchant settings & payout info)
   GET    /vendors/portal/products      (Merchant's isolated product inventory)
   POST   /vendors/portal/products      (Publish new product under merchant vendorId)
+  POST   /vendors/portal/products/bulk (Bulk CSV/Excel catalog ingestion with RFC 4180 parsing)
+  GET    /vendors/portal/sync          (Get WooCommerce sync settings and last run status)
+  PATCH  /vendors/portal/sync          (Configure WooCommerce store URL and REST API keys)
+  POST   /vendors/portal/sync/trigger  (Trigger per-vendor catalog sync with Redis locking)
   PATCH  /vendors/portal/products/:id  (Update vendor product with OCC version lock)
   DELETE /vendors/portal/products/:id  (Tenant-isolated soft delete)
   GET    /vendors/portal/orders        (Partitioned merchant sub-orders queue)
@@ -889,7 +916,7 @@ Admin (role: ADMIN or SUPER_ADMIN)
   PATCH  /admin/orders/:id/status      (Force-update status with audit log note)
   GET    /admin/customers              ?page&limit&search (Customer list with spend/orders)
   GET    /admin/customers/:id          (Customer profile, addresses & order history)
-  GET    /admin/analytics/overview     (Platform metrics with live DB counts: totalCustomers, totalProducts, totalOrders, and 30-day trends)
+  GET    /admin/analytics/overview     (Platform metrics with live DB counts: totalCustomers, totalProducts, totalOrders; excludes CANCELLED/REFUNDED orders from revenue)
   GET    /admin/analytics/summary      (Quick dashboard KPI summary)
   GET    /vendors/admin/alerts         (Pending merchant KYC verification alerts for notifications popover)
   GET    /auth/audit-logs              (Platform governance & security audit logs for notifications popover)

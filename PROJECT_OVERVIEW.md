@@ -24,8 +24,14 @@ Welcome to **NextDor** — an enterprise-grade Ghanaian E-Commerce & Multi-Vendo
 ## 🎯 1. What is NextDor?
 
 NextDor is a hybrid e-commerce ecosystem specifically tailored for the Ghanaian retail market:
-- **Flagship Catalog with Live WooCommerce Sync:** Imports, updates, and synchronizes products in real-time from an existing WordPress/WooCommerce installation via an asynchronous RFC 7240 background worker.
+- **3-Tier Catalog Ingestion:** Multi-channel product onboarding designed for solo artisans, high-volume merchants, and existing store owners:
+  1. *Single Product Ingestion:* Interactive form with drag-and-drop Cloudinary media upload, category mapping, and Optimistic Concurrency Control (OCC).
+  2. *Bulk CSV/Excel Upload:* High-speed batch ingestion with RFC 4180 parsing, delimiter auto-detection, row-by-row error validation, and one-click template download.
+  3. *Per-Vendor WooCommerce Sync:* Live REST API connector (`/wp-json/wc/v3/products`) with credential encryption, background pagination, and Redis distributed locking (`lock:wc-sync:vendor:${id}`) to prevent overlapping sync workers.
+- **Previous Price & Dynamic Discount Engine:** Native support for compare-at pricing. When a product has a previous price (`regularPrice`) greater than its current price (`price`), the UI dynamically renders the current price, a strikethrough cancelled price, and a calculated percentage discount badge (`-X%` / `X% OFF`). If no previous price exists, only the current price is shown without strikethrough.
+- **Mobile-First Uncongested Commerce:** Designed for effortless one-handed smartphone usage in Ghana. Dense 7-column desktop tables cleanly collapse into stacked mobile product cards with badge indicators, bottom-sheet catalog ingestion modals, touch-friendly filter chips, and slide-over OCC edit drawers.
 - **Multi-Vendor Marketplace & Sub-Orders:** Independent Ghanaian vendors (bakeries, fashion designers, electronics stores) can register their own stores, manage private inventory, and receive mobile money payouts (MTN MoMo, Telecel Cash). Multi-vendor checkouts are partitioned into independent `VendorOrder` records so vendors only see and fulfill their own line items.
+- **Financial & Revenue Integrity:** Strict financial accounting standards ensure `CANCELLED` and `REFUNDED` orders are excluded from Gross Marketplace Volume (GMV), platform take-rate revenue (10%), merchant escrow balances (90%), and sales analytics.
 - **Concurrency & Race Condition Prevention:** Built with **Optimistic Concurrency Control (OCC)** so multiple store managers updating the same product never overwrite each other's stock.
 - **Accurate Financial Engine:** Implements Martin Fowler's **Value Object Pattern** with fixed minor-unit integer arithmetic (pesewas), completely eliminating floating-point rounding errors and guaranteeing 100% mathematical conservation on 90% merchant / 10% platform splits.
 - **High-Performance Cloud Media:** Integrated with **Cloudinary** for signed, fast image uploads and responsive edge CDN delivery.
@@ -153,7 +159,9 @@ NextDor/
 | **User Wishlist** | `next-frontend/app/account/wishlist/page.tsx` | `http://localhost:3000/account/wishlist` |
 | **User Order History List** | `next-frontend/app/account/orders/page.tsx` | `http://localhost:3000/account/orders` |
 | **Order Tracking & Timeline** | `next-frontend/app/account/orders/[number]/page.tsx` | `http://localhost:3000/account/orders/[number]` |
-| **Vendor Management Portal** | `next-frontend/app/vendor/dashboard/page.tsx` | `http://localhost:3000/vendor/dashboard`<br>(4 Tabs: Inventory & OCC, Store Orders & Dispatch, MoMo Payouts & 48h Escrow, Store Settings) |
+| **Vendor Management Portal** | `next-frontend/app/vendor/dashboard/page.tsx` | `http://localhost:3000/vendor/dashboard`<br>(4 Tabs: Inventory & OCC, Store Orders & Dispatch, MoMo Payouts & 48h Escrow, Store Settings; responsive mobile cards on `< md`) |
+| **Vendor Bulk Upload Modal** | `next-frontend/components/vendor/BulkUploadModal.tsx` | High-speed RFC 4180 CSV/Excel bulk product upload modal with delimiter autodetection, downloadable template, and row validation |
+| **Vendor Store Sync Modal** | `next-frontend/components/vendor/StoreSyncModal.tsx` | Per-vendor WooCommerce REST API connector modal for syncing external store catalogs with Redis locking |
 | **Cloudinary Image Uploader** | `next-frontend/components/ui/ImageUpload.tsx` | Embedded in Vendor Dashboard & Admin forms |
 | **Cloudinary Upload API** | `next-frontend/app/api/upload/route.ts` | `POST http://localhost:3000/api/upload` |
 | **Merchant Onboarding** | `next-frontend/app/vendor/register/page.tsx` | `http://localhost:3000/vendor/register` |
@@ -193,19 +201,20 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **User Registration & Login** | Auth Controller | `src/modules/auth/auth.routes.ts` | `POST /api/v1/auth/register`<br>`POST /api/v1/auth/login` |
 | **Email Verification & Resend**| Auth Controller | `src/modules/auth/auth.routes.ts` | `POST /api/v1/auth/verify-email`<br>`POST /api/v1/auth/resend-code` |
 | **Forgot & Reset Password** | Auth Controller | `src/modules/auth/auth.routes.ts` | `POST /api/v1/auth/forgot-password`<br>`POST /api/v1/auth/reset-password` |
-| **Token Refresh & Logout** | Auth Service | `src/modules/auth/auth.service.ts` | `POST /api/v1/auth/refresh`<br>`POST /api/v1/auth/logout` |
+| **Token Refresh & Logout** | Auth Service | `src/modules/auth/auth.service.ts` | `POST /api/v1/auth/refresh`<br>`POST /api/v1/auth/logout` (O(1) `lookupHash` index) |
 | **Customer Order Placement** | Orders Service | `src/modules/orders/order.service.ts` | `POST /api/v1/orders` (Splits into `VendorOrder` records) |
 | **Customer Orders List** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/orders?page=1&limit=10` |
 | **Order Lookup (Polymorphic)** | Orders Repo | `src/modules/orders/order.repository.ts` | `GET /api/v1/orders/:idOrNumber` |
 | **Admin Orders Queue** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/admin/orders?limit=100`<br>`PATCH /api/v1/admin/orders/:id/status` |
 | **Admin Customer Aggregates** | Admin Customer Service | `src/modules/admin/admin.customer.service.ts` | `GET /api/v1/admin/customers`<br>`GET /api/v1/admin/customers/:id` |
-| **Admin Platform Analytics** | Admin Analytics Service | `src/modules/admin/admin.analytics.service.ts` | `GET /api/v1/admin/analytics/overview` (Live DB counts: totalCustomers, totalProducts, totalOrders, 30-day revenue series, conversion rate) |
+| **Admin Platform Analytics** | Admin Analytics Service | `src/modules/admin/admin.analytics.service.ts` | `GET /api/v1/admin/analytics/overview` (Excludes `CANCELLED`/`REFUNDED` from revenue; live counts for customers, products, orders) |
 | **Public Catalog & Search** | Products Controller | `src/modules/products/product.routes.ts` | `GET /api/v1/products`<br>`GET /api/v1/products/:slugOrId` |
 | **Admin Product Creation** | Products Service | `src/modules/products/product.service.ts` | `POST /api/v1/products` (Admin & Super Admin) |
+| **Admin Bulk Product Creation**| Products Service | `src/modules/products/product.service.ts` | `POST /api/v1/products/bulk` (Admin batch catalog upload) |
 | **Product Mutation & OCC** | Products Service | `src/modules/products/product.service.ts` | `PATCH /api/v1/products/:id` (Admin & Vendor Owner) |
 | **Product Soft-Deletion** | Products Service | `src/modules/products/product.service.ts` | `DELETE /api/v1/products/:id` (Admin & Super Admin) |
 | **Product Categories** | Products Service | `src/modules/products/product.service.ts` | `GET /api/v1/products/categories` |
-| **WooCommerce Sync Engine** | Sync Service | `src/modules/sync/sync.service.ts` | `POST /api/v1/sync/products`<br>`GET /api/v1/sync/status/:jobId` |
+| **WooCommerce Flagship Sync** | Sync Service | `src/modules/sync/sync.service.ts` | `POST /api/v1/sync/products`<br>`GET /api/v1/sync/status/:jobId` |
 | **Public Marketplace Directory** | Vendor Controller | `src/modules/vendors/vendor.routes.ts` | `GET /api/v1/vendors` |
 | **Public Vendor Storefront** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/:slug` |
 | **Self-Serve Vendor Onboarding**| Vendor Service | `src/modules/vendors/vendor.service.ts` | `POST /api/v1/vendors/register` |
@@ -213,6 +222,8 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Vendor Store Settings** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `PATCH /api/v1/vendors/portal/me` |
 | **Vendor Product Inventory** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/products` |
 | **Vendor Product Creation** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `POST /api/v1/vendors/portal/products` (Locked to `req.vendorId`) |
+| **Vendor Bulk Product Upload** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `POST /api/v1/vendors/portal/products/bulk` (Batch CSV/Excel ingestion) |
+| **Vendor WooCommerce Sync** | Vendor Sync Service | `src/modules/vendors/vendor.routes.ts` | `GET /api/v1/vendors/portal/sync`<br>`PATCH /api/v1/vendors/portal/sync`<br>`POST /api/v1/vendors/portal/sync/trigger` |
 | **Vendor Stock / Price (OCC)** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `PATCH /api/v1/vendors/portal/products/:id` (OCC version counter check) |
 | **Vendor Product Soft-Deletion**| Vendor Service | `src/modules/vendors/vendor.service.ts` | `DELETE /api/v1/vendors/portal/products/:id` (Tenant-isolated soft-delete) |
 | **Vendor Orders & Dispatch** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/orders`<br>`PATCH /api/v1/vendors/portal/orders/:id/status` |
@@ -228,9 +239,9 @@ All models are defined in [`next-backend/prisma/schema.prisma`](./next-backend/p
 
 - **`User`**: Accounts for customers, vendors, and admins (`role`: `CUSTOMER`, `VENDOR_OWNER`, `VENDOR_STAFF`, `ADMIN`, `SUPER_ADMIN`), with `emailVerified` boolean gating access.
 - **`AuthCode`**: Time-limited 6-digit OTP verification codes (`codeHash`, `type`: `VERIFY_EMAIL` / `RESET_PASSWORD`, `expiresAt`, `usedAt`, `attempts`) protecting registrations and password resets.
-- **`RefreshToken`**: Opaque session tokens tracked by `family` for replay attack detection. All active families are revoked on password reset.
-- **`Vendor`**: Merchant entity with `name`, `slug`, `logoUrl`, `momoNumber`, `momoNetwork`, and `commissionRate`.
-- **`Product`**: Catalog item with price, stock, `vendorId` (tenant key), `version` (OCC counter), and `deletedAt` (soft-delete).
+- **`RefreshToken`**: Opaque session tokens tracked by `family` for replay attack detection, indexed with SHA-256 `lookupHash` (`@db.VarChar(64)`) for O(1) rotation lookups. All active families are revoked on password reset.
+- **`Vendor`**: Merchant entity with `name`, `slug`, `logoUrl`, `momoNumber`, `momoNetwork`, `commissionRate`, and WooCommerce sync parameters (`wcStoreUrl`, `wcConsumerKey`, `wcConsumerSecret`, `wcLastSyncAt`, `wcSyncStatus`).
+- **`Product`**: Catalog item with `price`, `regularPrice` (previous/compare-at price for discount percentage calculations and strikethrough), `stockQty`, `vendorId` (tenant key), `version` (OCC counter), and `deletedAt` (soft-delete).
 - **`ProductImage`**: Multi-image gallery with sort order.
 - **`Category`**: Hierarchical category tree.
 - **`Order` & `OrderItem`**: Master customer checkout receipts snapshotting price, quantity, and vendor ID.
@@ -248,6 +259,15 @@ All models are defined in [`next-backend/prisma/schema.prisma`](./next-backend/p
 - **Platform vs. Vendor Revenue Splits:** [`next-backend/src/domain/CommissionCalculator.ts`](./next-backend/src/domain/CommissionCalculator.ts)
   - Computes platform fee and derives merchant net by direct subtraction: `vendorNet = subtotal.subtract(platformFee)`.
   - Guarantees $platformFee + vendorNet \equiv subtotal$ with zero penny leakage.
+- **Financial & Revenue Integrity (Exclusion of Cancelled Orders):**
+  - Strict GAAP/IFRS e-commerce standard: orders in `CANCELLED` or `REFUNDED` status are excluded from all revenue calculations.
+  - Gross Marketplace Volume (GMV), 10% Platform Commission Revenue, 90% Merchant Escrow Balances, Top Products by Revenue, and Category Sales summaries calculate only over valid non-cancelled orders (`status NOT IN ('CANCELLED', 'REFUNDED')`).
+- **Previous Price vs. Current Price & Dynamic Discount Engine:**
+  - When a product's previous price (`regularPrice`) is greater than current selling price (`price`):
+    - Current price is displayed as the primary purchase price.
+    - Previous price is displayed with a strikethrough (`line-through`).
+    - Percentage discount badge is calculated and rendered: `Math.round(((regularPrice - price) / regularPrice) * 100)% OFF` (or `-X%`).
+  - When `regularPrice` is null, undefined, or $\le$ `price`, strikethrough price and percentage badges are omitted.
 
 ---
 

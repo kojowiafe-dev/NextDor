@@ -11,6 +11,9 @@ NextDor is not a toy e-commerce tutorial; it is engineered around **real-world c
 - Strict mathematical conservation of monetary splits (Ghana Cedis & Pesewas).
 - Anti-collision Optimistic Concurrency Control (OCC) for inventory.
 - Strict multi-tenant isolation guarding merchant data.
+- 3-tier catalog ingestion (Single OCC form, bulk RFC 4180 CSV/Excel, and per-vendor WooCommerce REST API connector with Redis distributed locking).
+- Dynamic compare-at pricing and automatic discount calculations (`-X%` / `X% OFF`).
+- GAAP/IFRS revenue integrity strictly excluding cancelled and refunded orders from all financial metrics.
 - Asynchronous integration with external systems (WooCommerce, Paystack, MTN Mobile Money, Cloudinary).
 
 To help developers, architects, and engineering leads master the design decisions in this codebase and advance to the next level of software craftsmanship, this guide maps each **Core Architectural Pillar** of NextDor to the **authoritative industry books** that define it.

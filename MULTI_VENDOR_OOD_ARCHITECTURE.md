@@ -410,6 +410,104 @@ NextDor delegates binary media storage to **Cloudinary** to maintain serverless 
 
 ---
 
+---
+
+## 🚀 11. 3-Tier Multi-Vendor Catalog Ingestion Architecture
+
+Merchants on NextDor vary widely in inventory scale — from boutique artisans with 5 handmade products to distributors with thousands of SKUs. NextDor provides a flexible 3-tier catalog ingestion pipeline:
+
+```
+                  ┌────────────────────────────────────────────────────────┐
+                  │              Merchant Catalog Ingestion               │
+                  └───────────────────────────┬────────────────────────────┘
+                                              │
+         ┌────────────────────────────────────┼────────────────────────────────────┐
+         │                                    │                                    │
+┌────────▼──────────────┐           ┌─────────▼─────────────┐            ┌─────────▼──────────────┐
+│  Tier 1: Single Item  │           │   Tier 2: Bulk CSV    │            │   Tier 3: WooCommerce  │
+│  - Web modal / form   │           │   - RFC 4180 parsing  │            │   - Live REST API v3   │
+│  - Cloudinary upload  │           │   - Delimiter detect  │            │   - Key/Secret crypto  │
+│  - OCC Concurrency    │           │   - Batch validation  │            │   - Redis lock per-vdr │
+│  - Tenant isolation   │           │   - Up to 500 rows    │            │   - Background worker  │
+└───────────────────────┘           └───────────────────────┘            └────────────────────────┘
+```
+
+### 1. Tier 1: Single Product Ingestion
+- **Route:** `POST /api/v1/vendors/portal/products` (Merchant) or `POST /api/v1/products` (Admin).
+- **Execution:** Form inputs validate required fields (`name`, `price`, `description`, `images`, `stockQty`).
+- **OCC Invariant:** Newly created products initialize with `version = 1`. Subsequent mutations require client to pass `version` for optimistic locking.
+
+### 2. Tier 2: Bulk CSV / Excel Upload (`BulkUploadModal.tsx`)
+- **Route:** `POST /api/v1/vendors/portal/products/bulk`.
+- **Parsing Engine:** Robust RFC 4180 parser with quote-escaping and automatic delimiter detection (comma `,`, semicolon `;`, or tab `\t`).
+- **Header Normalization:** Lenient aliases matching common spreadsheet column headers:
+  - Name: `name`, `productname`, `title`, `itemname`
+  - Price: `price`, `regularprice`, `unitprice`, `originalprice`
+  - Sale Price: `saleprice`, `currentprice`, `discountedprice`, `offerprice`
+  - Stock: `stock`, `stockqty`, `quantity`, `inventory`
+  - Category: `category`, `categoryname`, `department`
+  - Image: `image`, `imageurl`, `photo`, `picture`
+- **Client-Side Batch Validation:** Validates required values, positive numbers, and row formats before sending to the backend, rendering row-by-row error indicators.
+- **One-Click Sample Template:** Generates and downloads a clean, pre-formatted CSV template directly in the browser.
+
+### 3. Tier 3: Per-Vendor WooCommerce Live Store Connector (`StoreSyncModal.tsx`)
+- **Routes:**
+  - `GET /api/v1/vendors/portal/sync`: Fetches sync configuration and timestamp of last execution.
+  - `PATCH /api/v1/vendors/portal/sync`: Securely updates WooCommerce store URL, Consumer Key, and Consumer Secret.
+  - `POST /api/v1/vendors/portal/sync/trigger`: Dispatches live asynchronous catalog synchronization.
+- **Distributed Lock with Redis:** Prevents race conditions and duplicate catalog writes by acquiring a distributed lock key:
+  $$\text{lock:wc-sync:vendor:}\{\text{vendorId}\}$$
+  with a 10-minute TTL and automatic release on completion or error.
+- **Tenant Scope Guarantee:** Incoming products are strictly upserted under the calling vendor's `vendorId`, preventing external products from leaking into other stores.
+
+---
+
+## 🏷️ 12. Dynamic Pricing & Financial Integrity Engine
+
+### Compare-At Pricing & Discount Engine
+To motivate conversions without deceptive pricing, NextDor implements an automated discount calculation and strikethrough engine:
+
+1. **Pricing Invariant:**
+   - **Current Price (`price`)**: The actual checkout price charged to the buyer.
+   - **Previous Price (`regularPrice`)**: The original reference or compare-at price.
+2. **Display Rule:**
+   - If $\text{regularPrice} > \text{price}$:
+     - Render `price` as the primary highlight.
+     - Render `regularPrice` with strikethrough styling (`line-through text-neutral-400`).
+     - Calculate and display percentage discount badge:
+       $$\text{Discount \%} = \text{round}\left(\frac{\text{regularPrice} - \text{price}}{\text{regularPrice}} \times 100\right)\%$$
+   - If $\text{regularPrice}$ is empty, null, or $\le \text{price}$:
+     - Render only `price`.
+     - Completely omit strikethrough price and percentage discount badge.
+
+### Financial Accounting & Cancelled Order Exclusion
+In strict compliance with GAAP/IFRS e-commerce standards, cancelled and refunded orders must **never** inflate revenue:
+- **Rule:** Orders with `status IN ('CANCELLED', 'REFUNDED')` are excluded at the database query level from:
+  1. **Gross Marketplace Volume (GMV)**
+  2. **10% Platform Commission Revenue**
+  3. **90% Merchant Escrow Balances**
+  4. **Top-Selling Products by Revenue**
+  5. **Category Sales Velocity Aggregates**
+- **Enforcement:** Enforced consistently across backend analytics services (`admin.analytics.service.ts`) and frontend summary dashboards (`app/admin/page.tsx`).
+
+---
+
+## 📱 13. Mobile-First Uncongested UX Architecture
+
+To deliver world-class usability on mobile devices (over 80% of Ghanaian e-commerce traffic):
+
+1. **Responsive Card Architecture (`< md`)**:
+   - Replaced crowded 7-column desktop tables with clean, stacked mobile product cards.
+   - Each card displays high-resolution thumbnail, product title, current price with strikethrough previous price, stock badge chip, and quick-action menu (Edit OCC Drawer, Delete).
+2. **Bottom-Sheet Ingestion Flow**:
+   - Tapping **"+ Add Product"** on mobile summons an ergonomic bottom sheet offering three clear choices (Single Product Entry, Bulk CSV Upload, WooCommerce Sync).
+3. **Slide-Over OCC Edit Drawer**:
+   - Quick price and stock edits happen in an inline slide-over drawer with OCC version verification, preventing full-page navigation context switches.
+4. **Touch-Optimized Filters**:
+   - Horizontally scrollable status tabs and stock filter pills ("All", "In Stock", "Low Stock", "Out of Stock") with minimum 44px tap targets.
+
+---
+
 ## 🏆 Key Takeaways
 
 1. **Precision Finance**: Minor pesewa integer math avoids JavaScript floating-point errors.
@@ -417,6 +515,8 @@ NextDor delegates binary media storage to **Cloudinary** to maintain serverless 
 3. **Concurrency Safety**: Optimistic locking (OCC version counter) guarantees race-free stock and pricing management.
 4. **Sub-Order Partitioning**: Master orders safely decompose into merchant-isolated line items.
 5. **Automated Escrow Protection**: 48-hour delivery verification window protects buyers while guaranteeing seller MoMo settlement.
-6. **Decoupled Architecture**: High maintainability through SOLID, Dependency Inversion, Clean Architecture, and Cloudinary media pipelines.
+6. **3-Tier Catalog Ingestion**: Single product OCC forms, bulk RFC 4180 CSV batch uploads, and per-vendor WooCommerce REST API connectors with Redis distributed locking.
+7. **Pricing & Revenue Integrity**: Dynamic compare-at discount calculations with strict exclusion of cancelled orders from revenue metrics.
+8. **Decoupled Architecture**: High maintainability through SOLID, Dependency Inversion, Clean Architecture, and Cloudinary media pipelines.
 
 

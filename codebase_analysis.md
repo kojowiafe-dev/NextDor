@@ -25,6 +25,9 @@ The system is architected as a high-performance monorepo:
 | **Payments & Escrow** | Paystack (Node SDK), Mobile Money (MTN, Telecel, AT), Cards | Webhooks with HMAC-SHA512 verification, 48-hour delivery escrow |
 | **Media & CDN** | Cloudinary v2, Next.js Image Optimization | Serverless signed image uploads (`/api/upload`), edge transcoding |
 | **Concurrency Control**| Optimistic Concurrency Control (OCC) | Version counters on products to prevent concurrent write collisions |
+| **Catalog Ingestion**  | 3-Tier Pipeline (Single OCC, RFC 4180 Bulk CSV, WooCommerce Sync) | Flexible onboarding for solo artisans to bulk enterprise catalogs with Redis locking |
+| **Pricing Engine**      | Compare-At Strikethrough & Dynamic Discount % | Dynamic badge computation (`-X%` / `X% OFF`) when `regularPrice > price` |
+| **Financial Accounting**| GAAP/IFRS Revenue & Escrow Invariant | Excludes `CANCELLED` and `REFUNDED` orders from GMV, platform revenue, and escrow |
 
 ---
 
@@ -105,24 +108,30 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 ### 🏪 Merchant Portal (`/vendor`)
 - **`/vendor/register`**: Public merchant onboarding with business registration, owner details, and Mobile Money payout configuration (MTN MoMo, Telecel Cash, AT Money).
 - **`/vendor/dashboard`**: 4-tab reactive console:
-  1. *Inventory & Stock*: Real-time product table, inline price/stock editor with OCC concurrency protection, Cloudinary image uploader, and product publishing modal.
+  1. *Inventory & Stock*: Real-time product table and responsive mobile cards (`< md`), inline price/stock editor with OCC concurrency protection, Cloudinary image uploader, slide-over OCC edit drawer, and 3-tier product ingestion modal:
+     - **Single Product Entry**: Comprehensive modal with live Cloudinary drag-and-drop media upload and OCC locking.
+     - **Bulk CSV/Excel Upload**: Powered by `BulkUploadModal.tsx`, featuring RFC 4180 parsing, delimiter autodetection, row-by-row error validation, and one-click sample template download.
+     - **WooCommerce Store Sync**: Powered by `StoreSyncModal.tsx`, connecting to external stores via `/wp-json/wc/v3/products` with per-vendor Redis distributed locks (`lock:wc-sync:vendor:${id}`).
   2. *Store Orders & Dispatch*: Partitioned sub-orders (`VendorOrder`), buyer address snapshots, line items, and 1-click dispatch progression (`PROCESSING` $\rightarrow$ `SHIPPED` $\rightarrow$ `DELIVERED`).
   3. *MoMo Payouts & Escrow*: Lifetime earnings, funds in 48-hour customer verification escrow, available balances, and automated transfer ledger.
   4. *Store Profile & Settings*: Brand identity, store bio, logo, banner, and settlement phone numbers.
 
 ### 🛡️ Admin Management Console (`/admin`)
-- **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), and recent audit activity.
+- **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), and recent audit activity (strictly excludes `CANCELLED` and `REFUNDED` orders from revenue calculations).
 - **Admin Notifications Center**: Interactive header bell popover (`AdminNotificationsPopover.tsx`) with real-time unread badge, one-click "Mark read" (zeroes unread count), one-click "Clear all" (switches to empty state), and individual item dismissal with persistent storage.
 - **Admin Navigation**: Zero-scrollbar non-scrollable desktop sidebar (`AdminSidebar.tsx`) with large NextDor logo and full-text action buttons, paired with a touch-friendly auto-dismissing mobile drawer with close (`X`) control.
 - **`/admin/orders`**: Global order management across all marketplace transactions, search by customer or order number, and manual status override with audit logging.
-- **`/admin/products`**: Global catalog directory, pricing audits, admin product creation (`POST /api/v1/products` via `AdminProductCreateForm`), and soft-delete controls.
+- **`/admin/products`**: Global catalog directory, pricing audits, admin product creation (`POST /api/v1/products` via `AdminProductCreateForm`), admin bulk upload (`POST /api/v1/products/bulk`), and soft-delete controls.
 - **`/admin/customers` & `/admin/customers/[id]`**: Customer directory with order counts, lifetime spend aggregates, and full customer detail history.
-- **`/admin/analytics`**: 30-day revenue trends, daily order distribution, top-selling categories, and vendor performance breakdowns.
+- **`/admin/analytics`**: 30-day revenue trends, daily order distribution, top-selling categories, and vendor performance breakdowns (excluding cancelled/refunded orders).
 - **`/admin/merchants`**: Merchant application queue, KYC review, commission rate adjustment, and one-click approval/suspension.
 - **`/admin/admins`**: Administrative staff directory and role assignment.
 - **`/admin/settings`**: Platform operational parameters, escrow durations, and maintenance modes.
 
 ### 📱 Mobile-First Navigation & Usability
+- **Responsive Mobile Product Cards (`< md`)**: Eliminates horizontal scroll congestion on mobile phones by transforming 7-column desktop tables into stacked product cards with high-contrast badge indicators and one-tap action menus.
+- **Bottom-Sheet Catalog Ingestion**: Tapping "+ Add Product" on mobile triggers an accessible bottom sheet modal with options for Single Entry, Bulk CSV, or WooCommerce Sync.
+- **Slide-Over OCC Edit Drawer**: Quick edits to stock and price occur directly in a slide-over drawer without full page reloads.
 - **Persistent Bottom Navigation (`BottomNav.tsx`)**: High-convenience thumb navigation bar fixed at viewport bottom with 1-tap access to Home, Shop/Explore, Search, Cart (with live animated item count badge), and Account/Sign In.
 - **Horizontal Swipeable Category Pills (`CategoryNav.tsx`)**: Responsive mobile category strip right beneath the header enabling instant category switching with horizontal touch swipe, without requiring menu drawer interaction.
 - **Accessible Mobile Drawer (`MobileNav.tsx`)**: Streamlined slide-out navigation with quick portal shortcuts (Admin Portal / Vendor Portal), account management, category directory, and touch-optimized tap targets.
@@ -172,10 +181,13 @@ To ensure sub-100ms page transitions without stale data or duplicate network rou
 | **Email Verification** | 6-digit cryptographic OTP codes stored SHA-256 hashed with 15-minute TTL and max 5 attempts. Unverified accounts cannot authenticate and are redirected to verification with automatic code re-dispatch. |
 | **Password Recovery** | Forgot password endpoint uses constant-time response to prevent email harvesting. Password reset updates bcrypt hash (cost 12), marks code used, and permanently revokes all active refresh token families across all devices. |
 | **Token Family Rotation** | RFC 6749 token family rotation. If a previously used refresh token is presented again (indicating token theft), the entire family is instantly revoked, forcing re-authentication. |
+| **O(1) Token Indexing**   | Refresh tokens include a SHA-256 `lookupHash` index for microsecond indexed lookups before bcrypt verification, eliminating table-scan denial-of-service vulnerabilities. |
 | **Tenant Isolation** | All vendor operations enforce database isolation: queries are hard-filtered by `vendorId = req.authUser.vendorId`. Merchants cannot view, modify, or delete another merchant's data. |
 | **Optimistic Concurrency**| Product updates include `version: product.version`. If another process updated the product concurrently, the database returns 0 rows updated, throwing `ConflictError` instead of overwriting data. |
+| **Distributed Locking**   | Asynchronous WooCommerce synchronization workers acquire Redis distributed locks (`lock:wc-sync:vendor:${id}`) to prevent race conditions or duplicate product ingestion. |
 | **Audit Logging** | High-privilege administrative and merchant actions (merchant approval, commission changes, order status overrides) create immutable `AuditLog` records containing user ID, IP address, timestamp, and payload snapshots. |
 | **Payment Integrity** | Paystack webhooks are validated using HMAC-SHA512 with timing-safe comparison (`crypto.timingSafeEqual`) on the raw request body before processing. |
+| **Financial Integrity**   | Orders with `status IN ('CANCELLED', 'REFUNDED')` are strictly excluded from GMV, 10% platform commission revenue, and 90% merchant escrow reserves. |
 
 ---
 

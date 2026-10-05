@@ -133,6 +133,7 @@ src/
 - `GET /grouped-by-merchant`: Active merchant storefront preview groupings
 - `GET /:slug`: Full product detail by URL slug
 - `POST /`: Create new product (Admin or Super Admin only, assigns flagship vendor, invalidates Redis cache)
+- `POST /bulk`: Batch catalog upload (Admin or Super Admin only)
 - `PATCH /:id`: Update product details (Admin or Vendor with OCC version check)
 - `DELETE /:id`: Soft-delete product (Admin only)
 
@@ -148,6 +149,10 @@ src/
 - `PATCH /portal/me`: Update merchant settings
 - `GET /portal/products`: Merchant's isolated inventory
 - `POST /portal/products`: Publish new product
+- `POST /portal/products/bulk`: Bulk CSV/Excel product upload with RFC 4180 parsing and row validation
+- `GET /portal/sync`: Get vendor WooCommerce sync settings and last run status
+- `PATCH /portal/sync`: Configure WooCommerce store URL and REST API keys
+- `POST /portal/sync/trigger`: Trigger per-vendor catalog synchronization (Redis locked)
 - `PATCH /portal/products/:id`: Edit vendor product with OCC concurrency lock
 - `DELETE /portal/products/:id`: Tenant-isolated soft delete
 - `GET /portal/orders`: Partitioned merchant sub-orders queue
@@ -161,7 +166,7 @@ src/
 - `PATCH /orders/:id/status`: Force-update order status with audit log note
 - `GET /customers`: Customer directory with order counts and spend totals
 - `GET /customers/:id`: Customer detail with address and order history
-- `GET /analytics/overview`: 30-day revenue metrics, daily trends, volume charts, and live database counts (`totalCustomers`, `totalProducts`, `totalOrders`)
+- `GET /analytics/overview`: 30-day revenue metrics, daily trends, volume charts, and live database counts (`totalCustomers`, `totalProducts`, `totalOrders`; strictly excludes `CANCELLED` and `REFUNDED` orders from revenue)
 - `GET /analytics/summary`: High-level dashboard summary metrics
 - `GET /merchants`: Merchant verification queue
 - `PATCH /merchants/:id/status`: Approve, suspend, or update commission rates
@@ -171,10 +176,13 @@ src/
 ## 🔒 Security Highlights
 
 1. **RFC 6749 Refresh Token Family Rotation**: Prevents replay attacks; re-using a revoked token invalidates the entire token family.
-2. **Tenant Isolation**: All vendor database queries strictly enforce `vendorId = req.authUser.vendorId`.
-3. **Optimistic Concurrency Control (OCC)**: Version counters on product updates eliminate race conditions.
-4. **Paystack HMAC Verification**: Constant-time signature verification (`crypto.timingSafeEqual`) on all incoming payment webhooks.
-5. **Integer Money Math**: Martin Fowler `Money` Value Object uses integer pesewas to eliminate floating point rounding leaks.
+2. **O(1) SHA-256 Lookup Fingerprint**: Fast indexed `lookupHash` on refresh tokens prevents database table scans, combining microsecond lookups with bcrypt tamper-proof security.
+3. **Tenant Isolation**: All vendor database queries strictly enforce `vendorId = req.authUser.vendorId`.
+4. **Optimistic Concurrency Control (OCC)**: Version counters on product updates eliminate race conditions.
+5. **Distributed Job Locking**: Redis locks (`lock:wc-sync:vendor:${id}`) prevent duplicate or overlapping WooCommerce synchronization workers.
+6. **Paystack HMAC Verification**: Constant-time signature verification (`crypto.timingSafeEqual`) on all incoming payment webhooks.
+7. **Integer Money Math**: Martin Fowler `Money` Value Object uses integer pesewas to eliminate floating point rounding leaks.
+8. **Financial Accounting Integrity**: Cancelled and refunded orders are strictly excluded from all platform revenue, GMV, and merchant escrow metrics.
 
 ---
 
