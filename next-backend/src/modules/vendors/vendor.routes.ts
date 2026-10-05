@@ -19,6 +19,7 @@ import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
 import { AuthService } from "../auth/auth.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
+import { SyncService } from "../sync/sync.service.js";
 
 // Extend FastifyRequest with vendor tenant context
 declare module "fastify" {
@@ -388,6 +389,129 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(201).send({
         success: true,
         data: { product },
+      });
+    }
+  );
+
+  /**
+   * POST /vendors/portal/products/bulk
+   * Bulk upload products from CSV or batch JSON for this vendor.
+   */
+  app.post(
+    "/portal/products/bulk",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Bulk upload products for authenticated vendor",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          required: ["items"],
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["name", "price"],
+                properties: {
+                  name: { type: "string" },
+                  description: { type: "string" },
+                  shortDesc: { type: "string" },
+                  price: { type: "number" },
+                  salePrice: { type: "number", nullable: true },
+                  stockQty: { type: "integer", nullable: true },
+                  categoryName: { type: "string" },
+                  imageUrl: { type: "string" },
+                  sku: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const body = req.body as { items: any[] };
+      const result = await vendorService.bulkCreateVendorProducts(req.vendorId!, body.items);
+      return reply.status(201).send({
+        success: true,
+        data: result,
+      });
+    }
+  );
+
+  /**
+   * GET /vendors/portal/sync
+   * Get vendor store sync integration settings and status.
+   */
+  app.get(
+    "/portal/sync",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Get WooCommerce store integration settings and sync status",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (req, reply) => {
+      const data = await vendorService.getSyncSettings(req.vendorId!);
+      return reply.send({ success: true, data });
+    }
+  );
+
+  /**
+   * PATCH /vendors/portal/sync
+   * Save vendor WooCommerce integration settings.
+   */
+  app.patch(
+    "/portal/sync",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Save WooCommerce store URL and API credentials",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          properties: {
+            wcStoreUrl: { type: "string" },
+            wcConsumerKey: { type: "string" },
+            wcConsumerSecret: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const body = req.body as any;
+      const data = await vendorService.updateSyncSettings(req.vendorId!, body);
+      return reply.send({ success: true, data });
+    }
+  );
+
+  /**
+   * POST /vendors/portal/sync/trigger
+   * Trigger manual sync of vendor's WooCommerce catalog.
+   */
+  app.post(
+    "/portal/sync/trigger",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Trigger manual WooCommerce catalog sync for vendor",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (req, reply) => {
+      SyncService.syncVendorFromWooCommerce(req.vendorId!).catch((err) => {
+        req.log.error({ err, vendorId: req.vendorId }, "Vendor WooCommerce sync failed in background");
+      });
+
+      return reply.send({
+        success: true,
+        message: "WooCommerce catalog sync triggered in background.",
       });
     }
   );

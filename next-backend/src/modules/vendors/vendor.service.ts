@@ -18,10 +18,12 @@ import { authService } from "../auth/auth.service.js";
 import {
   ConflictError,
   NotFoundError,
+  BadRequestError,
 } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
+import { flushPattern } from "../../lib/redis.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { slugify } from "../../lib/slugify.js";
@@ -467,4 +469,176 @@ export class VendorService {
   async getVendorPayoutsAndEscrow(vendorId: string, page = 1, limit = 20, status?: string) {
     return this.vendorRepo.findVendorPayouts(vendorId, { page, limit, status });
   }
+
+  /**
+   * Bulk creates products for a vendor from parsed CSV / Excel rows.
+   */
+  async bulkCreateVendorProducts(vendorId: string, items: BulkProductItemDto[]) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestError("No products provided for bulk creation.");
+    }
+    if (items.length > 500) {
+      throw new BadRequestError("Bulk import limit is 500 products per upload.");
+    }
+
+    const created: any[] = [];
+    const errors: Array<{ row: number; name: string; message: string }> = [];
+    const categoryCache = new Map<string, string>();
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const rowNum = i + 1;
+
+      try {
+        if (!item.name || typeof item.name !== "string" || item.name.trim().length < 2) {
+          throw new Error("Product name must be at least 2 characters.");
+        }
+        const price = Number(item.price);
+        if (isNaN(price) || price <= 0) {
+          throw new Error("Price must be a valid number greater than 0.");
+        }
+        const salePrice =
+          item.salePrice != null && !isNaN(Number(item.salePrice)) && Number(item.salePrice) > 0
+            ? Number(item.salePrice)
+            : null;
+        const stockQty =
+          item.stockQty != null && !isNaN(Number(item.stockQty))
+            ? Math.max(0, Math.floor(Number(item.stockQty)))
+            : 0;
+
+        let slug = slugify(item.name);
+        const existingSlug = await prisma.product.findUnique({ where: { slug } });
+        if (existingSlug) {
+          slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+
+        const stockStatus =
+          stockQty <= 0
+            ? "OUT_OF_STOCK"
+            : stockQty <= 3
+            ? "LOW_STOCK"
+            : "IN_STOCK";
+
+        // Category resolution
+        let categoryId: string | null = null;
+        const catName = item.categoryName?.trim();
+        if (catName) {
+          const lowerCat = catName.toLowerCase();
+          if (categoryCache.has(lowerCat)) {
+            categoryId = categoryCache.get(lowerCat)!;
+          } else {
+            let cat = await prisma.category.findFirst({
+              where: { name: { equals: catName, mode: "insensitive" } },
+            });
+            if (!cat) {
+              const catSlug = slugify(catName);
+              cat = await prisma.category.create({
+                data: {
+                  name: catName,
+                  slug: `${catSlug}-${Math.floor(100 + Math.random() * 900)}`,
+                },
+              });
+            }
+            categoryId = cat.id;
+            categoryCache.set(lowerCat, cat.id);
+          }
+        }
+
+        const product = await this.vendorRepo.createProduct({
+          name: item.name.trim(),
+          slug,
+          description: item.description?.trim() || item.name.trim(),
+          shortDesc: item.shortDesc?.trim() || null,
+          price,
+          salePrice,
+          stockQty,
+          stockStatus,
+          version: 1,
+          vendor: { connect: { id: vendorId } },
+          categories: categoryId ? { connect: [{ id: categoryId }] } : undefined,
+          images: item.imageUrl?.trim()
+            ? {
+                create: [
+                  {
+                    url: item.imageUrl.trim(),
+                    alt: item.name.trim(),
+                    sortOrder: 0,
+                  },
+                ],
+              }
+            : undefined,
+        });
+
+        created.push(product);
+      } catch (err: any) {
+        errors.push({
+          row: rowNum,
+          name: item.name || `Row ${rowNum}`,
+          message: err.message || "Failed to create product",
+        });
+      }
+    }
+
+    // Invalidate product caches
+    flushPattern("products:list:*").catch(() => {});
+
+    return {
+      totalProcessed: items.length,
+      createdCount: created.length,
+      failedCount: errors.length,
+      errors,
+      products: created.slice(0, 10),
+    };
+  }
+
+  /**
+   * Get vendor store sync integration settings.
+   */
+  async getSyncSettings(vendorId: string) {
+    const vendor = await this.vendorRepo.findById(vendorId);
+    if (!vendor) throw new NotFoundError("Vendor not found.");
+
+    return {
+      wcStoreUrl: vendor.wcStoreUrl || "",
+      wcConsumerKey: vendor.wcConsumerKey ? `${vendor.wcConsumerKey.slice(0, 6)}...` : "",
+      hasSecret: Boolean(vendor.wcConsumerSecret),
+      wcLastSyncAt: vendor.wcLastSyncAt,
+      wcSyncStatus: vendor.wcSyncStatus || "IDLE",
+    };
+  }
+
+  /**
+   * Update vendor store sync integration settings.
+   */
+  async updateSyncSettings(
+    vendorId: string,
+    data: { wcStoreUrl?: string; wcConsumerKey?: string; wcConsumerSecret?: string }
+  ) {
+    const updateData: any = {};
+    if (data.wcStoreUrl !== undefined) updateData.wcStoreUrl = data.wcStoreUrl?.trim() || null;
+    if (data.wcConsumerKey !== undefined) updateData.wcConsumerKey = data.wcConsumerKey?.trim() || null;
+    if (data.wcConsumerSecret !== undefined) updateData.wcConsumerSecret = data.wcConsumerSecret?.trim() || null;
+
+    const updated = await this.vendorRepo.updateProfile(vendorId, updateData);
+
+    return {
+      wcStoreUrl: updated.wcStoreUrl || "",
+      wcConsumerKey: updated.wcConsumerKey ? `${updated.wcConsumerKey.slice(0, 6)}...` : "",
+      hasSecret: Boolean(updated.wcConsumerSecret),
+      wcLastSyncAt: updated.wcLastSyncAt,
+      wcSyncStatus: updated.wcSyncStatus || "IDLE",
+    };
+  }
+}
+
+export interface BulkProductItemDto {
+  name: string;
+  description?: string;
+  shortDesc?: string;
+  price: number;
+  salePrice?: number | null;
+  stockQty?: number | null;
+  categoryName?: string;
+  imageUrl?: string;
+  sku?: string;
 }

@@ -228,6 +228,42 @@ export class ProductService {
   }
 
   /**
+   * Bulk creates products in catalog (Admin or bulk ingestion).
+   */
+  async bulkCreateProducts(items: any[], defaultVendorId?: string) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestError("No products provided for bulk upload.");
+    }
+    const created: any[] = [];
+    const errors: Array<{ row: number; name: string; message: string }> = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      try {
+        const prod = await this.createProduct({
+          ...item,
+          vendorId: item.vendorId || defaultVendorId,
+        });
+        created.push(prod);
+      } catch (err: any) {
+        errors.push({
+          row: i + 1,
+          name: item.name || `Row ${i + 1}`,
+          message: err.message || "Failed to create product",
+        });
+      }
+    }
+
+    return {
+      totalProcessed: items.length,
+      createdCount: created.length,
+      failedCount: errors.length,
+      errors,
+      products: created.slice(0, 10),
+    };
+  }
+
+  /**
    * Updates an existing product and evicts corresponding cache keys.
    */
   async updateProduct(id: string, input: {

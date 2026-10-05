@@ -41,8 +41,13 @@ import {
   Building2,
   FileText,
   Trash2,
+  Search,
+  FileSpreadsheet,
+  UploadCloud,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { BulkUploadModal } from "@/components/vendor/BulkUploadModal";
+import { StoreSyncModal } from "@/components/vendor/StoreSyncModal";
 
 type DashboardTab = "inventory" | "orders" | "payouts" | "settings";
 
@@ -193,14 +198,34 @@ export default function VendorDashboardPage() {
   const [editStock, setEditStock] = useState<string>("");
   const [isSavingProduct, setIsSavingProduct] = useState(false);
 
-  // Add product modal
+  // Add product modal & Bulk Ingestion Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showAddChoiceModal, setShowAddChoiceModal] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [productStockFilter, setProductStockFilter] = useState<"ALL" | "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK">("ALL");
+
   const [newProdName, setNewProdName] = useState("");
   const [newProdDesc, setNewProdDesc] = useState("");
   const [newProdPrice, setNewProdPrice] = useState("");
   const [newProdStock, setNewProdStock] = useState("10");
   const [newProdImage, setNewProdImage] = useState("");
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+
+  const filteredProducts = products.filter((p) => {
+    if (productStockFilter !== "ALL" && p.stockStatus !== productStockFilter) {
+      return false;
+    }
+    if (productSearch.trim()) {
+      const q = productSearch.toLowerCase();
+      return (
+        p.name.toLowerCase().includes(q) ||
+        (p.description && p.description.toLowerCase().includes(q))
+      );
+    }
+    return true;
+  });
 
   // Orders Tab Filters & Actions
   const [selectedOrderStatus, setSelectedOrderStatus] = useState<string>("ALL");
@@ -784,11 +809,12 @@ export default function VendorDashboardPage() {
             ) : null}
 
             <button
-              onClick={() => setShowAddModal(true)}
+              type="button"
+              onClick={() => setShowAddChoiceModal(true)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
             >
               <Plus className="h-4 w-4" />
-              <span>Add New Product</span>
+              <span>Add Products</span>
             </button>
 
             <button
@@ -797,24 +823,25 @@ export default function VendorDashboardPage() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition"
             >
               <LogOut className="h-3.5 w-3.5" />
-              <span>Sign Out</span>
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
 
-        {/* 4-Tab Navigation Bar */}
+        {/* 4-Tab Navigation Bar (Mobile Scrollable & Compact) */}
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-1 border-t border-zinc-100 pt-1">
+          <div className="flex space-x-1 border-t border-zinc-100 pt-1 overflow-x-auto no-scrollbar scroll-smooth">
             <button
               onClick={() => setActiveTab("inventory")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs font-semibold whitespace-nowrap transition ${
                 activeTab === "inventory"
                   ? "border-purple-600 text-purple-700"
                   : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
               }`}
             >
-              <Package className="h-4 w-4" />
-              <span>Inventory & Stock</span>
+              <Package className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Inventory</span>
+              <span className="hidden sm:inline">Inventory & Stock</span>
               <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 font-bold">
                 {products.length}
               </span>
@@ -822,14 +849,15 @@ export default function VendorDashboardPage() {
 
             <button
               onClick={() => setActiveTab("orders")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs font-semibold whitespace-nowrap transition ${
                 activeTab === "orders"
                   ? "border-purple-600 text-purple-700"
                   : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
               }`}
             >
-              <ShoppingBag className="h-4 w-4" />
-              <span>Store Orders & Dispatch</span>
+              <ShoppingBag className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Orders</span>
+              <span className="hidden sm:inline">Store Orders & Dispatch</span>
               <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700 font-bold">
                 {orders.length}
               </span>
@@ -837,14 +865,15 @@ export default function VendorDashboardPage() {
 
             <button
               onClick={() => setActiveTab("payouts")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs font-semibold whitespace-nowrap transition ${
                 activeTab === "payouts"
                   ? "border-purple-600 text-purple-700"
                   : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
               }`}
             >
-              <CreditCard className="h-4 w-4" />
-              <span>MoMo Payouts & 48h Escrow</span>
+              <CreditCard className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Payouts</span>
+              <span className="hidden sm:inline">MoMo Payouts & 48h Escrow</span>
               {escrowSummary?.inEscrowAmount ? (
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-800 font-bold">
                   {formatPrice(escrowSummary.inEscrowAmount, "GHS")}
@@ -854,14 +883,15 @@ export default function VendorDashboardPage() {
 
             <button
               onClick={() => setActiveTab("settings")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs font-semibold whitespace-nowrap transition ${
                 activeTab === "settings"
                   ? "border-purple-600 text-purple-700"
                   : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
               }`}
             >
-              <Settings className="h-4 w-4" />
-              <span>Store Profile & Settings</span>
+              <Settings className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Settings</span>
+              <span className="hidden sm:inline">Store Profile & Settings</span>
             </button>
           </div>
         </div>
@@ -979,35 +1009,149 @@ export default function VendorDashboardPage() {
               </div>
             </div>
 
-            {/* Products Table with OCC */}
+            {/* Products Card Container with Search, Filters, Desktop Table & Mobile Cards */}
             <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 px-6 py-4">
+              {/* Header Action Bar */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 px-4 sm:px-6 py-4">
                 <div>
                   <h2 className="text-base font-semibold text-zinc-900">Store Inventory & Real-Time Stock</h2>
                   <p className="text-xs text-zinc-500">
                     Protected by Optimistic Concurrency Control (OCC) to prevent lost updates across multiple store managers.
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+
+                {/* Desktop Quick Actions */}
+                <div className="hidden sm:flex items-center gap-2">
                   <button
                     onClick={handleManualRefresh}
                     disabled={isDataLoading}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition"
+                    title="Refresh inventory"
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isDataLoading ? "animate-spin" : ""}`} />
+                    <RefreshCw className={`h-3.5 w-3.5 ${isDataLoading ? "animate-spin text-purple-600" : ""}`} />
                     <span>Refresh</span>
                   </button>
+
+                  <button
+                    onClick={() => setShowSyncModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition shadow-xs"
+                    title="Sync catalog with your WooCommerce store"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    <span>Sync Store</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowBulkModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition shadow-xs"
+                    title="Bulk upload products via CSV/Excel"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                    <span>Bulk CSV</span>
+                  </button>
+
                   <button
                     onClick={() => setShowAddModal(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    <span>Add Product</span>
+                    <span>Add Single</span>
+                  </button>
+                </div>
+
+                {/* Mobile Single Action Button (Uncongested & Thumb-Friendly) */}
+                <div className="flex sm:hidden items-center justify-between gap-2">
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={isDataLoading}
+                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isDataLoading ? "animate-spin text-purple-600" : ""}`} />
+                    <span>Refresh</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowAddChoiceModal(true)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-purple-700 active:scale-[0.98] transition"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>+ Add Products</span>
                   </button>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Search & Stock Filter Toolbar */}
+              <div className="border-b border-zinc-100 bg-zinc-50/50 p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+                  {/* Search Input */}
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name or description..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-8 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-purple-600 focus:outline-none"
+                    />
+                    {productSearch && (
+                      <button
+                        onClick={() => setProductSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Stock Filter Chips (Scrollable on small screens) */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                    {[
+                      { key: "ALL", label: "All Items", count: products.length },
+                      { key: "IN_STOCK", label: "In Stock", count: products.filter((p) => p.stockStatus === "IN_STOCK").length },
+                      { key: "LOW_STOCK", label: "Low Stock", count: products.filter((p) => p.stockStatus === "LOW_STOCK").length },
+                      { key: "OUT_OF_STOCK", label: "Out of Stock", count: products.filter((p) => p.stockStatus === "OUT_OF_STOCK").length },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setProductStockFilter(tab.key as any)}
+                        className={`rounded-lg px-2.5 py-1 text-xs font-medium whitespace-nowrap transition ${
+                          productStockFilter === tab.key
+                            ? "bg-purple-600 text-white shadow-xs font-semibold"
+                            : "bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-100"
+                        }`}
+                      >
+                        {tab.label}
+                        <span className={`ml-1.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                          productStockFilter === tab.key ? "bg-purple-700/60 text-white" : "bg-zinc-100 text-zinc-500"
+                        }`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Filter Status Line */}
+                {(productSearch || productStockFilter !== "ALL") && (
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1">
+                    <span>
+                      Showing {filteredProducts.length} of {products.length} products
+                    </span>
+                    <button
+                      onClick={() => {
+                        setProductSearch("");
+                        setProductStockFilter("ALL");
+                      }}
+                      className="text-purple-600 hover:text-purple-800 font-semibold"
+                    >
+                      Reset filters
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* DESKTOP VIEW: Detailed OCC Table (Hidden on mobile) */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-zinc-100 bg-zinc-50/50 text-xs font-semibold text-zinc-500">
@@ -1027,14 +1171,33 @@ export default function VendorDashboardPage() {
                           Loading merchant inventory...
                         </td>
                       </tr>
-                    ) : products.length === 0 ? (
+                    ) : filteredProducts.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-12 text-center text-zinc-500">
-                          No products found. Click "Add New Product" to stock your store!
+                          {products.length === 0 ? (
+                            <div className="space-y-3">
+                              <Package className="mx-auto h-8 w-8 text-zinc-300" />
+                              <p className="font-semibold text-zinc-700">Your store catalog is empty</p>
+                              <p className="text-xs text-zinc-400">Choose a method above to add your first products!</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="font-medium text-zinc-700">No products match your current search or filter.</p>
+                              <button
+                                onClick={() => {
+                                  setProductSearch("");
+                                  setProductStockFilter("ALL");
+                                }}
+                                className="mt-2 text-xs font-semibold text-purple-600 hover:underline"
+                              >
+                                Clear search & filters
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ) : (
-                      products.map((prod) => {
+                      filteredProducts.map((prod) => {
                         const isEditing = editingId === prod.id;
                         const primaryImg = prod.images?.[0]?.url;
 
@@ -1049,8 +1212,8 @@ export default function VendorDashboardPage() {
                                     prod.name.charAt(0)
                                   )}
                                 </div>
-                                <div>
-                                  <p className="font-semibold text-zinc-900">{prod.name}</p>
+                                <div className="min-w-0 max-w-xs">
+                                  <p className="font-semibold text-zinc-900 truncate">{prod.name}</p>
                                   <p className="text-xs text-zinc-400 line-clamp-1">{prod.description}</p>
                                 </div>
                               </div>
@@ -1164,6 +1327,162 @@ export default function VendorDashboardPage() {
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* MOBILE VIEW: Uncongested Touch-Friendly Product Cards (Shown on mobile < md) */}
+              <div className="block md:hidden divide-y divide-zinc-100">
+                {isDataLoading && products.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-400 text-xs">
+                    Loading merchant inventory...
+                  </div>
+                ) : filteredProducts.length === 0 ? (
+                  <div className="p-8 text-center">
+                    {products.length === 0 ? (
+                      <div className="space-y-3">
+                        <Package className="mx-auto h-10 w-10 text-zinc-300" />
+                        <h4 className="font-bold text-zinc-800 text-sm">No Products In Store</h4>
+                        <p className="text-xs text-zinc-500">Tap "+ Add Products" above to stock your store catalog.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-zinc-600">No products match your search or filter.</p>
+                        <button
+                          onClick={() => {
+                            setProductSearch("");
+                            setProductStockFilter("ALL");
+                          }}
+                          className="text-xs font-bold text-purple-600 hover:underline"
+                        >
+                          Clear search & filters
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  filteredProducts.map((prod) => {
+                    const isEditing = editingId === prod.id;
+                    const primaryImg = prod.images?.[0]?.url;
+
+                    return (
+                      <div key={prod.id} className="p-4 space-y-3 bg-white">
+                        <div className="flex items-start gap-3">
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100 border border-zinc-200/60 flex items-center justify-center font-bold text-zinc-400 text-sm">
+                            {primaryImg ? (
+                              <img src={primaryImg} alt={prod.name} className="h-full w-full object-cover" />
+                            ) : (
+                              prod.name.charAt(0)
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="font-semibold text-zinc-900 text-sm leading-tight truncate">{prod.name}</h3>
+                              <span className="shrink-0 text-[10px] font-mono font-medium text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
+                                v{prod.version}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5">{prod.description}</p>
+                            <div className="mt-1 flex items-baseline gap-2">
+                              <span className="text-base font-bold text-zinc-900">
+                                {formatPrice(Number(prod.price), "GHS")}
+                              </span>
+                              <span className="text-xs text-zinc-500">
+                                • {prod.stockQty !== null ? `${prod.stockQty} in stock` : "Unlimited"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status & Visibility Badges */}
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                              prod.stockStatus === "IN_STOCK"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : prod.stockStatus === "LOW_STOCK"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-red-50 text-red-700 border border-red-200"
+                            }`}
+                          >
+                            {prod.stockStatus.replace("_", " ")}
+                          </span>
+
+                          {vendor?.status === "PENDING_APPROVAL" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
+                              <EyeOff className="h-3 w-3 text-amber-600" />
+                              <span>Staged (Offline)</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                              <Eye className="h-3 w-3 text-emerald-600" />
+                              <span>Live</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* In-place OCC Edit Drawer */}
+                        {isEditing ? (
+                          <div className="mt-3 rounded-xl border border-purple-200 bg-purple-50/50 p-3 space-y-3">
+                            <p className="text-xs font-semibold text-purple-900">Update Stock & Price (OCC Protected)</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[11px] font-semibold text-zinc-600">Price (GHS)</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editPrice}
+                                  onChange={(e) => setEditPrice(e.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-semibold text-zinc-600">Stock Qty</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={editStock}
+                                  onChange={(e) => setEditStock(e.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => saveProductChanges(prod)}
+                                disabled={isSavingProduct}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                <Save className="h-3.5 w-3.5" />
+                                <span>{isSavingProduct ? "Saving..." : "Save"}</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
+                            <button
+                              onClick={() => startEditing(prod)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 transition min-h-[38px]"
+                            >
+                              <span>Edit Stock / Price</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProduct(prod)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 active:bg-red-100 transition min-h-[38px]"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -1866,6 +2185,142 @@ export default function VendorDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Choice Modal for Adding Products (Mobile-First Sheet / Modal) */}
+      {showAddChoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl space-y-5 animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900">Add Products to Store</h3>
+                <p className="text-xs text-zinc-500">Select how you want to add or sync your inventory</p>
+              </div>
+              <button
+                onClick={() => setShowAddChoiceModal(false)}
+                className="h-9 w-9 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 hover:bg-zinc-200 text-sm font-semibold transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Option 1: Single Product */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddChoiceModal(false);
+                  setShowAddModal(true);
+                }}
+                className="w-full group flex items-start gap-4 rounded-2xl border border-zinc-200 p-4 text-left transition hover:border-purple-500 hover:bg-purple-50/50 hover:shadow-sm"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-700 group-hover:bg-purple-600 group-hover:text-white transition">
+                  <Package className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm text-zinc-900 group-hover:text-purple-900">
+                      Single Product Entry
+                    </span>
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600">
+                      1-5 items
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                    Manually enter product name, custom price, stock count, and upload photos one by one.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Bulk CSV Upload */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddChoiceModal(false);
+                  setShowBulkModal(true);
+                }}
+                className="w-full group flex items-start gap-4 rounded-2xl border border-zinc-200 p-4 text-left transition hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-sm"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition">
+                  <FileSpreadsheet className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm text-zinc-900 group-hover:text-emerald-900">
+                      Bulk CSV / Excel Upload
+                    </span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                      10 - 1,000+ items
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                    Download our ready-made CSV template, fill in your product list, and upload with instant validation.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3: WooCommerce Sync */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddChoiceModal(false);
+                  setShowSyncModal(true);
+                }}
+                className="w-full group flex items-start gap-4 rounded-2xl border border-zinc-200 p-4 text-left transition hover:border-blue-500 hover:bg-blue-50/50 hover:shadow-sm"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 group-hover:bg-blue-600 group-hover:text-white transition">
+                  <RefreshCw className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm text-zinc-900 group-hover:text-blue-900">
+                      WooCommerce Store Sync
+                    </span>
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
+                      Automated Sync
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                    Connect your existing WordPress store using API keys to sync products, categories, and stock automatically.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddChoiceModal(false)}
+                className="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk CSV / Excel Upload Modal */}
+      <BulkUploadModal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        onSuccess={(count) => {
+          setSuccessNotice(`Successfully imported ${count} products into your store!`);
+          vendorPortalCache.invalidateAll();
+          loadVendorData(true);
+        }}
+        authToken={getValidToken() || ""}
+      />
+
+      {/* WooCommerce Store Sync Modal */}
+      <StoreSyncModal
+        isOpen={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+        authToken={getValidToken() || ""}
+        onSyncComplete={() => {
+          vendorPortalCache.invalidateAll();
+          loadVendorData(true);
+        }}
+      />
 
       {/* Merchant Back-Office Footer */}
       <footer className="mt-16 border-t border-zinc-200 bg-white py-6 text-center text-xs text-zinc-500">

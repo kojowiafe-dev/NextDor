@@ -96,6 +96,12 @@ model Vendor {
   bankAccountNumber      String?
   bankAccountName        String?
   paystackSubaccountCode String?
+  // Store integration (WooCommerce / External Sync)
+  wcStoreUrl             String?
+  wcConsumerKey          String?
+  wcConsumerSecret       String?
+  wcLastSyncAt           DateTime?
+  wcSyncStatus           String?            @default("IDLE")
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   deletedAt              DateTime?

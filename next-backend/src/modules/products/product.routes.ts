@@ -262,6 +262,73 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   );
 
   /**
+   * POST /products/bulk
+   * Bulk upload products into catalog (Admin only).
+   */
+  app.post(
+    "/bulk",
+    {
+      schema: {
+        description: "Bulk create products (Admin only)",
+        tags: ["Products"],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          required: ["items"],
+          properties: {
+            vendorId: { type: "string" },
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["name", "price"],
+                properties: {
+                  name: { type: "string", minLength: 2 },
+                  description: { type: "string" },
+                  shortDesc: { type: "string" },
+                  price: { type: "number", minimum: 0 },
+                  salePrice: { type: "number", nullable: true },
+                  currency: { type: "string" },
+                  stockStatus: { type: "string", enum: ["IN_STOCK", "OUT_OF_STOCK", "LOW_STOCK"] },
+                  stockQty: { type: "integer", nullable: true },
+                  category: { type: "string" },
+                  vendorId: { type: "string" },
+                  image: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "Authentication required" },
+        });
+      }
+
+      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: "FORBIDDEN", message: "Admin privileges required" },
+        });
+      }
+
+      const body = req.body as { items: any[]; vendorId?: string };
+      const result = await productService.bulkCreateProducts(body.items, body.vendorId);
+
+      return reply.status(201).send({
+        success: true,
+        data: result,
+      });
+    }
+  );
+
+  /**
    * DELETE /products/:id
    * Soft-deletes a product by its primary key ID.
    * Requires ADMIN or SUPER_ADMIN role.

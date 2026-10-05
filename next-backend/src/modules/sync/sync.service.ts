@@ -15,7 +15,9 @@
 import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
 import { config } from "../../config/env.js";
-import { redis, CacheKey } from "../../lib/redis.js";
+import { redis, CacheKey, flushPattern } from "../../lib/redis.js";
+import { slugify } from "../../lib/slugify.js";
+import { NotFoundError, BadRequestError } from "../../lib/errors.js";
 
 interface WcImage {
   id: number;
@@ -356,6 +358,237 @@ export class SyncService {
       );
 
       return result;
+    }
+  }
+
+  /**
+   * Syncs catalog from a specific vendor's connected WooCommerce store.
+   */
+  static async syncVendorFromWooCommerce(vendorId: string): Promise<SyncResult> {
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: vendorId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundError("Vendor not found");
+    }
+
+    if (!vendor.wcStoreUrl) {
+      throw new BadRequestError("Vendor does not have a WooCommerce Store URL configured.");
+    }
+
+    const lockKey = `lock:wc-sync:vendor:${vendorId}`;
+    try {
+      const lockAcquired = await redis.set(lockKey, "1", "EX", 300, "NX");
+      if (!lockAcquired) {
+        return {
+          success: false,
+          totalFetched: 0,
+          productsCreated: 0,
+          productsUpdated: 0,
+          categoriesCreated: 0,
+          durationMs: 0,
+          errors: ["Sync already in progress for this store."],
+        };
+      }
+    } catch {
+      // In-memory fallback if Redis is down
+    }
+
+    await prisma.vendor.update({
+      where: { id: vendorId },
+      data: { wcSyncStatus: "SYNCING" },
+    });
+
+    const startTime = Date.now();
+    const baseUrl = vendor.wcStoreUrl.replace(/\/$/, "");
+    const hasKeys = Boolean(vendor.wcConsumerKey && vendor.wcConsumerSecret);
+    const endpoint = hasKeys
+      ? `${baseUrl}/wp-json/wc/v3/products`
+      : `${baseUrl}/wp-json/wc/store/v1/products`;
+
+    let page = 1;
+    const perPage = 50;
+    let totalFetched = 0;
+    let productsCreated = 0;
+    let productsUpdated = 0;
+    let categoriesCreated = 0;
+    const errors: string[] = [];
+
+    try {
+      while (true) {
+        const url = `${endpoint}?per_page=${perPage}&page=${page}`;
+        const headers: Record<string, string> = {
+          "Accept": "application/json",
+          "User-Agent": "NextDor-SyncService/1.0",
+        };
+
+        if (hasKeys && vendor.wcConsumerKey && vendor.wcConsumerSecret) {
+          const auth = Buffer.from(`${vendor.wcConsumerKey}:${vendor.wcConsumerSecret}`).toString("base64");
+          headers["Authorization"] = `Basic ${auth}`;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+        let response: Response;
+        try {
+          response = await fetch(url, { headers, signal: controller.signal });
+        } catch (err: any) {
+          const isAbort = err.name === "AbortError";
+          const msg = isAbort
+            ? `WooCommerce request timed out on page ${page} after 30s`
+            : `Failed to connect to WooCommerce on page ${page}: ${err.message}`;
+          logger.error({ err }, msg);
+          errors.push(msg);
+          break;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+          if (response.status === 400 && page > 1) {
+            break; // end of pagination
+          }
+          const msg = `WooCommerce responded with HTTP ${response.status} on page ${page}`;
+          errors.push(msg);
+          break;
+        }
+
+        const prods = (await response.json()) as any[];
+        if (!Array.isArray(prods) || prods.length === 0) {
+          break;
+        }
+
+        totalFetched += prods.length;
+
+        for (const p of prods) {
+          try {
+            const wcId = p.id;
+            const name = p.name || "Untitled Product";
+            let rawPrice = "0.00";
+            let rawSale: string | null = null;
+
+            if (p.prices) {
+              rawPrice = parsePrice(p.prices.price, p.prices.currency_minor_unit || 2);
+              if (p.prices.sale_price) {
+                rawSale = parsePrice(p.prices.sale_price, p.prices.currency_minor_unit || 2);
+              }
+            } else {
+              rawPrice = String(p.price || p.regular_price || "0");
+              if (p.sale_price) rawSale = String(p.sale_price);
+            }
+
+            const numPrice = parseFloat(rawPrice) || 0.01;
+            const numSale = rawSale ? parseFloat(rawSale) : null;
+            const isInStock = p.is_in_stock ?? (p.stock_status === "instock");
+            const stockStatus = isInStock ? "IN_STOCK" : "OUT_OF_STOCK";
+
+            // Category resolution
+            const categoryIds: string[] = [];
+            if (Array.isArray(p.categories)) {
+              for (const c of p.categories) {
+                const catSlug = c.slug || slugify(c.name || "General");
+                const cat = await prisma.category.upsert({
+                  where: { slug: catSlug },
+                  create: { name: c.name || "General", slug: catSlug },
+                  update: { name: c.name || "General" },
+                });
+                categoryIds.push(cat.id);
+                categoriesCreated++;
+              }
+            }
+
+            const primaryImg = p.images?.[0]?.src;
+            const slug = `${slugify(name)}-${wcId}`;
+
+            const existing = await prisma.product.findFirst({
+              where: {
+                OR: [
+                  { wcId },
+                  { slug },
+                ],
+              },
+            });
+
+            if (existing) {
+              await prisma.product.update({
+                where: { id: existing.id },
+                data: {
+                  name,
+                  price: numPrice,
+                  salePrice: numSale,
+                  stockStatus,
+                  vendorId: vendor.id,
+                  description: stripHtml(p.description || ""),
+                  shortDesc: stripHtml(p.short_description || ""),
+                  categories: categoryIds.length > 0 ? { set: categoryIds.map((id) => ({ id })) } : undefined,
+                },
+              });
+              productsUpdated++;
+            } else {
+              await prisma.product.create({
+                data: {
+                  wcId,
+                  name,
+                  slug,
+                  price: numPrice,
+                  salePrice: numSale,
+                  stockStatus,
+                  currency: "GHS",
+                  description: stripHtml(p.description || ""),
+                  shortDesc: stripHtml(p.short_description || ""),
+                  vendorId: vendor.id,
+                  categories: categoryIds.length > 0 ? { connect: categoryIds.map((id) => ({ id })) } : undefined,
+                  images: primaryImg
+                    ? {
+                        create: [
+                          {
+                            url: primaryImg,
+                            alt: name,
+                            sortOrder: 0,
+                          },
+                        ],
+                      }
+                    : undefined,
+                },
+              });
+              productsCreated++;
+            }
+          } catch (err: any) {
+            errors.push(`Product ${p.id}: ${err.message}`);
+          }
+        }
+
+        if (prods.length < perPage) break;
+        page++;
+      }
+
+      await prisma.vendor.update({
+        where: { id: vendorId },
+        data: {
+          wcLastSyncAt: new Date(),
+          wcSyncStatus: errors.length > 0 && productsCreated === 0 && productsUpdated === 0 ? "FAILED" : "SUCCESS",
+        },
+      });
+
+      flushPattern("products:list:*").catch(() => {});
+
+      return {
+        success: errors.length === 0 || productsCreated > 0 || productsUpdated > 0,
+        totalFetched,
+        productsCreated,
+        productsUpdated,
+        categoriesCreated,
+        durationMs: Date.now() - startTime,
+        errors,
+      };
+    } finally {
+      try {
+        await redis.del(lockKey);
+      } catch {
+        // ignore
+      }
     }
   }
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus, Pencil, Trash2, Search, RefreshCw, CheckCircle2, AlertCircle, Store, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, RefreshCw, CheckCircle2, AlertCircle, Store, AlertTriangle, FileSpreadsheet } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { formatPrice } from "@/lib/utils";
 import {
@@ -13,6 +13,7 @@ import {
   invalidateProductsCache,
 } from "@/lib/cache/adminCache";
 import { API_BASE } from "@/lib/api-config";
+import { BulkUploadModal } from "@/components/vendor/BulkUploadModal";
 
 
 interface ProductImage {
@@ -63,6 +64,7 @@ export default function AdminProductsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
 
   async function loadProducts(forceRefresh = false) {
@@ -242,6 +244,17 @@ export default function AdminProductsPage() {
           >
             <RefreshCw className={`h-4 w-4 text-[#ff9900] ${isSyncing ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">{isSyncing ? (syncProgressText || "Syncing...") : "Sync from WooCommerce"}</span>
+          </button>
+
+          {/* Bulk CSV Upload Button */}
+          <button
+            type="button"
+            onClick={() => setShowBulkModal(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-sm font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-100"
+            title="Bulk import products from CSV template"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-700" />
+            <span className="hidden sm:inline">Bulk Import</span>
           </button>
 
           <Link
@@ -518,6 +531,22 @@ export default function AdminProductsPage() {
           </div>
         </div>
       )}
+
+      {/* Bulk Upload Modal for Administrators */}
+      <BulkUploadModal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        endpoint={`${API_BASE}/products/bulk`}
+        authToken={typeof window !== "undefined" ? localStorage.getItem("nextdor-token") || "" : ""}
+        onSuccess={(count) => {
+          setSyncNotice({
+            type: "success",
+            message: `Successfully imported ${count} products into catalog!`,
+          });
+          invalidateProductsCache();
+          loadProducts(true);
+        }}
+      />
     </AdminLayout>
   );
 }
