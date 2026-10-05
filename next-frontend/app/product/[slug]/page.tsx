@@ -15,6 +15,7 @@ import { OtherSellersSection } from "@/components/product/OtherSellersSection";
 
 import { ProductDeliveryInfo } from "@/components/product/ProductDeliveryInfo";
 import { ProductSpecifications } from "@/components/product/ProductSpecifications";
+import { PriceDisplay } from "@/components/product/PriceDisplay";
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
@@ -92,11 +93,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </span>
           </div>
 
-          {product.onSale && product.regularPrice && product.regularPrice > product.price && (
-            <span className="inline-block rounded bg-[#cc0c39] px-2 py-0.5 text-xs font-bold text-white shadow-2xs">
-              {Math.round(((product.regularPrice - product.price) / product.regularPrice) * 100)}% OFF
-            </span>
-          )}
+          <div className="py-1">
+            <PriceDisplay product={product} size="lg" />
+          </div>
 
           <p className="text-sm text-zinc-600">
             {product.inStock ? (
