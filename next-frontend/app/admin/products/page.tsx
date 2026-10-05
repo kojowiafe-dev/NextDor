@@ -385,10 +385,17 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div>
-                        <p className="font-semibold text-zinc-900">
-                          {formatPrice(Number(product.salePrice ?? product.price), product.currency || "GHS")}
-                        </p>
-                        {product.salePrice && (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <p className="font-semibold text-zinc-900">
+                            {formatPrice(Number(product.salePrice ?? product.price), product.currency || "GHS")}
+                          </p>
+                          {product.salePrice && Number(product.price) > Number(product.salePrice) && (
+                            <span className="rounded bg-red-50 border border-red-200 px-1 py-0.2 text-[10px] font-bold text-red-600">
+                              -{Math.round(((Number(product.price) - Number(product.salePrice)) / Number(product.price)) * 100)}%
+                            </span>
+                          )}
+                        </div>
+                        {product.salePrice && Number(product.price) > Number(product.salePrice) && (
                           <p className="text-xs text-zinc-400 line-through">
                             {formatPrice(Number(product.price), product.currency || "GHS")}
                           </p>

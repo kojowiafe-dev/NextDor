@@ -85,9 +85,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <span>{product.reviewCount} reviews</span>
           </div>
 
-          {product.onSale && (
-            <span className="inline-block rounded bg-[#cc0c39] px-2 py-0.5 text-xs font-bold text-white">
-              SALE
+          {product.onSale && product.regularPrice && product.regularPrice > product.price && (
+            <span className="inline-block rounded bg-[#cc0c39] px-2 py-0.5 text-xs font-bold text-white shadow-2xs">
+              {Math.round(((product.regularPrice - product.price) / product.regularPrice) * 100)}% OFF
             </span>
           )}
 

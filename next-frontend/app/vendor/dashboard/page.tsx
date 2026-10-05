@@ -195,6 +195,7 @@ export default function VendorDashboardPage() {
   // Edit / OCC state per product
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState<string>("");
+  const [editPreviousPrice, setEditPreviousPrice] = useState<string>("");
   const [editStock, setEditStock] = useState<string>("");
   const [isSavingProduct, setIsSavingProduct] = useState(false);
 
@@ -209,6 +210,7 @@ export default function VendorDashboardPage() {
   const [newProdName, setNewProdName] = useState("");
   const [newProdDesc, setNewProdDesc] = useState("");
   const [newProdPrice, setNewProdPrice] = useState("");
+  const [newProdPreviousPrice, setNewProdPreviousPrice] = useState("");
   const [newProdStock, setNewProdStock] = useState("10");
   const [newProdImage, setNewProdImage] = useState("");
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
@@ -440,7 +442,13 @@ export default function VendorDashboardPage() {
   // Product Inline Edit with OCC
   function startEditing(product: VendorProduct) {
     setEditingId(product.id);
-    setEditPrice(String(product.price));
+    if (product.salePrice && Number(product.salePrice) > 0) {
+      setEditPrice(String(product.salePrice));
+      setEditPreviousPrice(String(product.price));
+    } else {
+      setEditPrice(String(product.price));
+      setEditPreviousPrice("");
+    }
     setEditStock(String(product.stockQty ?? 0));
     setErrorNotice(null);
     setSuccessNotice(null);
@@ -453,6 +461,17 @@ export default function VendorDashboardPage() {
 
     try {
       const token = getValidToken();
+      const currentPriceNum = parseFloat(editPrice);
+      const prevPriceNum = editPreviousPrice ? parseFloat(editPreviousPrice) : null;
+
+      let payloadPrice = currentPriceNum;
+      let payloadSalePrice: number | null = null;
+
+      if (prevPriceNum && prevPriceNum > currentPriceNum) {
+        payloadPrice = prevPriceNum;
+        payloadSalePrice = currentPriceNum;
+      }
+
       const res = await fetch(`${API_BASE}/vendors/portal/products/${product.id}`, {
         method: "PATCH",
         headers: {
@@ -461,7 +480,8 @@ export default function VendorDashboardPage() {
         },
         body: JSON.stringify({
           version: product.version,
-          price: parseFloat(editPrice),
+          price: payloadPrice,
+          salePrice: payloadSalePrice,
           stockQty: parseInt(editStock, 10),
         }),
       });
@@ -501,6 +521,17 @@ export default function VendorDashboardPage() {
 
     try {
       const token = getValidToken();
+      const currentPriceNum = parseFloat(newProdPrice);
+      const prevPriceNum = newProdPreviousPrice ? parseFloat(newProdPreviousPrice) : null;
+
+      let payloadPrice = currentPriceNum;
+      let payloadSalePrice: number | undefined = undefined;
+
+      if (prevPriceNum && prevPriceNum > currentPriceNum) {
+        payloadPrice = prevPriceNum;
+        payloadSalePrice = currentPriceNum;
+      }
+
       const res = await fetch(`${API_BASE}/vendors/portal/products`, {
         method: "POST",
         headers: {
@@ -510,7 +541,8 @@ export default function VendorDashboardPage() {
         body: JSON.stringify({
           name: newProdName,
           description: newProdDesc,
-          price: parseFloat(newProdPrice),
+          price: payloadPrice,
+          salePrice: payloadSalePrice,
           stockQty: parseInt(newProdStock, 10),
           imageUrl: newProdImage || undefined,
         }),
@@ -528,6 +560,7 @@ export default function VendorDashboardPage() {
       setNewProdName("");
       setNewProdDesc("");
       setNewProdPrice("");
+      setNewProdPreviousPrice("");
       setNewProdImage("");
       vendorPortalCache.invalidateAll();
       loadVendorData(true);
@@ -1221,17 +1254,50 @@ export default function VendorDashboardPage() {
 
                             <td className="px-6 py-4">
                               {isEditing ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={editPrice}
-                                  onChange={(e) => setEditPrice(e.target.value)}
-                                  className="w-24 rounded-lg border border-zinc-300 px-2 py-1 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
-                                />
+                                <div className="space-y-1.5 min-w-[120px]">
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-zinc-500 block">Current Price *</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0.10"
+                                      value={editPrice}
+                                      onChange={(e) => setEditPrice(e.target.value)}
+                                      placeholder="Current"
+                                      className="w-24 rounded-lg border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
+                                    />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-zinc-400 block">Previous Price</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0.10"
+                                      value={editPreviousPrice}
+                                      onChange={(e) => setEditPreviousPrice(e.target.value)}
+                                      placeholder="Optional"
+                                      className="w-24 rounded-lg border border-zinc-300 px-2 py-0.5 text-xs text-zinc-600 focus:border-purple-600 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
                               ) : (
-                                <span className="font-bold text-zinc-900">
-                                  {formatPrice(Number(prod.price), "GHS")}
-                                </span>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-zinc-900">
+                                      {formatPrice(Number(prod.salePrice ?? prod.price), "GHS")}
+                                    </span>
+                                    {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
+                                      <span className="rounded bg-red-50 border border-red-200 px-1 py-0.2 text-[10px] font-bold text-red-600">
+                                        -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
+                                    <span className="text-xs text-zinc-400 line-through block">
+                                      {formatPrice(Number(prod.price), "GHS")}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </td>
 
@@ -1383,8 +1449,18 @@ export default function VendorDashboardPage() {
                             <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5">{prod.description}</p>
                             <div className="mt-1 flex items-baseline gap-2">
                               <span className="text-base font-bold text-zinc-900">
-                                {formatPrice(Number(prod.price), "GHS")}
+                                {formatPrice(Number(prod.salePrice ?? prod.price), "GHS")}
                               </span>
+                              {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
+                                <>
+                                  <span className="text-xs text-zinc-400 line-through">
+                                    {formatPrice(Number(prod.price), "GHS")}
+                                  </span>
+                                  <span className="rounded bg-red-50 border border-red-200 px-1.5 py-0.2 text-[10px] font-bold text-red-600">
+                                    -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
+                                  </span>
+                                </>
+                              )}
                               <span className="text-xs text-zinc-500">
                                 • {prod.stockQty !== null ? `${prod.stockQty} in stock` : "Unlimited"}
                               </span>
@@ -1423,14 +1499,27 @@ export default function VendorDashboardPage() {
                         {isEditing ? (
                           <div className="mt-3 rounded-xl border border-purple-200 bg-purple-50/50 p-3 space-y-3">
                             <p className="text-xs font-semibold text-purple-900">Update Stock & Price (OCC Protected)</p>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                               <div>
-                                <label className="block text-[11px] font-semibold text-zinc-600">Price (GHS)</label>
+                                <label className="block text-[11px] font-semibold text-zinc-600">Current Price (GHS) *</label>
                                 <input
                                   type="number"
                                   step="0.01"
+                                  min="0.10"
                                   value={editPrice}
                                   onChange={(e) => setEditPrice(e.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-semibold text-zinc-600">Previous Price (GHS)</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.10"
+                                  placeholder="Optional"
+                                  value={editPreviousPrice}
+                                  onChange={(e) => setEditPreviousPrice(e.target.value)}
                                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
                                 />
                               </div>
@@ -2129,9 +2218,9 @@ export default function VendorDashboardPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700">Price (GHS) *</label>
+                  <label className="block text-xs font-semibold text-zinc-700">Current Price (GHS) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -2142,6 +2231,24 @@ export default function VendorDashboardPage() {
                     onChange={(e) => setNewProdPrice(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
                   />
+                  <p className="mt-0.5 text-[10px] text-zinc-400">Actual selling price</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700">Previous Price (GHS)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.10"
+                    placeholder="e.g. 150.00"
+                    value={newProdPreviousPrice}
+                    onChange={(e) => setNewProdPreviousPrice(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-[10px] text-zinc-400">
+                    {newProdPreviousPrice && Number(newProdPreviousPrice) > Number(newProdPrice)
+                      ? `${Math.round(((Number(newProdPreviousPrice) - Number(newProdPrice)) / Number(newProdPreviousPrice)) * 100)}% OFF (Cancelled price)`
+                      : "Optional strikethrough price"}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-zinc-700">Initial Stock *</label>
@@ -2154,6 +2261,7 @@ export default function VendorDashboardPage() {
                     onChange={(e) => setNewProdStock(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
                   />
+                  <p className="mt-0.5 text-[10px] text-zinc-400">Inventory quantity</p>
                 </div>
               </div>
 

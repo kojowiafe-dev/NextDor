@@ -126,10 +126,15 @@ export function DealOfTheDayCard({ dealProduct }: DealOfTheDayCardProps) {
                   <span className="text-base font-extrabold text-[#ff9900]">
                     {formatPrice(dealProduct.price, dealProduct.currency)}
                   </span>
-                  {dealProduct.regularPrice && (
-                    <span className="text-xs text-zinc-400 line-through">
-                      {formatPrice(dealProduct.regularPrice, dealProduct.currency)}
-                    </span>
+                  {dealProduct.regularPrice && dealProduct.regularPrice > dealProduct.price && (
+                    <>
+                      <span className="text-xs text-zinc-400 line-through">
+                        {formatPrice(dealProduct.regularPrice, dealProduct.currency)}
+                      </span>
+                      <span className="rounded bg-red-500/20 text-red-300 border border-red-500/30 px-1 py-0.2 text-[10px] font-bold">
+                        -{Math.round(((dealProduct.regularPrice - dealProduct.price) / dealProduct.regularPrice) * 100)}%
+                      </span>
+                    </>
                   )}
                 </div>
               </div>

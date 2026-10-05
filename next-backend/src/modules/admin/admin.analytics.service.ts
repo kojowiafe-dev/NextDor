@@ -51,26 +51,34 @@ export class AdminAnalyticsService {
       }
     }
 
-    // 3. Top products by revenue
-    const topItems = await prisma.orderItem.groupBy({
-      by: ["productName"],
-      _sum: {
+    // 3. Top products by revenue (excluding CANCELLED and REFUNDED orders)
+    const validOrderItems = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          status: { notIn: ["CANCELLED", "REFUNDED"] },
+        },
+      },
+      select: {
+        productName: true,
         subtotal: true,
         quantity: true,
       },
-      orderBy: {
-        _sum: { subtotal: "desc" },
-      },
-      take: 5,
     });
 
-    const topProducts = topItems.map((item) => ({
-      name: item.productName,
-      revenue: Number(item._sum.subtotal ?? 0),
-      quantity: item._sum.quantity ?? 0,
-    }));
+    const productMap = new Map<string, { revenue: number; quantity: number }>();
+    for (const item of validOrderItems) {
+      const existing = productMap.get(item.productName) || { revenue: 0, quantity: 0 };
+      existing.revenue += Number(item.subtotal);
+      existing.quantity += item.quantity;
+      productMap.set(item.productName, existing);
+    }
 
-    // 4. Sales by category
+    const topProducts = Array.from(productMap.entries())
+      .map(([name, data]) => ({ name, revenue: data.revenue, quantity: data.quantity }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
+    // 4. Sales by category (excluding CANCELLED and REFUNDED orders)
     const categoriesWithSales = await prisma.category.findMany({
       take: 6,
       select: {
@@ -78,6 +86,11 @@ export class AdminAnalyticsService {
         products: {
           select: {
             orderItems: {
+              where: {
+                order: {
+                  status: { notIn: ["CANCELLED", "REFUNDED"] },
+                },
+              },
               select: {
                 subtotal: true,
               },
@@ -115,6 +128,10 @@ export class AdminAnalyticsService {
         ? `${((totalCompletedOrders / totalCustomers) * 100).toFixed(1)}%`
         : "0.0%";
 
+    const validRecentOrders = recentOrders.filter(
+      (o) => o.status !== "CANCELLED" && o.status !== "REFUNDED",
+    );
+
     return {
       revenueData: revenueBuckets,
       ordersByStatus,
@@ -122,7 +139,7 @@ export class AdminAnalyticsService {
       salesByCategory,
       conversionRate,
       metrics: {
-        totalOrders: recentOrders.length,
+        totalOrders: validRecentOrders.length,
         totalRevenue: revenueBuckets.reduce((acc, v) => acc + v, 0),
         totalCustomers,
         totalProducts,

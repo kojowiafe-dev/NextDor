@@ -121,9 +121,14 @@ export function TrendingRow({ products }: TrendingRowProps) {
                         {formatPrice(product.price, product.currency)}
                       </span>
                       {product.regularPrice != null && product.regularPrice > product.price && (
-                        <span className="text-xs text-zinc-400 line-through">
-                          {formatPrice(product.regularPrice, product.currency)}
-                        </span>
+                        <>
+                          <span className="text-xs text-zinc-400 line-through">
+                            {formatPrice(product.regularPrice, product.currency)}
+                          </span>
+                          <span className="rounded bg-red-50 border border-red-200 px-1 py-0.2 text-[10px] font-bold text-red-600">
+                            -{Math.round(((product.regularPrice - product.price) / product.regularPrice) * 100)}%
+                          </span>
+                        </>
                       )}
                     </div>
 

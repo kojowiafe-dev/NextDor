@@ -160,7 +160,7 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
               <div className="space-y-4">
                 <div className="space-y-1">
                   <label className="block text-sm font-medium text-zinc-700">
-                    Price (GHS) <span className="text-red-500">*</span>
+                    Regular / Previous Price (GHS) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -174,18 +174,27 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
                     }`}
                   />
                   {errors.price && <p className="text-xs text-red-600">{errors.price}</p>}
+                  <p className="text-xs text-zinc-400">Standard price (shown as cancelled strikethrough when a sale price is active).</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-sm font-medium text-zinc-700">Sale Price (GHS)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-zinc-700">Sale / Current Price (GHS)</label>
+                    {form.price && form.salePrice && Number(form.price) > Number(form.salePrice) && (
+                      <span className="rounded bg-red-50 border border-red-200 px-1.5 py-0.5 text-xs font-bold text-red-600">
+                        {Math.round(((Number(form.price) - Number(form.salePrice)) / Number(form.price)) * 100)}% OFF
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
                     min={0}
                     step={0.01}
                     value={form.salePrice ?? ""}
                     onChange={(e) => set("salePrice", e.target.value ? Number(e.target.value) : undefined)}
-                    placeholder="Leave blank if no sale"
+                    placeholder="Leave blank if item is not discounted"
                     className="w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-900 outline-none focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/20"
                   />
+                  <p className="text-xs text-zinc-400">Discounted selling price. Leave empty if no discount applies.</p>
                 </div>
               </div>
             </div>

@@ -303,7 +303,11 @@ export default function AdminDashboardPage() {
   }
 
   const recentOrders = orders.slice(0, 5);
-  const totalRevenue = orders.reduce((s, o) => s + o.total, 0);
+  // Exclude cancelled and refunded orders from revenue, platform fees, and escrow calculations
+  const activeRevenueOrders = orders.filter(
+    (o) => o.status !== "cancelled" && o.status !== "refunded"
+  );
+  const totalRevenue = activeRevenueOrders.reduce((s, o) => s + o.total, 0);
   const pipelineOrders = orders.filter((o) => o.status === "processing" || o.status === "pending" || o.status === "confirmed" || o.status === "shipped");
   const platformFee = totalRevenue * 0.10; // 10% platform cut
   const escrowHold = totalRevenue * 0.90; // 90% escrow reserve held for merchants

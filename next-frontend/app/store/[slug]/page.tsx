@@ -166,9 +166,9 @@ export default async function VendorStorefrontPage({
                         {prod.name.charAt(0)}
                       </div>
                     )}
-                    {prod.salePrice && (
+                    {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
                       <span className="absolute top-2.5 left-2.5 rounded-md bg-red-600 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
-                        SALE
+                        -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
                       </span>
                     )}
                   </div>
@@ -184,11 +184,18 @@ export default async function VendorStorefrontPage({
 
                     <div className="mt-auto pt-4 flex items-center justify-between">
                       <div>
-                        <span className="text-base font-extrabold text-zinc-900">
-                          {formatPrice(Number(prod.salePrice ?? prod.price), prod.currency || "GHS")}
-                        </span>
-                        {prod.salePrice && (
-                          <span className="ml-2 text-xs text-zinc-400 line-through">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base font-extrabold text-zinc-900">
+                            {formatPrice(Number(prod.salePrice ?? prod.price), prod.currency || "GHS")}
+                          </span>
+                          {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
+                            <span className="rounded bg-red-50 border border-red-200 px-1.5 py-0.2 text-[10px] font-bold text-red-600">
+                              -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
+                            </span>
+                          )}
+                        </div>
+                        {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
+                          <span className="block text-xs text-zinc-400 line-through">
                             {formatPrice(Number(prod.price), prod.currency || "GHS")}
                           </span>
                         )}

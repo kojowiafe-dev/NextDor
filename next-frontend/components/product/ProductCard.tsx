@@ -51,9 +51,9 @@ export function ProductCard({ product }: ProductCardProps) {
     <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-zinc-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-[#ff9900]/30">
       {/* Top Badges: Sale Discount & In-Stock Availability */}
       <div className="mb-2 flex items-center justify-between gap-1.5">
-        {product.onSale ? (
+        {product.onSale && discount > 0 ? (
           <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-xs">
-            {discount > 0 ? `-${discount}%` : "SALE"}
+            -{discount}%
           </span>
         ) : (
           <span />

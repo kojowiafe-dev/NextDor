@@ -138,8 +138,8 @@ export function BulkUploadModal({
       rawHeaders.findIndex((h) => aliases.some((a) => h.includes(a)));
 
     const nameIdx = getIndex(["name", "title", "product"]);
-    const priceIdx = getIndex(["price", "regularprice", "unitprice"]);
-    const saleIdx = getIndex(["saleprice", "sale", "discount"]);
+    const priceIdx = getIndex(["price", "regularprice", "previousprice", "originalprice", "unitprice"]);
+    const saleIdx = getIndex(["saleprice", "sale", "discount", "currentprice"]);
     const stockIdx = getIndex(["stock", "qty", "quantity"]);
     const catIdx = getIndex(["category", "cat"]);
     const imgIdx = getIndex(["image", "img", "photo", "url"]);
@@ -155,7 +155,7 @@ export function BulkUploadModal({
 
       const name = values[nameIdx]?.trim() || "";
       const rawPrice = values[priceIdx]?.replace(/[^0-9.]/g, "") || "";
-      const price = parseFloat(rawPrice);
+      const parsedA = parseFloat(rawPrice);
 
       if (!name || name.length < 2) {
         errors.push({
@@ -166,7 +166,7 @@ export function BulkUploadModal({
         continue;
       }
 
-      if (isNaN(price) || price <= 0) {
+      if (isNaN(parsedA) || parsedA <= 0) {
         errors.push({
           row: rowNum,
           name,
@@ -175,11 +175,21 @@ export function BulkUploadModal({
         continue;
       }
 
-      let salePrice: number | null = null;
+      let finalPrice = parsedA;
+      let finalSalePrice: number | null = null;
+
       if (saleIdx !== -1 && values[saleIdx]) {
-        const parsedSale = parseFloat(values[saleIdx].replace(/[^0-9.]/g, ""));
-        if (!isNaN(parsedSale) && parsedSale > 0 && parsedSale < price) {
-          salePrice = parsedSale;
+        const parsedB = parseFloat(values[saleIdx].replace(/[^0-9.]/g, ""));
+        if (!isNaN(parsedB) && parsedB > 0) {
+          if (parsedB < parsedA) {
+            // parsedA is previous (regular), parsedB is current (sale)
+            finalPrice = parsedA;
+            finalSalePrice = parsedB;
+          } else if (parsedB > parsedA) {
+            // parsedB is previous (regular), parsedA is current (sale)
+            finalPrice = parsedB;
+            finalSalePrice = parsedA;
+          }
         }
       }
 
@@ -193,8 +203,8 @@ export function BulkUploadModal({
 
       items.push({
         name,
-        price,
-        salePrice,
+        price: finalPrice,
+        salePrice: finalSalePrice,
         stockQty,
         categoryName: catIdx !== -1 ? values[catIdx]?.trim() : undefined,
         imageUrl: imgIdx !== -1 ? values[imgIdx]?.trim() : undefined,
