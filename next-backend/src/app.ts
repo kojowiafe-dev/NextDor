@@ -27,6 +27,7 @@ import { productRoutes } from "./modules/products/product.routes.js";
 import { vendorRoutes } from "./modules/vendors/vendor.routes.js";
 import { orderRoutes, adminOrderRoutes, vendorOrderRoutes } from "./modules/orders/order.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
+import { redis } from "./lib/redis.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -77,6 +78,11 @@ export async function buildApp() {
   // Security headers — always register first
   await app.register(import("@fastify/helmet"), {
     contentSecurityPolicy: false, // API only — CSP is for HTML pages
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
   });
 
   // CORS — controls which origins can call this API
@@ -139,8 +145,7 @@ export async function buildApp() {
     global: true,
     max: 200,             // 200 requests per windowMs per IP
     timeWindow: "1 minute",
-    // Redis plugin connection is provided here in Phase 2 when we
-    // integrate @fastify/rate-limit with ioredis
+    redis,                // FIX #12: Redis-backed distributed rate limit
     keyGenerator: (req: any) => req.ip,
     errorResponseBuilder: () => ({
       success: false,

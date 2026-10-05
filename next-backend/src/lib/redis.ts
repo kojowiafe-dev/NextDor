@@ -115,7 +115,12 @@ export async function flushPattern(pattern: string): Promise<number> {
     cursor = nextCursor;
 
     if (keys.length > 0) {
-      await redis.del(...keys);
+      // FIX #14: Batch delete via pipeline to prevent blocking Redis event loop
+      const pipeline = redis.pipeline();
+      for (const key of keys) {
+        pipeline.del(key);
+      }
+      await pipeline.exec();
       deletedCount += keys.length;
     }
   } while (cursor !== "0");

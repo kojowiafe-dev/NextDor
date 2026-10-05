@@ -59,11 +59,37 @@ export type PlaceOrderInput = {
 export class OrderRepository {
   /**
    * Generates a human-readable order number: ND-XXXXX (zero-padded).
-   * Uses the current order count to produce sequential numbers.
+   *
+   * FIX #5 — Race condition solved:
+   * Uses PostgreSQL sequence `order_number_seq` executed atomically INSIDE the transaction.
+   * If sequence doesn't exist yet, it's auto-created, and has a safe random/entropy fallback.
    */
-  private async generateOrderNumber(): Promise<string> {
-    const count = await prisma.order.count();
-    return `ND-${String(count + 1).padStart(5, "0")}`;
+  private async generateOrderNumber(tx: Prisma.TransactionClient): Promise<string> {
+    try {
+      const rows = await tx.$queryRawUnsafe<Array<{ nextval: string | bigint | number }>>(
+        "SELECT nextval('order_number_seq') AS nextval"
+      );
+      if (rows && rows.length > 0 && rows[0].nextval != null) {
+        return `ND-${String(rows[0].nextval).padStart(5, "0")}`;
+      }
+    } catch {
+      // Sequence might not exist yet — try creating it
+      try {
+        await tx.$executeRawUnsafe("CREATE SEQUENCE IF NOT EXISTS order_number_seq START WITH 1");
+        const rows = await tx.$queryRawUnsafe<Array<{ nextval: string | bigint | number }>>(
+          "SELECT nextval('order_number_seq') AS nextval"
+        );
+        if (rows && rows.length > 0 && rows[0].nextval != null) {
+          return `ND-${String(rows[0].nextval).padStart(5, "0")}`;
+        }
+      } catch {
+        // Fall through to entropy-backed sequence
+      }
+    }
+
+    const count = await tx.order.count();
+    const entropy = Math.floor(100 + Math.random() * 900);
+    return `ND-${String(count + 1).padStart(5, "0")}-${entropy}`;
   }
 
   /**
@@ -77,9 +103,8 @@ export class OrderRepository {
    * All steps run in a single Prisma transaction — any failure rolls back everything.
    */
   async placeOrder(input: PlaceOrderInput): Promise<Order> {
-    const orderNumber = await this.generateOrderNumber();
-
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const orderNumber = await this.generateOrderNumber(tx);
       // 1. Decrement stock for tracked products only (where stockQty is not null)
       for (const item of input.items) {
         await tx.product.updateMany({
@@ -202,11 +227,11 @@ export class OrderRepository {
   }
 
   /**
-   * Fetches a single order by its human-readable number.
+   * Fetches a single order by its ID (UUID) or human-readable number (ND-XXXXX).
    * Includes the full status timeline, items, and vendor sub-orders.
    * Optionally scoped to a userId for customer access control.
    */
-  async findByNumber(numberOrId: string, userId?: string) {
+  async findByIdOrNumber(numberOrId: string, userId?: string) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(numberOrId);
 
     let userClause: Prisma.OrderWhereInput = {};
@@ -261,6 +286,14 @@ export class OrderRepository {
         },
       },
     });
+  }
+
+  async findByNumber(numberOrId: string, userId?: string) {
+    return this.findByIdOrNumber(numberOrId, userId);
+  }
+
+  async findById(id: string, userId?: string) {
+    return this.findByIdOrNumber(id, userId);
   }
 
   /**

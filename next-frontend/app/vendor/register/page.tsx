@@ -90,6 +90,13 @@ export default function VendorRegisterPage() {
         return;
       }
 
+      // If email verification is required, redirect to verification screen
+      if (json.data?.requiresVerification || !json.data?.tokens) {
+        const targetEmail = json.data?.email || email.trim();
+        router.push(`/verify-email?email=${encodeURIComponent(targetEmail)}&redirect=/vendor/dashboard`);
+        return;
+      }
+
       // Save tokens and session
       const { tokens, user, vendor } = json.data;
       if (typeof window !== "undefined") {

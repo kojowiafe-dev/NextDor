@@ -15,6 +15,7 @@
 import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
 import { config } from "../../config/env.js";
+import { redis, CacheKey } from "../../lib/redis.js";
 
 interface WcImage {
   id: number;
@@ -95,18 +96,38 @@ export class SyncService {
 
   /**
    * Triggers the sync process in the background without blocking the HTTP thread.
+   * FIX #9: Distributed lock via Redis (`lock:wc-sync`) prevents multiple server instances
+   * from concurrently running overlapping sync tasks.
    */
-  static startBackgroundSync(): { started: boolean; message: string } {
-    if (this.status.isSyncing) {
-      return { started: false, message: "Sync is already in progress." };
+  static async startBackgroundSync(): Promise<{ started: boolean; message: string }> {
+    try {
+      const lockAcquired = await redis.set(CacheKey.syncLock(), "1", "EX", 300, "NX");
+      if (!lockAcquired) {
+        return { started: false, message: "Sync is already in progress on another server instance." };
+      }
+    } catch {
+      // In-memory fallback if Redis is down
+      if (this.status.isSyncing) {
+        return { started: false, message: "Sync is already in progress." };
+      }
     }
 
+    this.status.isSyncing = true;
+
     // Launch without await so caller gets instant response
-    this.syncFromWooCommerce().catch((err) => {
-      logger.error({ err }, "Background sync encountered an unexpected error");
-      this.status.isSyncing = false;
-      this.status.lastError = err.message;
-    });
+    this.syncFromWooCommerce()
+      .catch((err) => {
+        logger.error({ err }, "Background sync encountered an unexpected error");
+        this.status.isSyncing = false;
+        this.status.lastError = err.message;
+      })
+      .finally(async () => {
+        try {
+          await redis.del(CacheKey.syncLock());
+        } catch {
+          // ignore
+        }
+      });
 
     return { started: true, message: "Synchronization started in background." };
   }
@@ -146,18 +167,28 @@ export class SyncService {
         logger.info({ page, url }, "Fetching products page from WooCommerce");
 
         let response: Response;
+        // FIX #17: 30-second timeout via AbortController prevents hanging indefinitely on network failure
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
         try {
           response = await fetch(url, {
             headers: {
               "Accept": "application/json",
               "User-Agent": "NextDor-SyncService/1.0",
             },
+            signal: controller.signal,
           });
         } catch (err: any) {
-          const msg = `Failed to connect to WooCommerce on page ${page}: ${err.message}`;
+          const isAbort = err.name === "AbortError";
+          const msg = isAbort
+            ? `WooCommerce request timed out on page ${page} after 30s`
+            : `Failed to connect to WooCommerce on page ${page}: ${err.message}`;
           logger.error({ err }, msg);
           errors.push(msg);
           break;
+        } finally {
+          clearTimeout(timeoutId);
         }
 
         if (!response.ok) {

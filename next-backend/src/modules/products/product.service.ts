@@ -16,14 +16,7 @@ import { ProductRepository, type FindProductsFilter } from "./product.repository
 import { BadRequestError, NotFoundError } from "../../lib/errors.js";
 import { cacheGet, cacheSet, cacheDel, flushPattern, CacheKey } from "../../lib/redis.js";
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { slugify } from "../../lib/slugify.js";
 
 
 export class ProductService {
@@ -50,10 +43,18 @@ export class ProductService {
     const page = Math.max(1, Number(filter.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(filter.limit) || 50));
 
-    // Build a deterministic cache key from query parameters.
-    // JSON.stringify sorts keys consistently so identical queries share one key.
+    // Build a strictly deterministic cache key from query parameters (Fix #11).
+    // Keys are sorted and string inputs trimmed/normalized to avoid cache misses.
+    const normalized = {
+      category: filter.category?.trim().toLowerCase() || "",
+      limit,
+      page,
+      search: filter.search?.trim().toLowerCase() || "",
+      sort: filter.sort || "newest",
+      vendor: filter.vendor?.trim().toLowerCase() || "",
+    };
     const cacheHash = Buffer.from(
-      JSON.stringify({ page, limit, search: filter.search, category: filter.category, vendor: filter.vendor, sort: filter.sort })
+      JSON.stringify(normalized, Object.keys(normalized).sort())
     ).toString("base64url");
     const cacheKey = CacheKey.productList(cacheHash);
 

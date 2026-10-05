@@ -84,9 +84,11 @@ const envSchema = z.object({
   WOOCOMMERCE_STORE_URL: z.string().url(),
 
   // ── Cloudinary ───────────────────────────────────────────────────────────
-  CLOUDINARY_CLOUD_NAME: z.string().default(process.env.CLOUD_NAME || "mq17etnb"),
-  CLOUDINARY_API_KEY: z.string().default(process.env.CLOUD_API_KEY || "536664647454792"),
-  CLOUDINARY_API_SECRET: z.string().default(process.env.CLOUD_API_SECRET || "VzaEvbCJW8KHmd_IwCYAr3h34-U"),
+  // SECURITY: Never hardcode credentials here. Rotate old keys immediately.
+  // Use environment variables only. See .env.example for required names.
+  CLOUDINARY_CLOUD_NAME: z.string().min(1, "CLOUDINARY_CLOUD_NAME is required"),
+  CLOUDINARY_API_KEY: z.string().min(1, "CLOUDINARY_API_KEY is required"),
+  CLOUDINARY_API_SECRET: z.string().min(1, "CLOUDINARY_API_SECRET is required"),
   CLOUDINARY_URL: z.string().optional(),
 });
 

@@ -92,11 +92,16 @@ export class UserRepository {
   }
 
   /**
-   * Saves a newly generated hashed refresh token.
+   * Saves a newly generated hashed refresh token with dual-hash lookup support.
+   *
+   * FIX #1: Both hashes are now stored:
+   * - tokenHash  (bcrypt):  tamper-proof security verification
+   * - lookupHash (SHA-256): O(1) indexed DB lookup key
    */
   async saveRefreshToken(data: {
     userId: string;
     tokenHash: string;
+    lookupHash: string;
     family: string;
     expiresAt: Date;
   }): Promise<RefreshToken> {
@@ -132,6 +137,21 @@ export class UserRepository {
       where: { userId, expiresAt: { lt: new Date() } },
     });
     return res.count;
+  }
+
+  /**
+   * FIX #16: Cleans up expired auth codes (OTPs) across all users.
+   * Prevents unbounded table growth and keeps lookup index fast.
+   */
+  async deleteExpiredAuthCodes(): Promise<number> {
+    try {
+      const res = await prisma.authCode.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+      return res.count;
+    } catch {
+      return 0;
+    }
   }
 
   /**

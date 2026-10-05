@@ -30,6 +30,7 @@
 
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { logger } from "./logger.js";
+import { config } from "../config/env.js";
 
 // Extend globalThis to hold our dev-mode cached instance
 declare global {
@@ -37,8 +38,33 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
+/**
+ * Ensures connection pooling parameters (connection_limit, pool_timeout)
+ * are configured on the PostgreSQL connection string for scale (Fix #10).
+ */
+function getPooledDatabaseUrl(): string {
+  try {
+    const rawUrl = config.DATABASE_URL;
+    const url = new URL(rawUrl);
+    if (!url.searchParams.has("connection_limit")) {
+      url.searchParams.set("connection_limit", process.env.NODE_ENV === "production" ? "10" : "5");
+    }
+    if (!url.searchParams.has("pool_timeout")) {
+      url.searchParams.set("pool_timeout", "30");
+    }
+    return url.toString();
+  } catch {
+    return config.DATABASE_URL;
+  }
+}
+
 function createPrismaClient(): PrismaClient {
   const client = new PrismaClient({
+    datasources: {
+      db: {
+        url: getPooledDatabaseUrl(),
+      },
+    },
     log: [
       { level: "query", emit: "event" },   // captured below
       { level: "warn",  emit: "stdout" },

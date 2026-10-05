@@ -2,6 +2,14 @@
 // Run `npx prisma migrate dev --name init` to create the first migration.
 //
 // DESIGN DECISIONS documented inline throughout.
+//
+// ORDER NUMBER SEQUENCE (Fix #5 — Race Condition):
+// The original design used COUNT(*) + 1 to generate order numbers.
+// Two simultaneous checkouts can both read count=100 and both generate ND-00101.
+// Solution: PostgreSQL sequences are atomic — the DB engine guarantees each
+// nextval() call returns a unique, monotonically-increasing integer.
+// Add this to a migration manually (Prisma doesn't manage sequences directly):
+//   CREATE SEQUENCE IF NOT EXISTS order_number_seq START 1;
 
 generator client {
   provider = "prisma-client-js"
@@ -123,23 +131,44 @@ enum PayoutMethod {
 /// The `family` field enables token-rotation theft detection:
 /// if the same family's old token is replayed, all tokens in that family
 /// are revoked and the user must re-authenticate.
+///
+/// PERFORMANCE FIX (Issue #1): The original design required scanning ALL active tokens
+/// and running bcrypt.compare() against each — O(N) per refresh request.
+/// With 10,000 active users this crashes the server.
+///
+/// Solution: Add a `lookupHash` — a fast SHA-256 fingerprint of the raw token
+/// used as an indexed lookup key. O(1) findUnique by lookupHash, then one
+/// bcrypt.compare() only on the matched row. bcrypt stays for tamper-proof storage;
+/// SHA-256 provides the database search key.
+///
+/// Why SHA-256 for lookup but bcrypt for storage?
+/// - SHA-256 is fast (microseconds) and deterministic — perfect for DB index lookup.
+/// - bcrypt is slow (100ms) and includes a random salt — perfect for credential storage.
+/// - Together: fast lookup + strong storage = best of both worlds.
 model RefreshToken {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String    @db.Uuid
-  tokenHash String    @unique
-  family    String    // UUID — shared across a rotation chain
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @db.Uuid
+  tokenHash   String    @unique        // bcrypt hash — tamper-proof storage
+  /// SHA-256(rawToken) — fast indexed lookup key, not a security boundary.
+  /// Allows O(1) findUnique instead of scanning all rows + bcrypt on each.
+  lookupHash  String?   @unique @db.VarChar(64)
+  family      String    // UUID — shared across a rotation chain
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([family])
+  @@index([userId, revokedAt, expiresAt])  // Composite for "find active tokens by user"
   @@map("refresh_tokens")
 }
 
 /// One-time verification and password recovery codes stored as secure hashes.
+/// CLEANUP NOTE: This table must be periodically cleaned. Run nightly:
+///   DELETE FROM auth_codes WHERE expires_at < NOW() - INTERVAL '24 hours';
+/// Without cleanup, this table grows unbounded and queries slow down.
 model AuthCode {
   id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email     String    @db.VarChar(255)
@@ -151,6 +180,7 @@ model AuthCode {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   @@index([email, type])
+  @@index([expiresAt])  // Supports efficient nightly cleanup queries
   @@map("auth_codes")
 }
 

@@ -86,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const expired = isJwtExpired(storedToken);
 
           if (!expired) {
+            setSessionCookie();
             // Token is still active and valid — verify quietly in background
             try {
               const freshUser = await fetchCurrentUser(storedToken);
@@ -101,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
               const newAccessToken = await refreshAccessToken();
               if (newAccessToken) {
+                setSessionCookie();
                 const refreshedUser = await fetchCurrentUser(newAccessToken);
                 if (refreshedUser && isMounted) {
                   setUser(refreshedUser);
@@ -113,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
               } else {
                 // Refresh failed — both access and refresh tokens expired
+                clearSessionCookie();
                 if (isMounted) {
                   setUser(null);
                   setToken(null);
@@ -141,12 +144,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+function setSessionCookie() {
+  if (typeof document !== "undefined") {
+    document.cookie = "nextdor_session=1; path=/; max-age=2592000; SameSite=Lax";
+  }
+}
+
+function clearSessionCookie() {
+  if (typeof document !== "undefined") {
+    document.cookie = "nextdor_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+  }
+}
+
   const login = useCallback(async (payload: SignInPayload): Promise<AuthUser> => {
     const { user: authUser, accessToken } = await apiSignIn(payload);
     setUser(authUser);
     setToken(accessToken);
 
     if (typeof window !== "undefined") {
+      setSessionCookie();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
       localStorage.setItem(TOKEN_KEY, accessToken);
       if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
@@ -168,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(accessToken);
 
       if (typeof window !== "undefined") {
+        setSessionCookie();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
         localStorage.setItem(TOKEN_KEY, accessToken);
         if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
@@ -185,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
 
     if (typeof window !== "undefined") {
+      clearSessionCookie();
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem("vendor_token");

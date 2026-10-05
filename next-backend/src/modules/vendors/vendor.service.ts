@@ -12,6 +12,7 @@
 
 import bcrypt from "bcryptjs";
 import { VendorRepository } from "./vendor.repository.js";
+import crypto from "node:crypto";
 import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
 import { authService } from "../auth/auth.service.js";
 import {
@@ -21,16 +22,10 @@ import {
 import { logger } from "../../lib/logger.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
+import { EmailService } from "../../lib/email.js";
+import { dispatchEmailAsync } from "../../lib/email.queue.js";
+import { slugify } from "../../lib/slugify.js";
 import type { UserRole, VendorOrderStatus, PayoutStatus } from "@prisma/client";
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 export interface RegisterVendorDto {
   ownerName: string;
@@ -135,7 +130,7 @@ export class VendorService {
         passwordHash,
         phone: dto.phone?.trim() || null,
         role: "VENDOR_OWNER" as UserRole,
-        emailVerified: true,
+        emailVerified: false, // FIX #6: Enforce email verification for vendor accounts
       },
       vendor: {
         name: dto.storeName.trim(),
@@ -172,11 +167,34 @@ export class VendorService {
       ipAddress: "Self-Serve Onboarding",
     });
 
-    const tokens = await authService._issueTokens(user.id);
+    // Generate 6-digit OTP verification code
+    const code = crypto.randomInt(100000, 999999).toString();
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    await prisma.authCode.create({
+      data: {
+        email: user.email,
+        codeHash,
+        type: "VERIFY_EMAIL",
+        expiresAt,
+      },
+    });
+
+    // FIX #13: Send email asynchronously via BullMQ / non-blocking queue
+    await dispatchEmailAsync({
+      type: "verification",
+      email: user.email,
+      name: user.name,
+      code,
+    });
+    logger.info({ vendorId: vendor.id, email: user.email }, "auth: verification code dispatched for new vendor");
+
     return {
       vendor,
       user: authService._safeUser(user),
-      tokens,
+      requiresVerification: true,
+      email: user.email,
     };
   }
 

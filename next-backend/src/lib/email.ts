@@ -76,13 +76,18 @@ export class EmailService {
   static async sendVerificationCode(email: string, name: string, code: string): Promise<boolean> {
     const formattedCode = code.split("").join(" ");
 
-    // Terminal console banner for development inspection
-    console.log("\n" + "=".repeat(60));
-    console.log(`✉️  NEXTDOR EMAIL VERIFICATION CODE`);
-    console.log(`To: ${name} <${email}>`);
-    console.log(`CODE: [ ${formattedCode} ]`);
-    console.log(`Valid for 15 minutes.`);
-    console.log("=".repeat(60) + "\n");
+    // SECURITY: Only log OTP codes in development — NEVER in production.
+    // In production, logs are accessible to anyone with server/log access.
+    // Attacker with log access + this = instant account takeover on any email.
+    if (config.NODE_ENV !== "production") {
+      logger.debug({ to: email, code }, "[DEV] Verification code dispatched");
+      console.log("\n" + "=".repeat(60));
+      console.log(`✉️  NEXTDOR EMAIL VERIFICATION CODE`);
+      console.log(`To: ${name} <${email}>`);
+      console.log(`CODE: [ ${formattedCode} ]`);
+      console.log(`Valid for 15 minutes.`);
+      console.log("=".repeat(60) + "\n");
+    }
 
     const html = `
       <!DOCTYPE html>
@@ -139,13 +144,16 @@ export class EmailService {
   static async sendPasswordResetCode(email: string, name: string, code: string): Promise<boolean> {
     const formattedCode = code.split("").join(" ");
 
-    // Terminal console banner for development inspection
-    console.log("\n" + "=".repeat(60));
-    console.log(`🔑  NEXTDOR PASSWORD RESET CODE`);
-    console.log(`To: ${name} <${email}>`);
-    console.log(`RESET CODE: [ ${formattedCode} ]`);
-    console.log(`Valid for 15 minutes.`);
-    console.log("=".repeat(60) + "\n");
+    // SECURITY: Only log reset codes in development — NEVER in production.
+    if (config.NODE_ENV !== "production") {
+      logger.debug({ to: email, code }, "[DEV] Password reset code dispatched");
+      console.log("\n" + "=".repeat(60));
+      console.log(`🔑  NEXTDOR PASSWORD RESET CODE`);
+      console.log(`To: ${name} <${email}>`);
+      console.log(`RESET CODE: [ ${formattedCode} ]`);
+      console.log(`Valid for 15 minutes.`);
+      console.log("=".repeat(60) + "\n");
+    }
 
     const html = `
       <!DOCTYPE html>

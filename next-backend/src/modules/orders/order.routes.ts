@@ -17,9 +17,12 @@
  *   Admin     → /api/v1/admin/orders
  */
 
+import crypto from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { orderService } from "./order.service.js";
 import { AuthService } from "../auth/auth.service.js";
+import { prisma } from "../../lib/prisma.js";
+import { config } from "../../config/env.js";
 import type { OrderStatus, VendorOrderStatus } from "@prisma/client";
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -262,6 +265,101 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         success: true,
         data: { orderNumber: number, status: order.status },
       });
+    },
+  );
+
+  /**
+   * POST /api/v1/orders/webhook/paystack
+   * Paystack Payment Webhook Handler.
+   *
+   * FIX #8:
+   * 1. Constant-time HMAC-SHA512 verification against PAYSTACK_WEBHOOK_SECRET.
+   * 2. Idempotency guard: deduplicates multiple webhook deliveries before processing.
+   * 3. Atomically updates Payment to SUCCESS, records PaymentAttempt, and marks Order PAID.
+   */
+  app.post(
+    "/webhook/paystack",
+    {
+      schema: {
+        description: "Paystack Payment Webhook Handler (Idempotent)",
+        tags: ["Orders"],
+      },
+    },
+    async (req, reply) => {
+      const signature = req.headers["x-paystack-signature"] as string;
+      if (!signature) {
+        return reply.status(400).send({ success: false, message: "Missing x-paystack-signature header" });
+      }
+
+      const bodyStr = JSON.stringify(req.body);
+      const computedHash = crypto
+        .createHmac("sha512", config.PAYSTACK_WEBHOOK_SECRET)
+        .update(bodyStr)
+        .digest("hex");
+
+      const signatureBuf = Buffer.from(signature, "hex");
+      const hashBuf = Buffer.from(computedHash, "hex");
+
+      if (signatureBuf.length !== hashBuf.length || !crypto.timingSafeEqual(signatureBuf, hashBuf)) {
+        req.log.warn({ ip: req.ip }, "security: invalid Paystack webhook signature");
+        return reply.status(401).send({ success: false, message: "Invalid webhook signature" });
+      }
+
+      const payload = req.body as any;
+      if (payload.event === "charge.success") {
+        const paystackRef = payload.data?.reference;
+        if (!paystackRef) {
+          return reply.status(200).send({ received: true });
+        }
+
+        // FIX #8: Check if a SUCCESS payment attempt already exists (Idempotency)
+        const existingAttempt = await prisma.paymentAttempt.findFirst({
+          where: {
+            payment: { paystackRef },
+            status: "SUCCESS",
+          },
+        });
+
+        if (existingAttempt) {
+          req.log.info({ paystackRef }, "Paystack webhook: duplicate charge.success received — skipping (idempotent)");
+          return reply.status(200).send({ received: true, idempotent: true });
+        }
+
+        const payment = await prisma.payment.findFirst({
+          where: { paystackRef },
+        });
+
+        if (payment) {
+          await prisma.$transaction([
+            prisma.payment.update({
+              where: { id: payment.id },
+              data: {
+                status: "SUCCESS",
+                paidAt: payload.data?.paid_at ? new Date(payload.data.paid_at) : new Date(),
+                metadata: payload.data,
+              },
+            }),
+            prisma.paymentAttempt.create({
+              data: {
+                paymentId: payment.id,
+                status: "SUCCESS",
+                gatewayResp: payload,
+              },
+            }),
+            prisma.order.update({
+              where: { id: payment.orderId },
+              data: {
+                paymentStatus: "PAID",
+                status: "CONFIRMED",
+              },
+            }),
+          ]);
+
+          req.log.info({ orderId: payment.orderId, paystackRef }, "Order marked PAID via Paystack webhook");
+        }
+      }
+
+      return reply.status(200).send({ received: true });
     },
   );
 };

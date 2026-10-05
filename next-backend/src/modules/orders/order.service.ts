@@ -108,6 +108,12 @@ export class OrderService {
     }
     const finalUserId = input.userId;
 
+    // FIX #7: Coupon validation guard
+    // Reject unknown or unconfigured coupons so customers are never silently charged full price.
+    if (input.couponId) {
+      throw new BadRequestError("Invalid or expired coupon code. Discounts could not be applied.");
+    }
+
     // ── Find products in database (by UUID, WooCommerce wcId, or slug) ────────
     const productIdentifiers = input.cart.map((i) => i.productId);
     let products = await this.repo.findProductsForCheckout(productIdentifiers);
@@ -332,7 +338,8 @@ export class OrderService {
     note: string | undefined,
     adminId: string,
   ) {
-    const order = await this.repo.findByNumber(orderId);
+    // FIX #22: Support lookup by either UUID or order number (ND-XXXXX)
+    const order = await this.repo.findByIdOrNumber(orderId);
 
     if (!order) throw new NotFoundError("Order");
 

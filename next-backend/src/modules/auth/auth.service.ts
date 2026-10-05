@@ -5,6 +5,12 @@
  * ─────────────────────────────────────────────────────────────
  * Encapsulates password hashing (bcrypt), JWT access token issuance,
  * opaque refresh token rotation, email verification OTPs, and password recovery.
+ *
+ * KEY FIXES APPLIED:
+ * ─────────────────────────────────────────────────────────────
+ * Fix #1  — O(1) refresh token lookup via SHA-256 + bcrypt dual-hash strategy.
+ * Fix #15 — verifyEmail throws BadRequestError on already-verified instead of
+ *            silently issuing new tokens (was an account takeover vector).
  */
 
 import crypto from "node:crypto";
@@ -20,6 +26,7 @@ import {
 } from "../../lib/errors.js";
 import { UserRepository } from "./user.repository.js";
 import { EmailService } from "../../lib/email.js";
+import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import type { User } from "@prisma/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -49,6 +56,36 @@ function generateOtp(): string {
   return crypto.randomInt(100000, 1000000).toString();
 }
 
+/**
+ * FIX #1 — O(1) Token Lookup via SHA-256 Fingerprint.
+ *
+ * WHY TWO HASHES?
+ * ─────────────────────────────────────────────────────────────
+ * - `tokenHash` (bcrypt):   Slow, salted, tamper-proof — the security guard.
+ *   Cannot be used as a DB lookup key because bcrypt includes a random salt,
+ *   so the same raw token always produces a DIFFERENT hash each time.
+ *
+ * - `lookupHash` (SHA-256): Fast, deterministic — the search key.
+ *   SHA-256(rawToken) always produces the SAME output for the same input,
+ *   so we can store it as a @unique DB index and do a O(1) findUnique().
+ *
+ * HOW IT WORKS:
+ *   On save:    hash(raw, bcrypt) → tokenHash; sha256(raw) → lookupHash
+ *   On lookup:  sha256(incoming) → findUnique(lookupHash) → one bcrypt.compare
+ *
+ * BEFORE FIX (the bug):
+ *   refresh() called findMany({ revokedAt: null }) → loaded ALL active tokens.
+ *   Then looped and ran bcrypt.compare() on EACH. With 10,000 users = 10,000
+ *   bcrypt calls × 100ms each = system halted. O(N) disaster.
+ *
+ * AFTER FIX:
+ *   sha256(incoming) → findUnique(lookupHash) → O(1) indexed DB lookup.
+ *   One single bcrypt.compare(). O(1) regardless of user count.
+ */
+function makeLookupHash(rawToken: string): string {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
 function verifyAccessToken(token: string): { sub: string; role: string; email?: string; vendorId?: string } {
   try {
     return jwt.verify(token, config.JWT_SECRET) as { sub: string; role: string; email?: string; vendorId?: string };
@@ -58,6 +95,7 @@ function verifyAccessToken(token: string): { sub: string; role: string; email?: 
 }
 
 // ─── Auth Service Class ───────────────────────────────────────────────────────
+
 
 export class AuthService {
   constructor(private readonly userRepo: UserRepository) {}
@@ -113,8 +151,13 @@ export class AuthService {
       expiresAt,
     });
 
-    // Send verification email
-    await EmailService.sendVerificationCode(normalizedEmail, user.name, code);
+    // FIX #13: Send verification email asynchronously via queue (non-blocking)
+    await dispatchEmailAsync({
+      type: "verification",
+      email: normalizedEmail,
+      name: user.name,
+      code,
+    });
     logger.info({ userId: user.id, email: normalizedEmail }, "auth: verification code dispatched on register");
 
     return {
@@ -137,9 +180,13 @@ export class AuthService {
       throw new NotFoundError("Account not found");
     }
 
+    // FIX #15: Don't silently issue tokens for already-verified accounts.
+    // Original code issued new login tokens for ANY already-verified email
+    // without checking the code at all — an attacker who knows a victim's email
+    // could call this endpoint to get valid tokens for that user's account.
+    // Correct behaviour: email already verified → direct them to login.
     if (user.emailVerified) {
-      const tokens = await this._issueTokens(user.id);
-      return { user: this._safeUser(user), tokens };
+      throw new BadRequestError("Email already verified. Please log in instead.");
     }
 
     const authCode = await this.userRepo.findLatestValidAuthCode(normalizedEmail, "VERIFY_EMAIL");
@@ -198,7 +245,13 @@ export class AuthService {
       expiresAt,
     });
 
-    await EmailService.sendVerificationCode(normalizedEmail, user.name, code);
+    // FIX #13: Asynchronously dispatch verification email
+    await dispatchEmailAsync({
+      type: "verification",
+      email: normalizedEmail,
+      name: user.name,
+      code,
+    });
     logger.info({ email: normalizedEmail }, "auth: verification code resent");
 
     return {
@@ -229,7 +282,13 @@ export class AuthService {
           expiresAt,
         });
 
-        await EmailService.sendPasswordResetCode(normalizedEmail, user.name, code);
+        // FIX #13: Asynchronously dispatch password reset email
+        await dispatchEmailAsync({
+          type: "password_reset",
+          email: normalizedEmail,
+          name: user.name,
+          code,
+        });
         logger.info({ email: normalizedEmail }, "auth: password reset code dispatched");
       }
     }
@@ -339,40 +398,49 @@ export class AuthService {
 
   /**
    * Exchange a refresh token for a new access + refresh pair (Family Rotation).
+   *
+   * FIX #1 — O(1) lookup via SHA-256 lookupHash.
+   * Before: findMany(ALL active tokens) + bcrypt.compare on each = O(N).
+   * After:  SHA-256(rawToken) → findUnique(lookupHash) = O(1) indexed lookup,
+   *         then one single bcrypt.compare() to confirm authenticity.
+   *
+   * WHY still bcrypt.compare after SHA-256 lookup?
+   * SHA-256 is fast but also easy to compute. If an attacker somehow reads the
+   * lookupHash from DB, they still cannot reverse-engineer the raw token (SHA-256
+   * is a one-way function for 256-bit entropy input). bcrypt.compare adds a second
+   * layer: tamper-proof verification that the token truly matches. Belt + suspenders.
    */
   async refresh(rawRefreshToken: string): Promise<AuthTokens> {
-    const user = await import("../../lib/prisma.js").then(({ prisma }) =>
-      prisma.refreshToken.findMany({
-        where: { revokedAt: null, expiresAt: { gt: new Date() } },
-      })
-    );
+    const { prisma } = await import("../../lib/prisma.js");
+    const lookupHash = makeLookupHash(rawRefreshToken);
 
-    let matched: any = null;
-    for (const token of user) {
-      if (await bcrypt.compare(rawRefreshToken, token.tokenHash)) {
-        matched = token;
-        break;
-      }
+    // O(1) indexed lookup — no table scan
+    const matched = await prisma.refreshToken.findUnique({
+      where: { lookupHash },
+    });
+
+    if (!matched || matched.revokedAt || matched.expiresAt <= new Date()) {
+      throw new UnauthorizedError("Invalid or expired refresh token");
     }
 
-    if (!matched) {
+    // Final verification: bcrypt confirms token was not tampered with
+    const isValid = await bcrypt.compare(rawRefreshToken, matched.tokenHash);
+    if (!isValid) {
       throw new UnauthorizedError("Invalid refresh token");
     }
 
     // Check if this family has any revoked tokens (= replay attack detected)
-    const familyHasRevoked = await import("../../lib/prisma.js").then(({ prisma }) =>
-      prisma.refreshToken.findFirst({
-        where: { family: matched.family, revokedAt: { not: null } },
-      })
-    );
+    const familyHasRevoked = await prisma.refreshToken.findFirst({
+      where: { family: matched.family, revokedAt: { not: null } },
+    });
 
     if (familyHasRevoked) {
       await this.userRepo.revokeTokenFamily(matched.family);
       logger.warn(
         { userId: matched.userId, family: matched.family },
-        "auth: refresh token replay detected — family revoked"
+        "auth: refresh token replay detected — entire family revoked"
       );
-      throw new UnauthorizedError("Session invalidated. Please log in again.");
+      throw new UnauthorizedError("Session invalidated due to suspicious activity. Please log in again.");
     }
 
     // Revoke current token
@@ -386,25 +454,35 @@ export class AuthService {
 
   /**
    * Revoke a refresh token (device logout).
+   *
+   * FIX #1 — O(1) lookup via SHA-256 lookupHash.
+   * Same dual-hash strategy: SHA-256 for fast lookup, bcrypt for verification.
    */
   async logout(rawRefreshToken: string): Promise<void> {
-    const tokens = await import("../../lib/prisma.js").then(({ prisma }) =>
-      prisma.refreshToken.findMany({
-        where: { revokedAt: null },
-      })
-    );
+    const { prisma } = await import("../../lib/prisma.js");
+    const lookupHash = makeLookupHash(rawRefreshToken);
 
-    for (const token of tokens) {
-      if (await bcrypt.compare(rawRefreshToken, token.tokenHash)) {
+    const token = await prisma.refreshToken.findUnique({
+      where: { lookupHash },
+    });
+
+    if (token && !token.revokedAt) {
+      // Verify before revoking (prevents logout-by-hash-guessing attacks)
+      const isValid = await bcrypt.compare(rawRefreshToken, token.tokenHash);
+      if (isValid) {
         await this.userRepo.revokeTokenById(token.id);
         logger.info({ userId: token.userId }, "auth: user logged out");
-        return;
       }
     }
+    // Logout is idempotent: if token not found or already revoked, succeed silently
   }
 
   /**
    * Internal helper: Issues token pair and cleans up expired tokens.
+   *
+   * FIX #1 — Now stores BOTH hashes:
+   * - lookupHash: SHA-256(rawToken) → unique index → O(1) DB lookup
+   * - tokenHash:  bcrypt(rawToken)  → tamper-proof verification
    */
   async _issueTokens(userId: string, existingFamily?: string): Promise<AuthTokens> {
     const user = await this.userRepo.findById(userId);
@@ -412,7 +490,10 @@ export class AuthService {
 
     const accessToken = signAccessToken(userId, user.role, user.email, user.vendorId);
     const refreshToken = generateOpaqueToken();
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
+
+    // Compute both hashes from the raw token
+    const tokenHash  = await bcrypt.hash(refreshToken, 10);      // slow, salted — for verification
+    const lookupHash = makeLookupHash(refreshToken);              // fast, deterministic — for lookup
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
@@ -420,11 +501,14 @@ export class AuthService {
     await this.userRepo.saveRefreshToken({
       userId,
       tokenHash,
+      lookupHash,
       family: existingFamily ?? crypto.randomUUID(),
       expiresAt,
     });
 
     await this.userRepo.deleteExpiredTokens(userId);
+    // FIX #16: Prune expired OTPs in background
+    this.userRepo.deleteExpiredAuthCodes().catch(() => {});
 
     return { accessToken, refreshToken };
   }
