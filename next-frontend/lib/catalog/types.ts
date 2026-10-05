@@ -23,6 +23,13 @@ export type Product = {
   rating: number;
   reviewCount: number;
   inStock: boolean;
+  vendor?: {
+    id?: string;
+    name: string;
+    slug: string;
+    isVerified?: boolean;
+    logoUrl?: string | null;
+  } | null;
 };
 
 export type Category = {

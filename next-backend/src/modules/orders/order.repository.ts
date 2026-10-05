@@ -87,9 +87,15 @@ export class OrderRepository {
       }
     }
 
+    // Fallback: strictly clean sequential order numbers (e.g. ND-00001, ND-00002)
     const count = await tx.order.count();
-    const entropy = Math.floor(100 + Math.random() * 900);
-    return `ND-${String(count + 1).padStart(5, "0")}-${entropy}`;
+    let candidateSeq = count + 1;
+    let candidate = `ND-${String(candidateSeq).padStart(5, "0")}`;
+    while (await tx.order.findUnique({ where: { number: candidate } })) {
+      candidateSeq++;
+      candidate = `ND-${String(candidateSeq).padStart(5, "0")}`;
+    }
+    return candidate;
   }
 
   /**

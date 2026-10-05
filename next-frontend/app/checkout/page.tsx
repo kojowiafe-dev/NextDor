@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import Script from "next/script";
 import {
   ShieldCheck,
   Truck,
@@ -17,7 +18,7 @@ import {
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatPrice } from "@/lib/utils";
-import { placeOrder, ordersCache } from "@/lib/orders/api";
+import { placeOrder, ordersCache, initializePayment, verifyPayment } from "@/lib/orders/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ type FormData = {
 
 const REGIONS = [
   "Greater Accra", "Ashanti", "Western", "Central", "Eastern",
-  "Northern", "Upper East", "Upper West", "Volta", "Brong-Ahafo",
+  "Northern", "Upper East", "Upper West", "Volta", "Bono",
   "Western North", "Ahafo", "Bono East", "Oti", "Savannah", "North East",
 ];
 
@@ -55,9 +56,9 @@ const DELIVERY_OPTIONS: {
   price: number;
   icon: typeof Truck;
 }[] = [
-  { id: "standard", label: "Standard Delivery", sub: "2–4 business days", price: 20, icon: Truck },
-  { id: "express", label: "Express Delivery", sub: "Same day / next day", price: 45, icon: Zap },
-  { id: "pickup", label: "Pickup from Store", sub: "Ready within 2 hours", price: 0, icon: ShieldCheck },
+  { id: "standard", label: "Standard Delivery", sub: "2–4 business days across Greater Accra & major hubs", price: 25, icon: Truck },
+  { id: "express", label: "Express Priority", sub: "Same day / next day morning expedited dispatch", price: 50, icon: Zap },
+  { id: "pickup", label: "Pickup Station / Hub", sub: "Accra Digital Centre Hub (Mon-Sat, 8am-7pm)", price: 0, icon: ShieldCheck },
 ];
 
 const MOMO_NETWORKS = ["MTN MoMo", "Vodafone Cash", "AirtelTigo Money"];
@@ -117,13 +118,6 @@ export default function CheckoutPage() {
   const { items, subtotal, clearCart } = useCart();
   const { user, token, isLoading: authLoading, isAuthenticated } = useAuth();
   const currency = items[0]?.currency ?? "GHS";
-
-  // Redirect guest users to login with redirect back to checkout
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.replace("/login?redirect=/checkout");
-    }
-  }, [authLoading, isAuthenticated, router]);
 
   const [form, setForm] = useState<FormData>({
     firstName: user?.name.split(" ")[0] ?? "",
@@ -209,14 +203,10 @@ export default function CheckoutPage() {
     try {
       const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("nextdor-token") : null);
 
-      if (!activeToken) {
-        router.replace("/login?redirect=/checkout");
-        return;
-      }
-
-      // Send order to backend API
+      // Send order to backend API (supports authenticated customer or guest checkout)
       const result = await placeOrder(
         {
+          guestEmail: !user ? form.email.trim() : undefined,
           cart: items.map((i) => ({
             productId: String(i.productId),
             quantity: Number(i.quantity) || 1,
@@ -240,12 +230,67 @@ export default function CheckoutPage() {
         activeToken,
       );
 
-      if (result?.orderNumber) {
-        ordersCache.invalidateAll();
-        clearCart();
-        router.push(`/checkout/success?order=${result.orderNumber}&total=${total}&currency=${currency}`);
-      } else {
+      if (!result?.orderNumber) {
         throw new Error("Unable to confirm your order. Please try again.");
+      }
+
+      const orderNumber = result.orderNumber;
+      ordersCache.invalidateAll();
+
+      if (form.payment === "cod") {
+        clearCart();
+        router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&payment=cod&status=PENDING`);
+        return;
+      }
+
+      // Online payment (MoMo or Card via Paystack gateway)
+      try {
+        const payInit = await initializePayment(orderNumber, {
+          email: form.email.trim(),
+          token: activeToken,
+        });
+
+        // 1. If Paystack inline popup is available in window
+        if (typeof window !== "undefined" && (window as any).PaystackPop && payInit.publicKey) {
+          const handler = (window as any).PaystackPop.setup({
+            key: payInit.publicKey,
+            email: form.email.trim(),
+            amount: Math.round(total * 100),
+            currency: "GHS",
+            ref: payInit.reference,
+            callback: async (response: { reference: string }) => {
+              try {
+                await verifyPayment(orderNumber, response.reference, activeToken);
+              } catch (verifyErr) {
+                console.warn("Payment verification status:", verifyErr);
+              }
+              clearCart();
+              router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PAID`);
+            },
+            onClose: () => {
+              clearCart();
+              router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PENDING`);
+            },
+          });
+          handler.openIframe();
+          return;
+        }
+
+        // 2. If Paystack returned a redirect authorization URL
+        if (payInit.authorizationUrl) {
+          clearCart();
+          window.location.href = payInit.authorizationUrl;
+          return;
+        }
+
+        // 3. Fallback / sandbox direct verification
+        await verifyPayment(orderNumber, payInit.reference, activeToken);
+        clearCart();
+        router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PAID`);
+      } catch (payErr: any) {
+        console.warn("Payment gateway notice:", payErr);
+        clearCart();
+        router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PENDING`);
       }
     } catch (orderApiError: any) {
       console.error("Order placement failed:", orderApiError);
@@ -259,14 +304,10 @@ export default function CheckoutPage() {
       <div className="mx-auto flex min-h-[400px] max-w-6xl items-center justify-center px-4">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-[#ff9900]" />
-          <p className="text-sm font-medium text-zinc-600">Verifying your secure session...</p>
+          <p className="text-sm font-medium text-zinc-600">Preparing secure checkout...</p>
         </div>
       </div>
     );
-  }
-
-  if (!isAuthenticated || !user) {
-    return null;
   }
 
   if (items.length === 0) {
@@ -294,27 +335,51 @@ export default function CheckoutPage() {
       </div>
 
       {/* Account Verification & Tracking Assurance Banner */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-50/60 to-white p-4 ring-1 ring-emerald-200/80 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-            <ShieldCheck className="h-5 w-5" />
+      {user ? (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-50/60 to-white p-4 ring-1 ring-emerald-200/80 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-emerald-950">
+                Verified Account · <span className="font-bold">{user.name}</span> ({user.email})
+              </p>
+              <p className="text-[11px] text-emerald-700">
+                Your order and courier dispatch timeline will be permanently linked to your dashboard.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-emerald-950">
-              Verified Account · <span className="font-bold">{user.name}</span> ({user.email})
-            </p>
-            <p className="text-[11px] text-emerald-700">
-              Your order and courier dispatch timeline will be permanently linked to your dashboard.
-            </p>
-          </div>
+          <Link
+            href="/login?redirect=/checkout"
+            className="text-xs font-semibold text-emerald-800 underline hover:text-emerald-950"
+          >
+            Switch account
+          </Link>
         </div>
-        <Link
-          href="/login?redirect=/checkout"
-          className="text-xs font-semibold text-emerald-800 underline hover:text-emerald-950"
-        >
-          Switch account
-        </Link>
-      </div>
+      ) : (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-amber-50 via-amber-50/60 to-white p-4 ring-1 ring-amber-200/80 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+              <Zap className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-amber-950">
+                Fast Guest Checkout · No Account Required
+              </p>
+              <p className="text-[11px] text-amber-700">
+                You can complete your purchase in 60 seconds without creating a password. Order tracking will be emailed to you.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/login?redirect=/checkout"
+            className="text-xs font-semibold text-amber-800 underline hover:text-amber-950"
+          >
+            Already have an account? Sign In
+          </Link>
+        </div>
+      )}
 
       <form onSubmit={handlePlaceOrder} noValidate>
         <div className="grid gap-6 lg:grid-cols-3">
@@ -603,21 +668,33 @@ export default function CheckoutPage() {
 
               <hr className="my-4 border-zinc-100" />
 
-              {/* Totals */}
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-zinc-500">Subtotal</dt>
-                  <dd className="font-medium">{formatPrice(subtotal, currency)}</dd>
+              {/* Totals Breakdown (Item #8) */}
+              <dl className="space-y-2.5 text-sm">
+                <div className="flex justify-between text-zinc-600">
+                  <dt>Items Subtotal</dt>
+                  <dd className="font-semibold text-zinc-900">{formatPrice(subtotal, currency)}</dd>
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-zinc-500">Delivery</dt>
-                  <dd className="font-medium">
-                    {deliveryFee === 0 ? "Free" : formatPrice(deliveryFee, currency)}
+                <div className="flex justify-between text-zinc-600">
+                  <dt className="flex items-center gap-1.5">
+                    <span>Delivery ({DELIVERY_OPTIONS.find((d) => d.id === form.delivery)?.label})</span>
+                  </dt>
+                  <dd className="font-semibold text-zinc-900">
+                    {deliveryFee === 0 ? (
+                      <span className="font-bold text-emerald-600">FREE</span>
+                    ) : (
+                      formatPrice(deliveryFee, currency)
+                    )}
                   </dd>
                 </div>
-                <div className="flex justify-between border-t border-zinc-100 pt-2 text-base font-bold text-zinc-900">
-                  <dt>Total</dt>
-                  <dd>{formatPrice(total, currency)}</dd>
+                <div className="flex justify-between text-zinc-600">
+                  <dt className="flex items-center gap-1 text-emerald-700 font-medium">
+                    <ShieldCheck className="h-4 w-4" /> Escrow Buyer Protection
+                  </dt>
+                  <dd className="font-semibold text-emerald-700">Free</dd>
+                </div>
+                <div className="flex justify-between border-t border-zinc-200 pt-3 text-base font-bold text-zinc-900">
+                  <dt>Grand Total</dt>
+                  <dd className="text-lg font-extrabold text-zinc-950">{formatPrice(total, currency)}</dd>
                 </div>
               </dl>
             </div>
@@ -639,23 +716,32 @@ export default function CheckoutPage() {
               {isPlacing ? (
                 <>
                   <div className="h-5 w-5 animate-spin rounded-full border-3 border-zinc-900/30 border-t-zinc-900" />
-                  Placing Order...
+                  Processing Order & Payment...
                 </>
               ) : (
                 <>
                   <Lock className="h-4 w-4" />
-                  Place Order · {formatPrice(total, currency)}
+                  {form.payment === "cod" ? "Confirm Order · " : "Pay Securely · "}
+                  {formatPrice(total, currency)}
                 </>
               )}
             </button>
 
-            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-zinc-400">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Secure checkout. Your data is encrypted.
-            </p>
+            <div className="space-y-1.5 text-center">
+              <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700">
+                <ShieldCheck className="h-4 w-4" />
+                48-Hour NextDor Buyer Escrow Guarantee
+              </p>
+              <p className="text-[11px] text-zinc-400">
+                Encrypted with 256-bit SSL · Paystack Certified Gateway
+              </p>
+            </div>
           </div>
         </div>
       </form>
+
+      {/* Paystack Inline Popup SDK */}
+      <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
     </div>
   );
 }

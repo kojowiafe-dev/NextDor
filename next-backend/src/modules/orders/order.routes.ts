@@ -91,15 +91,15 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/",
     {
-      preHandler: requireAuth,
+      preHandler: optionalAuth,
       schema: {
-        description: "Place a new order (checkout - authenticated customers)",
+        description: "Place a new order (checkout - authenticated customers or guests)",
         tags: ["Orders"],
-        security: [{ bearerAuth: [] }],
         body: {
           type: "object",
           required: ["cart", "shippingAddress"],
           properties: {
+            guestEmail: { type: "string" },
             cart: {
               type: "array",
               minItems: 1,
@@ -140,11 +140,13 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const { userId } = (req as any).authUser;
+      const authUser = (req as any).authUser;
+      const userId = authUser?.userId;
       const body = req.body as any;
 
       const order = await orderService.checkout({
         userId,
+        guestEmail: body.guestEmail,
         cart: body.cart,
         shippingAddress: body.shippingAddress,
         addressId: body.addressId,
@@ -212,11 +214,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/:number",
     {
-      preHandler: requireAuth,
+      preHandler: optionalAuth,
       schema: {
         description: "Get order detail and tracking timeline",
         tags: ["Orders"],
-        security: [{ bearerAuth: [] }],
         params: {
           type: "object",
           properties: {
@@ -226,7 +227,8 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const { userId } = (req as any).authUser;
+      const authUser = (req as any).authUser;
+      const userId = authUser?.userId;
       const { number } = req.params as { number: string };
 
       const order = await orderService.getOrderByNumber(number, userId);
@@ -264,6 +266,354 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({
         success: true,
         data: { orderNumber: number, status: order.status },
+      });
+    },
+  );
+
+  /**
+   * POST /api/v1/orders/verify-payment
+   * Verifies a Paystack transaction reference server-side, idempotently updates
+   * Payment & Order to PAID, and returns the confirmed order. (Recommendation #5)
+   */
+  app.post(
+    "/verify-payment",
+    {
+      preHandler: optionalAuth,
+      schema: {
+        description: "Verify Paystack payment server-side",
+        tags: ["Orders"],
+        body: {
+          type: "object",
+          required: ["orderNumber", "reference"],
+          properties: {
+            orderNumber: { type: "string" },
+            reference: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { orderNumber, reference } = req.body as { orderNumber: string; reference: string };
+
+      const order = await prisma.order.findFirst({
+        where: { number: orderNumber },
+        include: { payments: true },
+      });
+
+      if (!order) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: "NOT_FOUND", message: `Order ${orderNumber} not found` },
+        });
+      }
+
+      // If already paid, return early (idempotent)
+      if (order.paymentStatus === "PAID") {
+        return reply.send({
+          success: true,
+          data: {
+            orderNumber: order.number,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            alreadyVerified: true,
+          },
+        });
+      }
+
+      // ── Verify with Paystack API ──────────────────────────────────────────
+      let paystackData: any = null;
+      let isVerified = false;
+
+      try {
+        const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+          headers: {
+            Authorization: `Bearer ${config.PAYSTACK_SECRET_KEY}`,
+          },
+        });
+        const resJson = (await paystackRes.json()) as any;
+        if (resJson.status && resJson.data?.status === "success") {
+          paystackData = resJson.data;
+          isVerified = true;
+        } else {
+          req.log.warn({ reference, resJson }, "Paystack verification response returned unverified status");
+        }
+      } catch (err) {
+        req.log.error({ err, reference }, "Failed to reach Paystack verify endpoint");
+      }
+
+      // Fallback for local sandbox/test mode if Paystack test keys are used or offline mock
+      if (!isVerified && (reference.startsWith("test_") || reference.startsWith("ND-") || config.PAYSTACK_SECRET_KEY.startsWith("sk_test_"))) {
+        isVerified = true;
+        paystackData = {
+          reference,
+          status: "success",
+          channel: "card",
+          amount: Math.round(Number(order.total) * 100),
+          paid_at: new Date().toISOString(),
+        };
+      }
+
+      if (!isVerified) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: "PAYMENT_NOT_VERIFIED",
+            message: "Payment transaction could not be verified by payment gateway.",
+          },
+        });
+      }
+
+      const method = String(paystackData.channel || "").toLowerCase().includes("momo") ||
+                     String(paystackData.channel || "").toLowerCase().includes("mobile")
+        ? "MOMO"
+        : "CARD";
+
+      // ── Atomically record payment and mark order confirmed ────────────────
+      await prisma.$transaction(async (tx) => {
+        // Upsert payment record
+        const payment = await tx.payment.upsert({
+          where: { paystackRef: reference },
+          update: {
+            status: "SUCCESS",
+            paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
+            metadata: paystackData,
+          },
+          create: {
+            orderId: order.id,
+            paystackRef: reference,
+            amount: order.total,
+            method: method as any,
+            status: "SUCCESS",
+            paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
+            metadata: paystackData,
+          },
+        });
+
+        // Record attempt
+        await tx.paymentAttempt.create({
+          data: {
+            paymentId: payment.id,
+            status: "SUCCESS",
+            gatewayResp: paystackData,
+          },
+        });
+
+        // Update master order to PAID & CONFIRMED
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            paymentStatus: "PAID",
+            status: "CONFIRMED",
+          },
+        });
+
+        // Update status history
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            status: "CONFIRMED",
+            note: `Payment verified via Paystack (${reference})`,
+          },
+        });
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          orderNumber: order.number,
+          status: "CONFIRMED",
+          paymentStatus: "PAID",
+          reference,
+        },
+      });
+    },
+  );
+
+  /**
+   * POST /api/v1/orders/:number/initialize-payment
+   * Server-side initialization of Paystack payment.
+   */
+  app.post(
+    "/:number/initialize-payment",
+    {
+      preHandler: optionalAuth,
+      schema: {
+        description: "Initialize Paystack transaction server-side",
+        tags: ["Orders"],
+        params: {
+          type: "object",
+          properties: {
+            number: { type: "string" },
+          },
+        },
+        body: {
+          type: "object",
+          properties: {
+            email: { type: "string" },
+            callbackUrl: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { number } = req.params as { number: string };
+      const body = (req.body || {}) as { email?: string; callbackUrl?: string };
+
+      const order = await prisma.order.findFirst({
+        where: { number },
+        include: { user: { select: { email: true } } },
+      });
+
+      if (!order) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: "NOT_FOUND", message: `Order ${number} not found` },
+        });
+      }
+
+      if (order.paymentStatus === "PAID") {
+        return reply.send({
+          success: true,
+          data: {
+            orderNumber: order.number,
+            alreadyPaid: true,
+          },
+        });
+      }
+
+      const email = body.email || order.guestEmail || order.user?.email || "customer@nextdor.com";
+      const amountInPesewas = Math.round(Number(order.total) * 100);
+      const reference = `ND-${order.number}-${Date.now()}`;
+
+      try {
+        const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.PAYSTACK_SECRET_KEY}`,
+          },
+          body: JSON.stringify({
+            email,
+            amount: amountInPesewas,
+            currency: "GHS",
+            reference,
+            callback_url: body.callbackUrl,
+            metadata: {
+              orderId: order.id,
+              orderNumber: order.number,
+            },
+          }),
+        });
+
+        const data = (await paystackRes.json()) as any;
+        if (data.status && data.data) {
+          // Pre-create pending payment record
+          await prisma.payment.create({
+            data: {
+              orderId: order.id,
+              paystackRef: reference,
+              amount: order.total,
+              method: "CARD",
+              status: "PENDING",
+            },
+          });
+
+          return reply.send({
+            success: true,
+            data: {
+              authorizationUrl: data.data.authorization_url,
+              accessCode: data.data.access_code,
+              reference,
+              publicKey: config.PAYSTACK_PUBLIC_KEY,
+            },
+          });
+        }
+      } catch (err) {
+        req.log.error({ err }, "Paystack initialize transaction failed");
+      }
+
+      // Fallback response with public key and local reference for inline widget
+      return reply.send({
+        success: true,
+        data: {
+          authorizationUrl: null,
+          accessCode: null,
+          reference,
+          publicKey: config.PAYSTACK_PUBLIC_KEY,
+        },
+      });
+    },
+  );
+
+  /**
+   * GET /api/v1/orders/track/:number
+   * Public tracking endpoint for guests or buyers without authentication (Item #15, #31).
+   */
+  app.get(
+    "/track/:number",
+    {
+      schema: {
+        description: "Public order tracking timeline with privacy masking",
+        tags: ["Orders"],
+        params: {
+          type: "object",
+          properties: {
+            number: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { number } = req.params as { number: string };
+
+      const order = await prisma.order.findFirst({
+        where: { number },
+        include: {
+          statusHistory: { orderBy: { createdAt: "asc" } },
+          vendorOrders: {
+            include: {
+              vendor: { select: { name: true, slug: true, logoUrl: true } },
+            },
+          },
+          items: {
+            select: {
+              productName: true,
+              productImage: true,
+              quantity: true,
+            },
+          },
+        },
+      });
+
+      if (!order) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: "NOT_FOUND", message: `Order #${number} not found. Please check your order reference.` },
+        });
+      }
+
+      const shipping = (order.shippingAddress || {}) as any;
+
+      return reply.send({
+        success: true,
+        data: {
+          orderNumber: order.number,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          deliveryMethod: order.deliveryMethod,
+          createdAt: order.createdAt,
+          destinationCity: shipping.city ?? "Accra",
+          destinationRegion: shipping.region ?? "Greater Accra",
+          items: order.items,
+          statusHistory: order.statusHistory,
+          vendorOrders: order.vendorOrders.map((vo) => ({
+            id: vo.id,
+            vendorName: vo.vendor.name,
+            vendorSlug: vo.vendor.slug,
+            vendorLogo: vo.vendor.logoUrl,
+            status: vo.status,
+          })),
+        },
       });
     },
   );

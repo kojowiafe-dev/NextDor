@@ -304,11 +304,15 @@ export default function AdminDashboardPage() {
 
   const recentOrders = orders.slice(0, 5);
   // Exclude cancelled and refunded orders from revenue, platform fees, and escrow calculations
-  const activeRevenueOrders = orders.filter(
-    (o) => o.status !== "cancelled" && o.status !== "refunded"
-  );
-  const totalRevenue = activeRevenueOrders.reduce((s, o) => s + o.total, 0);
-  const pipelineOrders = orders.filter((o) => o.status === "processing" || o.status === "pending" || o.status === "confirmed" || o.status === "shipped");
+  const activeRevenueOrders = orders.filter((o) => {
+    const st = String(o.status || "").toLowerCase().trim();
+    return st !== "cancelled" && st !== "refunded";
+  });
+  const totalRevenue = activeRevenueOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const pipelineOrders = orders.filter((o) => {
+    const st = String(o.status || "").toLowerCase().trim();
+    return st === "processing" || st === "pending" || st === "confirmed" || st === "shipped";
+  });
   const platformFee = totalRevenue * 0.10; // 10% platform cut
   const escrowHold = totalRevenue * 0.90; // 90% escrow reserve held for merchants
 
@@ -316,11 +320,12 @@ export default function AdminDashboardPage() {
     const buckets = [0, 0, 0, 0, 0, 0, 0];
     const now = Date.now();
     for (const order of orders) {
-      if (order.status !== "cancelled" && order.status !== "refunded") {
+      const st = String(order.status || "").toLowerCase().trim();
+      if (st !== "cancelled" && st !== "refunded") {
         const orderTime = new Date(order.date).getTime();
         const diffDays = Math.floor((now - orderTime) / (24 * 60 * 60 * 1000));
         if (diffDays >= 0 && diffDays < 7) {
-          buckets[6 - diffDays] += order.total;
+          buckets[6 - diffDays] += (Number(order.total) || 0);
         }
       }
     }

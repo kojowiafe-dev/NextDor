@@ -103,10 +103,23 @@ export class OrderService {
       throw new BadRequestError("Cart is empty");
     }
 
-    if (!input.userId) {
-      throw new UnauthorizedError("You must be signed in to complete checkout.");
+    if (!input.userId && !input.guestEmail) {
+      throw new BadRequestError("An email address or signed-in customer account is required for checkout.");
     }
-    const finalUserId = input.userId;
+
+    let finalUserId: string | undefined = input.userId;
+    const cleanGuestEmail = input.guestEmail ? input.guestEmail.toLowerCase().trim() : undefined;
+
+    // If guest checked out with an email that belongs to a registered user, link the order
+    if (!finalUserId && cleanGuestEmail) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: cleanGuestEmail },
+        select: { id: true },
+      });
+      if (existingUser) {
+        finalUserId = existingUser.id;
+      }
+    }
 
     // FIX #7: Coupon validation guard
     // Reject unknown or unconfigured coupons so customers are never silently charged full price.
@@ -265,6 +278,7 @@ export class OrderService {
     // ── Persist order ──────────────────────────────────────────────────────
     const order = await this.repo.placeOrder({
       userId: finalUserId,
+      guestEmail: cleanGuestEmail,
       addressId: input.addressId,
       shippingAddress: input.shippingAddress,
       deliveryMethod,

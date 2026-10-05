@@ -13,6 +13,9 @@ import { ProductRow } from "@/components/home/ProductRow";
 import { ReviewsSection } from "@/components/product/ReviewsSection";
 import { OtherSellersSection } from "@/components/product/OtherSellersSection";
 
+import { ProductDeliveryInfo } from "@/components/product/ProductDeliveryInfo";
+import { ProductSpecifications } from "@/components/product/ProductSpecifications";
+
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -75,14 +78,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 <Star
                   key={index}
                   className={`h-4 w-4 ${
-                    index < Math.round(product.rating)
+                    product.reviewCount > 0 && index < Math.round(product.rating)
                       ? "fill-current"
-                      : "fill-zinc-200 text-zinc-200"
+                      : "fill-zinc-100 text-zinc-300"
                   }`}
                 />
               ))}
             </div>
-            <span>{product.reviewCount} reviews</span>
+            <span>
+              {product.reviewCount > 0
+                ? `${product.reviewCount} reviews`
+                : "No reviews yet"}
+            </span>
           </div>
 
           {product.onSale && product.regularPrice && product.regularPrice > product.price && (
@@ -100,6 +107,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </p>
 
           <AddToCartButton product={product} />
+
+          {/* Delivery & Trust Widget (Items #9, #10, #25, #26, #32) */}
+          <div className="pt-2">
+            <ProductDeliveryInfo
+              vendor={product.vendor ? {
+                name: product.vendor.name,
+                slug: product.vendor.slug,
+                isVerified: true,
+              } : null}
+              currency={product.currency}
+            />
+          </div>
         </div>
       </div>
 
@@ -112,6 +131,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
           dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
         />
       </section>
+
+      {/* Specifications, SKU & Warranty (Items #20 & #22) */}
+      <ProductSpecifications product={product} />
 
       {/* Multi-Seller Grouping: Alternative Merchant Offers */}
       {otherSellers.length > 0 && (

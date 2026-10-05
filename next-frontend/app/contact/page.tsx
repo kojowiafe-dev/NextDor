@@ -8,29 +8,33 @@ export const metadata: Metadata = {
     "Get in touch with the Nextdor team. We're here to help with orders, deliveries, and anything else.",
 };
 
+import { SITE_CONFIG } from "@/lib/constants/siteConfig";
+
 const contactDetails = [
   {
     icon: Phone,
-    label: "Phone",
-    value: "+233 20 000 0000",
+    label: "Phone Support",
+    value: SITE_CONFIG.phoneDisplay,
     sub: "Mon–Sat, 8am–6pm GMT",
+    href: `tel:${SITE_CONFIG.phone}`,
   },
   {
     icon: Mail,
-    label: "Email",
-    value: "hello@nextdor.online",
-    sub: "We reply within 24 hours",
+    label: "Email Us",
+    value: SITE_CONFIG.email,
+    sub: "Fast response within 24 hours",
+    href: `mailto:${SITE_CONFIG.email}`,
   },
   {
     icon: MapPin,
-    label: "Address",
-    value: "Independence Avenue, Accra",
-    sub: "Greater Accra, Ghana",
+    label: "Office Address",
+    value: SITE_CONFIG.address,
+    sub: `${SITE_CONFIG.city}, ${SITE_CONFIG.region}, ${SITE_CONFIG.country}`,
   },
   {
     icon: Clock,
     label: "Business Hours",
-    value: "Mon – Sat: 8am – 6pm",
+    value: "Mon – Sat: 8:00 AM – 6:00 PM",
     sub: "Sunday: Closed",
   },
 ];

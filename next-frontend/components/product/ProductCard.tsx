@@ -114,14 +114,16 @@ export function ProductCard({ product }: ProductCardProps) {
               <Star
                 key={index}
                 className={`h-3 w-3 ${
-                  index < Math.round(product.rating || 4.5)
+                  product.reviewCount > 0 && index < Math.round(product.rating)
                     ? "fill-current"
-                    : "fill-zinc-200 text-zinc-200"
+                    : "fill-zinc-100 text-zinc-300"
                 }`}
               />
             ))}
           </div>
-          <span className="text-[11px]">({product.reviewCount || 12})</span>
+          <span className="text-[11px] text-zinc-400">
+            ({product.reviewCount || 0})
+          </span>
         </div>
 
         {/* Price */}
