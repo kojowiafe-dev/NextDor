@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import StoreLayout from "@/components/layout/StoreLayout";
+import { NavigationProgressBar } from "@/components/ui/NavigationProgressBar";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -21,11 +23,13 @@ export const metadata: Metadata = {
   },
 };
 
-
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${outfit.variable} h-full antialiased`}>
       <body className="min-h-full font-sans">
+        <Suspense fallback={null}>
+          <NavigationProgressBar />
+        </Suspense>
         <StoreLayout>{children}</StoreLayout>
       </body>
     </html>

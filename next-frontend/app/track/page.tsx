@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { fetchPublicOrderTracking, type PublicOrderTracking } from "@/lib/orders/api";
 import { SITE_CONFIG } from "@/lib/constants/siteConfig";
+import { NextDorPageLoader } from "@/components/ui/NextDorPageLoader";
 
 // ─── 7-Stage Order Lifecycle Progression (Item #12) ───────────────────────────
 
@@ -173,6 +174,17 @@ function TrackingContent() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Loading state indicator */}
+        {isLoading && !activeTracking && (
+          <div className="mt-8 rounded-2xl bg-white p-8 shadow-xs ring-1 ring-zinc-200">
+            <NextDorPageLoader
+              message="Locating your package..."
+              subMessage="Connecting to NextDor Logistics & Store Dispatch"
+              fullScreen={false}
+            />
           </div>
         )}
 

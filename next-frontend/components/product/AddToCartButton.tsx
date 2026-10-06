@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { ShoppingCart, Zap, Check, Plus, Minus } from "lucide-react";
 import type { Product } from "@/lib/catalog/types";
 import { useCart } from "@/context/CartContext";
-import { PriceDisplay } from "./PriceDisplay";
 
 type AddToCartButtonProps = {
   product: Product;
@@ -52,8 +51,6 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
 
   return (
     <div className="space-y-4">
-      <PriceDisplay product={product} size="lg" />
-
       {product.inStock && (
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-zinc-600">Quantity:</span>
