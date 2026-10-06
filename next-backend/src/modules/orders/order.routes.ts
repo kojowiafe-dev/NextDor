@@ -23,6 +23,7 @@ import { orderService } from "./order.service.js";
 import { AuthService } from "../auth/auth.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/env.js";
+import { EmailService } from "../../lib/email.js";
 import type { OrderStatus, VendorOrderStatus } from "@prisma/client";
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -297,7 +298,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 
       const order = await prisma.order.findFirst({
         where: { number: orderNumber },
-        include: { payments: true },
+        include: { payments: true, user: true },
       });
 
       if (!order) {
@@ -416,6 +417,23 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           },
         });
       });
+
+      // Asynchronously notify customer that payment is confirmed
+      const shipAddr = (order.shippingAddress as any) || {};
+      const customerEmail = order.guestEmail || order.user?.email;
+      const customerName = shipAddr.recipientName || order.user?.name || "Customer";
+
+      if (customerEmail) {
+        EmailService.sendOrderStatusUpdate({
+          email: customerEmail,
+          customerName,
+          orderNumber: order.number,
+          status: "PAYMENT VERIFIED & CONFIRMED",
+          note: `Your payment of GH₵${Number(order.total).toFixed(2)} was successfully verified via Paystack (${reference}).`,
+        }).catch((err) => {
+          req.log.warn({ err, orderNumber: order.number }, "Failed to send payment verified email");
+        });
+      }
 
       return reply.send({
         success: true,

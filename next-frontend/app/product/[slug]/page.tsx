@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Star } from "lucide-react";
@@ -21,12 +22,43 @@ type ProductPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export async function generateMetadata({ params }: ProductPageProps) {
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
+
+  if (!product) {
+    return {
+      title: "Product Not Found | NextDor Ghana",
+    };
+  }
+
+  const title = `${product.name} — Buy Online in Ghana | NextDor`;
+  const description =
+    product.shortDescription ||
+    `Buy ${product.name} at the best price in Ghana on NextDor. Verified sellers, fast delivery across Accra and nationwide, 48-hour buyer escrow guarantee.`;
+  const canonicalUrl = `https://nextdor.online/product/${product.slug}`;
+  const images = product.images?.[0]?.src ? [product.images[0].src] : [];
+
   return {
-    title: product?.name ?? "Product",
-    description: product?.shortDescription,
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl,
+      siteName: "NextDor Ghana",
+      images: images.map((url) => ({ url, alt: product.name })),
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images,
+    },
   };
 }
 
@@ -44,8 +76,50 @@ export default async function ProductPage({ params }: ProductPageProps) {
   ]);
   const sanitizedDescription = sanitizeHtml(product.description || "");
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    image: product.images?.map((img) => img.src) || [],
+    description: product.shortDescription || product.description,
+    sku: product.id,
+    brand: {
+      "@type": "Brand",
+      name: "NextDor",
+    },
+    offers: {
+      "@type": "Offer",
+      url: `https://nextdor.online/product/${product.slug}`,
+      priceCurrency: "GHS",
+      price: product.price,
+      priceValidUntil: "2027-12-31",
+      itemCondition: "https://schema.org/NewCondition",
+      availability: product.inStock
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+      seller: {
+        "@type": "Organization",
+        name: product.vendor?.name || "NextDor Verified Merchant",
+      },
+    },
+    ...(product.reviewCount > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: product.rating,
+            reviewCount: product.reviewCount,
+          },
+        }
+      : {}),
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
+      {/* Schema.org Structured Data for Google Rich Snippets */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <nav className="mb-4 text-sm text-zinc-500">
         <Link href="/" className="hover:text-[#c7511f] hover:underline">
           Home

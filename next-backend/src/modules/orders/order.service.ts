@@ -21,6 +21,7 @@ import { OrderRepository } from "./order.repository.js";
 import { Money } from "../../domain/Money.js";
 import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
 import { logger } from "../../lib/logger.js";
+import { EmailService } from "../../lib/email.js";
 import {
   NotFoundError,
   BadRequestError,
@@ -297,6 +298,20 @@ export class OrderService {
       "order: checkout completed",
     );
 
+    // Asynchronously dispatch confirmation and vendor notifications (non-blocking)
+    this.dispatchOrderPlacedEmails(
+      order.number,
+      order.total,
+      order.subtotal,
+      order.deliveryFee,
+      enrichedItems,
+      input.shippingAddress,
+      cleanGuestEmail,
+      finalUserId
+    ).catch((err) => {
+      logger.warn({ err, orderNumber: order.number }, "Order placed email dispatch error");
+    });
+
     return order;
   }
 
@@ -335,12 +350,26 @@ export class OrderService {
       );
     }
 
-    return this.repo.updateStatus(
+    const updated = await this.repo.updateStatus(
       order.id,
       "CANCELLED",
       "Cancelled by customer",
       userId,
     );
+
+    const shipAddr = order.shippingAddress as any;
+    this.dispatchStatusUpdateEmail(
+      order.number,
+      "CANCELLED",
+      "Your order has been cancelled upon your request.",
+      order.guestEmail || undefined,
+      order.userId || undefined,
+      shipAddr?.recipientName
+    ).catch((err) => {
+      logger.warn({ err, orderNumber: order.number }, "Order cancellation email dispatch error");
+    });
+
+    return updated;
   }
 
   /**
@@ -364,7 +393,21 @@ export class OrderService {
       );
     }
 
-    return this.repo.updateStatus(order.id, newStatus, note, adminId);
+    const updated = await this.repo.updateStatus(order.id, newStatus, note, adminId);
+
+    const shipAddr = order.shippingAddress as any;
+    this.dispatchStatusUpdateEmail(
+      order.number,
+      newStatus,
+      note,
+      order.guestEmail || undefined,
+      order.userId || undefined,
+      shipAddr?.recipientName
+    ).catch((err) => {
+      logger.warn({ err, orderNumber: order.number }, "Order status update email dispatch error");
+    });
+
+    return updated;
   }
 
   /**
@@ -411,6 +454,139 @@ export class OrderService {
     }
 
     return this.repo.updateVendorOrderStatus(vendorOrderId, newStatus);
+  }
+
+  // ─── Private Email Dispatch Helpers ─────────────────────────────────────────
+
+  private async dispatchOrderPlacedEmails(
+    orderNumber: string,
+    total: any,
+    subtotal: any,
+    deliveryFee: any,
+    items: Array<{
+      productName: string;
+      quantity: number;
+      unitPrice: any;
+      subtotal: any;
+      vendorId?: string | null;
+      productImage?: string | null;
+    }>,
+    shippingAddress: {
+      recipientName?: string;
+      recipientPhone?: string;
+      street: string;
+      city: string;
+      region: string;
+    },
+    guestEmail?: string,
+    userId?: string
+  ): Promise<void> {
+    try {
+      let customerEmail = guestEmail;
+      let customerName = shippingAddress?.recipientName || "Valued Customer";
+
+      if (userId) {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (user) {
+          customerEmail = user.email || customerEmail;
+          customerName = user.name || customerName;
+        }
+      }
+
+      // 1. Dispatch confirmation to customer/guest
+      if (customerEmail) {
+        await EmailService.sendOrderConfirmation({
+          email: customerEmail,
+          customerName,
+          orderNumber,
+          total: Number(total),
+          subtotal: Number(subtotal),
+          deliveryFee: Number(deliveryFee),
+          paymentMethod: "Online Payment / Cash on Delivery",
+          shippingAddress,
+          items: items.map((i) => ({
+            productName: i.productName,
+            quantity: i.quantity,
+            unitPrice: Number(i.unitPrice),
+            subtotal: Number(i.subtotal),
+            productImage: i.productImage,
+          })),
+        });
+      }
+
+      // 2. Group items by vendor and dispatch merchant notifications
+      const vendorItemsMap = new Map<string, typeof items>();
+      for (const item of items) {
+        if (item.vendorId) {
+          if (!vendorItemsMap.has(item.vendorId)) vendorItemsMap.set(item.vendorId, []);
+          vendorItemsMap.get(item.vendorId)!.push(item);
+        }
+      }
+
+      for (const [vendorId, vItems] of vendorItemsMap.entries()) {
+        try {
+          const vendor = await prisma.vendor.findUnique({
+            where: { id: vendorId },
+            include: { owner: true },
+          });
+
+          const vendorEmail = vendor?.email || vendor?.owner?.email;
+          const storeName = vendor?.name || "NextDor Vendor";
+
+          if (vendorEmail) {
+            await EmailService.sendVendorNewOrderNotification({
+              vendorEmail,
+              storeName,
+              orderNumber,
+              destinationCity: `${shippingAddress.city}, ${shippingAddress.region}`,
+              items: vItems.map((i) => ({
+                productName: i.productName,
+                quantity: i.quantity,
+                unitPrice: Number(i.unitPrice),
+              })),
+            });
+          }
+        } catch (vErr) {
+          logger.warn({ vErr, vendorId, orderNumber }, "Failed to send vendor notification");
+        }
+      }
+    } catch (err) {
+      logger.error({ err, orderNumber }, "Failed to dispatch order placed emails");
+    }
+  }
+
+  private async dispatchStatusUpdateEmail(
+    orderNumber: string,
+    status: string,
+    note?: string,
+    guestEmail?: string,
+    userId?: string,
+    recipientName?: string
+  ): Promise<void> {
+    try {
+      let customerEmail = guestEmail;
+      let customerName = recipientName || "Valued Customer";
+
+      if (userId) {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (user) {
+          customerEmail = user.email || customerEmail;
+          customerName = user.name || customerName;
+        }
+      }
+
+      if (customerEmail) {
+        await EmailService.sendOrderStatusUpdate({
+          email: customerEmail,
+          customerName,
+          orderNumber,
+          status,
+          note,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, orderNumber }, "Failed to dispatch status update email");
+    }
   }
 }
 

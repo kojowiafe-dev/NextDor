@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Flame } from "lucide-react";
 import type { Category } from "@/lib/catalog/types";
 
 type CategoryNavProps = {
@@ -12,6 +12,7 @@ type CategoryNavProps = {
 export function CategoryNav({ categories }: CategoryNavProps) {
   const pathname = usePathname();
   const topCategories = categories.slice(0, 10);
+  const isDealsActive = pathname === "/deals";
 
   return (
     <>
@@ -23,6 +24,20 @@ export function CategoryNav({ categories }: CategoryNavProps) {
             className="shrink-0 font-semibold hover:text-[#ff9900] transition-colors"
           >
             All Products
+          </Link>
+          <Link
+            href="/deals"
+            className={`shrink-0 inline-flex items-center gap-1.5 font-bold transition-colors ${
+              isDealsActive
+                ? "text-[#ff9900]"
+                : "text-amber-400 hover:text-[#ff9900]"
+            }`}
+          >
+            <Flame className="h-4 w-4 text-[#ff9900] animate-pulse" />
+            <span>Today&apos;s Deals</span>
+            <span className="rounded bg-[#cc0c39] px-1.5 py-0.5 text-[10px] font-black text-white uppercase tracking-wider">
+              Hot
+            </span>
           </Link>
           {topCategories.map((category) => {
             const isActive = pathname === `/category/${category.slug}`;
@@ -57,6 +72,17 @@ export function CategoryNav({ categories }: CategoryNavProps) {
           >
             <Sparkles className="h-3 w-3" />
             <span>All</span>
+          </Link>
+          <Link
+            href="/deals"
+            className={`shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold whitespace-nowrap transition-all ${
+              isDealsActive
+                ? "bg-[#cc0c39] text-white shadow-sm"
+                : "bg-[#cc0c39]/20 text-[#ff7875] border border-[#cc0c39]/40 hover:bg-[#cc0c39]/30 active:scale-95"
+            }`}
+          >
+            <Flame className="h-3 w-3 text-[#ff9900]" />
+            <span>Deals</span>
           </Link>
           {topCategories.map((category) => {
             const isActive = pathname === `/category/${category.slug}`;

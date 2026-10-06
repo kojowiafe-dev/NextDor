@@ -18,6 +18,7 @@ import {
   Heart,
   HelpCircle,
   Sparkles,
+  Flame,
 } from "lucide-react";
 import type { Category } from "@/lib/catalog/types";
 import { useAuth } from "@/context/AuthContext";
@@ -224,6 +225,19 @@ export function MobileNav({ categories }: MobileNavProps) {
                   <span>All Products</span>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
+              </Link>
+              <Link
+                href="/deals"
+                onClick={close}
+                className="flex items-center justify-between rounded-lg px-3 py-2 text-xs font-bold text-[#ff9900] hover:bg-white/10 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <Flame className="h-3.5 w-3.5 text-[#ff9900]" />
+                  <span>Today&apos;s Deals</span>
+                </div>
+                <span className="rounded bg-[#cc0c39] px-1.5 py-0.5 text-[9px] font-black text-white uppercase tracking-wider">
+                  Hot
+                </span>
               </Link>
               {categories.map((category) => (
                 <Link

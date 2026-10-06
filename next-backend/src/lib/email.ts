@@ -203,4 +203,309 @@ export class EmailService {
       text: `Your NextDor password reset code is: ${code}. It expires in 15 minutes.`,
     });
   }
+
+  /**
+   * Dispatches an order confirmation email to the buyer (customer or guest).
+   */
+  static async sendOrderConfirmation(params: {
+    email: string;
+    customerName: string;
+    orderNumber: string;
+    total: number | string;
+    subtotal: number | string;
+    deliveryFee: number | string;
+    paymentMethod: string;
+    shippingAddress: {
+      recipientName?: string;
+      recipientPhone?: string;
+      street: string;
+      city: string;
+      region: string;
+    };
+    items: Array<{
+      productName: string;
+      quantity: number;
+      unitPrice: number | string;
+      subtotal: number | string;
+      productImage?: string | null;
+    }>;
+  }): Promise<boolean> {
+    const {
+      email,
+      customerName,
+      orderNumber,
+      total,
+      subtotal,
+      deliveryFee,
+      paymentMethod,
+      shippingAddress,
+      items,
+    } = params;
+
+    const itemsRowsHtml = items
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e4e4e7; font-size: 14px; color: #18181b;">
+            <strong>${item.productName}</strong>
+          </td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e4e4e7; font-size: 14px; text-align: center; color: #52525b;">
+            ${item.quantity}
+          </td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e4e4e7; font-size: 14px; text-align: right; color: #18181b; font-weight: 600;">
+            GH₵${Number(item.subtotal).toFixed(2)}
+          </td>
+        </tr>
+      `
+      )
+      .join("");
+
+    const trackUrl = `https://nextdor.online/track?order=${encodeURIComponent(orderNumber)}`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+            .header { background: #131921; padding: 28px 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .order-badge { display: inline-block; background: #fff7ed; border: 1px solid #ffedd5; color: #c2410c; font-weight: 700; font-size: 13px; padding: 6px 14px; border-radius: 20px; margin-bottom: 16px; }
+            .section-title { font-size: 16px; font-weight: 700; color: #18181b; margin: 24px 0 12px 0; border-bottom: 2px solid #f4f4f5; padding-bottom: 6px; }
+            .address-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; font-size: 13px; line-height: 1.6; color: #334155; }
+            .totals-table { width: 100%; margin-top: 16px; }
+            .totals-table td { padding: 6px 0; font-size: 14px; }
+            .grand-total { font-size: 18px; font-weight: 800; color: #09090b; border-top: 2px solid #e4e4e7; padding-top: 10px; }
+            .btn-track { display: block; width: fit-content; margin: 28px auto 0 auto; background: #ff9900; color: #131921; text-decoration: none; font-weight: 800; font-size: 15px; padding: 14px 32px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(255,153,0,0.3); }
+            .escrow-callout { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 14px; margin-top: 24px; font-size: 12px; color: #065f46; line-height: 1.5; }
+            .footer { padding: 24px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; background: #fafafa; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 26px; letter-spacing: 1px;">NEXTDOR</h1>
+              <p style="color: #cbd5e1; margin: 4px 0 0 0; font-size: 12px;">Shop More, Wait Less</p>
+            </div>
+            <div class="content">
+              <div class="order-badge">✓ Order Received &amp; Confirmed</div>
+              <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 8px 0; color: #09090b;">Thank you, ${customerName}!</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+                We have received your order <strong style="color: #18181b;">${orderNumber}</strong>. Our verified merchants have been notified and are preparing your items for swift dispatch.
+              </p>
+
+              <div class="section-title">Order Items</div>
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                <thead>
+                  <tr style="background: #f8fafc; text-align: left;">
+                    <th style="padding: 10px 8px; font-size: 12px; color: #64748b; font-weight: 700; border-bottom: 2px solid #e2e8f0;">Item</th>
+                    <th style="padding: 10px 8px; font-size: 12px; color: #64748b; font-weight: 700; text-align: center; border-bottom: 2px solid #e2e8f0;">Qty</th>
+                    <th style="padding: 10px 8px; font-size: 12px; color: #64748b; font-weight: 700; text-align: right; border-bottom: 2px solid #e2e8f0;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsRowsHtml}
+                </tbody>
+              </table>
+
+              <table class="totals-table">
+                <tr>
+                  <td style="color: #64748b;">Subtotal</td>
+                  <td style="text-align: right; font-weight: 600;">GH₵${Number(subtotal).toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td style="color: #64748b;">Delivery Fee</td>
+                  <td style="text-align: right; font-weight: 600;">GH₵${Number(deliveryFee).toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td style="color: #64748b;">Payment Method</td>
+                  <td style="text-align: right; font-weight: 600;">${paymentMethod}</td>
+                </tr>
+                <tr class="grand-total">
+                  <td><strong>Total Paid / Due</strong></td>
+                  <td style="text-align: right;"><strong>GH₵${Number(total).toFixed(2)}</strong></td>
+                </tr>
+              </table>
+
+              <div class="section-title">Delivery Destination</div>
+              <div class="address-box">
+                <strong>Recipient:</strong> ${shippingAddress.recipientName || customerName}<br />
+                <strong>Phone:</strong> ${shippingAddress.recipientPhone || "Provided on checkout"}<br />
+                <strong>Address:</strong> ${shippingAddress.street}, ${shippingAddress.city}, ${shippingAddress.region}
+              </div>
+
+              <div class="escrow-callout">
+                🛡️ <strong>NextDor 48-Hour Buyer Protection Escrow:</strong> Your funds are safely held until 48 hours after delivery. If your order does not arrive as described, you are protected with a full refund.
+              </div>
+
+              <a href="${trackUrl}" class="btn-track" style="color: #131921 !important;">
+                Track Live Order Progress &rarr;
+              </a>
+            </div>
+            <div class="footer">
+              <p style="margin: 0 0 6px 0;">Need support? WhatsApp or call us at <strong>+233 55 123 4567</strong> or email support@nextdor.online.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: `Order Confirmed: ${orderNumber} — NextDor Ghana`,
+      html,
+      text: `Thank you for your order, ${customerName}! Order ${orderNumber} is confirmed. Total: GH₵${Number(total).toFixed(2)}. Track your order here: ${trackUrl}`,
+    });
+  }
+
+  /**
+   * Dispatches a new order alert to a vendor merchant.
+   */
+  static async sendVendorNewOrderNotification(params: {
+    vendorEmail: string;
+    storeName: string;
+    orderNumber: string;
+    destinationCity: string;
+    items: Array<{
+      productName: string;
+      quantity: number;
+      unitPrice: number | string;
+    }>;
+  }): Promise<boolean> {
+    const { vendorEmail, storeName, orderNumber, destinationCity, items } = params;
+
+    const itemsListHtml = items
+      .map(
+        (item) => `
+        <li style="margin-bottom: 6px;">
+          <strong>${item.productName}</strong> &times; ${item.quantity} (GH₵${Number(item.unitPrice).toFixed(2)} each)
+        </li>
+      `
+      )
+      .join("");
+
+    const portalUrl = "https://nextdor.online/vendor/dashboard";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+            .header { background: #131921; padding: 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .badge { display: inline-block; background: #ede9fe; color: #6d28d9; font-weight: 700; font-size: 12px; padding: 4px 12px; border-radius: 20px; }
+            .btn { display: block; width: fit-content; margin: 24px auto 0 auto; background: #8b5cf6; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px; text-align: center; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 22px;">NEXTDOR MERCHANT PORTAL</h1>
+              <p style="color: #a1a1aa; margin: 4px 0 0 0; font-size: 11px;">Store Order Notification</p>
+            </div>
+            <div class="content">
+              <div class="badge">🔔 New Customer Order</div>
+              <h2 style="font-size: 20px; font-weight: 700; margin: 12px 0 8px 0;">Hello ${storeName},</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
+                You have received a new order (<strong style="color: #18181b;">${orderNumber}</strong>) delivering to <strong>${destinationCity}</strong>.
+              </p>
+              
+              <h3 style="font-size: 15px; margin: 20px 0 8px 0; color: #09090b;">Items to prepare:</h3>
+              <ul style="color: #334155; font-size: 14px; padding-left: 20px;">
+                ${itemsListHtml}
+              </ul>
+
+              <p style="color: #71717a; font-size: 13px; line-height: 1.5; margin-top: 20px;">
+                Please log into your merchant dashboard to acknowledge the order, update fulfillment to <strong>PROCESSING</strong>, and arrange dispatch.
+              </p>
+
+              <a href="${portalUrl}" class="btn">
+                Open Merchant Dashboard &rarr;
+              </a>
+            </div>
+            <div class="footer">
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. Merchant Fulfillment Services.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: vendorEmail,
+      subject: `New Order Received: ${orderNumber} — ${storeName}`,
+      html,
+      text: `Hello ${storeName}, you have received a new order ${orderNumber} delivering to ${destinationCity}. Please log in to fulfill: ${portalUrl}`,
+    });
+  }
+
+  /**
+   * Dispatches order status update email to customer.
+   */
+  static async sendOrderStatusUpdate(params: {
+    email: string;
+    customerName: string;
+    orderNumber: string;
+    status: string;
+    note?: string;
+  }): Promise<boolean> {
+    const { email, customerName, orderNumber, status, note } = params;
+    const trackUrl = `https://nextdor.online/track?order=${encodeURIComponent(orderNumber)}`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+            .header { background: #131921; padding: 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .btn { display: block; width: fit-content; margin: 24px auto 0 auto; background: #ff9900; color: #131921 !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px; text-align: center; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 22px;">NEXTDOR</h1>
+              <p style="color: #a1a1aa; margin: 4px 0 0 0; font-size: 11px;">Order Status Update</p>
+            </div>
+            <div class="content">
+              <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 12px 0;">Hi ${customerName},</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
+                Your order <strong style="color: #18181b;">${orderNumber}</strong> has been updated to status: <strong style="color: #ff9900;">${status}</strong>.
+              </p>
+              ${
+                note
+                  ? `<p style="background: #f8fafc; border-left: 3px solid #ff9900; padding: 10px 14px; font-size: 13px; color: #475569;">${note}</p>`
+                  : ""
+              }
+              <a href="${trackUrl}" class="btn">
+                Track Order Live &rarr;
+              </a>
+            </div>
+            <div class="footer">
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: `Order Update: ${orderNumber} is now ${status} — NextDor`,
+      html,
+      text: `Hi ${customerName}, your order ${orderNumber} is now ${status}. Track it here: ${trackUrl}`,
+    });
+  }
 }
