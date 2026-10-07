@@ -27,6 +27,8 @@ The system is architected as a high-performance monorepo:
 | **Concurrency Control**| Optimistic Concurrency Control (OCC) | Version counters on products to prevent concurrent write collisions |
 | **Catalog Ingestion**  | 3-Tier Pipeline (Single OCC, RFC 4180 Bulk CSV, WooCommerce Sync) | Flexible onboarding for solo artisans to bulk enterprise catalogs with Redis locking |
 | **Pricing Engine**      | Compare-At Strikethrough & Dynamic Discount % | Dynamic badge computation (`-X%` / `X% OFF`) when `regularPrice > price` |
+| **Search Intelligence** | Instant Server Autocomplete & Suggestions | 220ms debounce search (`GET /api/v1/products/autocomplete`) with category chips and product preview cards |
+| **Faceted Catalog**     | Multi-Facet Filtering Engine | Price range presets & custom inputs, in-stock toggle, deals toggle, rating stars, and mobile drawer |
 | **Financial Accounting**| GAAP/IFRS Revenue & Escrow Invariant | Excludes `CANCELLED` and `REFUNDED` orders from GMV, platform revenue, and escrow |
 
 ---
@@ -36,15 +38,16 @@ The system is architected as a high-performance monorepo:
 ```
 NextDor/
 ├── next-frontend/                      # Next.js 16 App Router Client
-│   ├── app/                            # 37 active routes
-│   │   ├── (storefront)/               # Customer shopping routes (/, /shop, /product/[slug], /cart, /checkout)
+│   ├── app/                            # 38 active routes
+│   │   ├── (storefront)/               # Customer shopping routes (/, /shop, /deals, /product/[slug], /cart, /checkout)
 │   │   ├── (auth)/                     # /login, /register, /verify-email, /forgot-password, /reset-password
 │   │   ├── account/                    # Customer portal (/account, /account/orders, /account/addresses)
 │   │   ├── vendor/                     # Merchant portal (/vendor/dashboard, /vendor/register)
 │   │   ├── admin/                      # Super admin & staff console (/admin, /admin/customers, /admin/analytics)
 │   │   └── api/upload/                 # Cloudinary image upload serverless route handler
 │   ├── components/                     # Reusable UI component library
-│   │   ├── layout/                     # StoreHeader, CategoryNav, MobileNav, Footer
+│   │   ├── layout/                     # StoreHeader, CategoryNav, MobileNav, BottomNav, Footer
+│   │   ├── shop/                       # ShopFilters, ActiveFilterChips, MobileFilterDrawer
 │   │   ├── home/                       # HeroCarousel, CategoryTiles, ProductRow, TrendingSection
 │   │   ├── product/                    # ProductCard, ProductGrid, PriceDisplay, AddToCartButton
 │   │   ├── admin/                      # AdminNavbar, StatusBadge, DataTables
@@ -65,7 +68,7 @@ NextDor/
 │   │   └── modules/                    # Feature vertical slices (Clean Architecture)
 │   │       ├── auth/                   # Register, login, OTP verify, password recovery, refresh rotation
 │   │       ├── users/                  # Customer profile and address repository & service
-│   │       ├── products/               # Catalog, categories, OCC locking, soft delete
+│   │       ├── products/               # Catalog, categories, autocomplete, faceted filtering, OCC locking
 │   │       ├── orders/                 # Checkout, multi-vendor sub-orders, polymorphic findByNumber
 │   │       ├── vendors/                # Merchant onboarding, tenant-isolated inventory & payouts
 │   │       ├── admin/                  # Admin customer directory, analytics overview, governance
@@ -88,9 +91,10 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 
 ### 🛍️ Storefront Portal (Public & Customer)
 - **`/`**: Dynamic homepage featuring Hero carousel, top categories, Deal of the Day, Flash Sales, and trending products.
-- **`/shop`**: Full catalog with multi-facet filters (categories, price range, vendors, sorting by newest/price/popularity), server search, and pagination.
-- **`/product/[slug]`**: Rich product detail page with high-resolution image galleries, stock status, seller comparison ("Other Sellers"), and Add to Cart.
-- **`/category/[slug]`**: Category-filtered catalog with breadcrumb trails.
+- **`/shop`**: 2-column full catalog with desktop `ShopFilters.tsx` sidebar, `ActiveFilterChips.tsx`, `MobileFilterDrawer.tsx`, price presets/custom inputs, in-stock/deals toggles, rating filters, server search, and pagination.
+- **`/deals`**: Dedicated Deals Hub with discount tier filtering (🔥 50%+ OFF, ⚡ 30%+ OFF, 15%+ OFF, Under GH₵100), category pills, and sorting by savings.
+- **`/product/[slug]`**: Rich product detail page with high-resolution image galleries, specifications sheet (`ProductSpecifications.tsx`), stock status, seller comparison ("Other Sellers"), and Add to Cart.
+- **`/category/[slug]`**: Category showcase page with hero banner, sibling category selector pills, breadcrumb trails, and live faceted filters.
 - **`/cart`**: Interactive shopping cart with quantity adjustment, price calculation, and subtotal updates.
 - **`/checkout`**: Multi-step checkout with delivery address selection, Ghana delivery options (Standard, Express, Pickup), and Paystack payment initiation.
 - **`/track-order`**: Public order status lookup accepting order numbers (e.g. `ND-00001`) or tracking UUIDs.
@@ -242,5 +246,5 @@ To completely eradicate ghost orders, prevent customer delivery confusion, and g
 
 The entire platform is fully verified and compiling cleanly:
 - **`next-backend`**: `npm run build` and `npx tsc --noEmit` pass with **0 errors**.
-- **`next-frontend`**: `npm run build` generates all **34 routes** (SSG + SSR + Turbopack) with **0 errors**.
-- **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`, `codebase_analysis.md`) are synchronized with the live code.
+- **`next-frontend`**: `npm run build` generates all **38 routes** (SSG + SSR + Turbopack) with **0 errors**.
+- **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `PROJECT_PHASES_AND_ROADMAP.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`, `codebase_analysis.md`) are synchronized with the live code.

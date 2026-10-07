@@ -9,6 +9,7 @@
 | Document | Purpose |
 | :--- | :--- |
 | 🗺️ **[Master Project Overview & Navigation Map](./PROJECT_OVERVIEW.md)** | **Start here!** Full sitemap, "If I want this, where do I go?" cheat sheet, routing index, and environment setup. |
+| 🎯 **[Master Phased Implementation Roadmap](./PROJECT_PHASES_AND_ROADMAP.md)** | All 7 completed enterprise roadmap phases, verification criteria, and milestone tracking. |
 | 🔍 **[Codebase Analysis & System Architecture](./codebase_analysis.md)** | Full monorepo breakdown, tech stack, active routes, domain logic, and security verification. |
 | 🏛️ **[Multi-Vendor OOD Architecture](./MULTI_VENDOR_OOD_ARCHITECTURE.md)** | Comprehensive function-by-function architectural breakdown, SOLID principles, Tenant Isolation, and Optimistic Concurrency Control (OCC). |
 | ⚡ **[Frontend Caching & Performance Architecture](./FRONTEND_CACHING_ARCHITECTURE.md)** | Client-side SWR caching engine, in-flight request deduplication, navigation latency elimination, and audit. |
@@ -51,15 +52,18 @@ npm run dev
    - *Bulk CSV/Excel Upload:* Batch ingestion supporting up to 500 products with RFC 4180 parsing, delimiter autodetection, row validation, and downloadable sample templates.
    - *WooCommerce Store Connector:* Per-vendor live store synchronization (`/wp-json/wc/v3/products`) with credential encryption, background pagination, and Redis distributed locking (`lock:wc-sync:vendor:${id}`) to prevent race conditions.
 2. **Previous Price & Dynamic Discount Engine**: Native compare-at pricing. When `regularPrice > price`, the storefront, cart, vendor dashboard, and admin tables display the current price, strikethrough previous price, and auto-computed percentage discount badge (`-X%` / `X% OFF`). If no previous price is configured, only current price renders without strikethrough.
-3. **Mobile-First Uncongested Commerce**: Tailored for Ghana's mobile-first market. Replaces congested desktop tables on mobile viewports with stacked product cards, bottom-sheet catalog action modals, touch-friendly filter chips, persistent thumb bottom navigation (`BottomNav.tsx`), swipeable category chips (`CategoryNav.tsx`), and slide-over OCC edit drawers.
-4. **Marketplace Order Partitioning**: Automated split of multi-vendor checkouts into distinct `VendorOrder` records with isolated tenant visibility.
-5. **Deterministic Commission & Payouts**: 90% merchant / 10% platform split calculated with Martin Fowler's `Money` Value Object (pesewas/minor units) to prevent penny rounding leaks.
-6. **Financial & Revenue Integrity**: Orders in `CANCELLED` and `REFUNDED` status are strictly excluded from Gross Marketplace Volume (GMV), 10% platform revenue, 90% merchant escrow reserves, top products by revenue, and category sales reports.
-7. **Multi-Tenant Security & OCC**: Hardened tenant isolation (`WHERE id = productId AND vendorId = currentVendorId`) for viewing, editing, and soft-deleting products, paired with Optimistic Concurrency Control versioning.
-8. **Cloudinary Asset Storage**: High-speed, signed media pipeline with client-side drag-and-drop uploads and edge CDN delivery.
-9. **Brand Consistency**: Unified Amazon/NextDor orange theme (`#ff9900` / `#f08804`) and motto *"Shop More, Wait Less"*.
-10. **Verified Email Onboarding & Recovery**: 6-digit OTP code email verification before account activation (`/verify-email`), 60-second cooldown protection, and full password recovery (`/forgot-password` $\rightarrow$ `/reset-password`) that invalidates all active sessions across devices upon password reset.
-11. **Super Admin Operations Center**: Live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), real-time notification popover (`AdminNotificationsPopover.tsx`) with 1-click "Mark read" and "Clear all", zero-scrollbar non-scrollable desktop sidebar with auto-dismissing mobile drawer, and complete product CRUD (`POST /api/v1/products`).
+3. **Search Intelligence & Instant Autocomplete**: 220ms debounced server search (`GET /api/v1/products/autocomplete`) via `SearchBar.tsx` delivering category suggestions, live product previews with thumbnail cards, prices, and vendor badges, full keyboard arrow navigation, and trending search tags.
+4. **Multi-Facet Catalog Filters & Responsive Mobile Drawer**: Advanced filtering (`ShopFilters.tsx`) on `/shop` and `/search` supporting price presets & custom inputs, "In Stock Only" toggle, "⚡ Deals & Discounts Only" toggle, 4★/3★ customer rating filters, category tree with counts, removable active filter chips, and slide-over mobile drawer (`MobileFilterDrawer.tsx`).
+5. **Mobile-First Optimization & AVIF/WebP Transcoding**: Tailored for Ghana's mobile-first market. Native Next.js AVIF/WebP image edge transcoding, `compress: true`, minimum touch targets $\ge 48\text{px}$, `touch-action: manipulation` tap delay elimination, safe-area inset bottom navigation (`BottomNav.tsx`), and zero horizontal overflow (`overflow-x: hidden`).
+6. **Marketplace Order Partitioning**: Automated split of multi-vendor checkouts into distinct `VendorOrder` records with isolated tenant visibility.
+7. **Deterministic Commission & Payouts**: 90% merchant / 10% platform split calculated with Martin Fowler's `Money` Value Object (pesewas/minor units) to prevent penny rounding leaks, with 48-hour customer verification escrow retention.
+8. **Financial & Revenue Integrity**: Orders in `CANCELLED` and `REFUNDED` status are strictly excluded from Gross Marketplace Volume (GMV), 10% platform revenue, 90% merchant escrow reserves, top products by revenue, and category sales reports.
+9. **Multi-Tenant Security & OCC**: Hardened tenant isolation (`WHERE id = productId AND vendorId = currentVendorId`) for viewing, editing, and soft-deleting products, paired with Optimistic Concurrency Control versioning.
+10. **Platform Security & O(1) Token Indexing**: Refresh token SHA-256 indexed lookups (`lookupHash`) for microsecond O(1) queries before bcrypt verification, Redis-backed distributed rate limiting (200 req/min), Helmet HSTS headers, and strict CORS whitelisting.
+11. **Cloudinary Asset Storage**: High-speed, signed media pipeline with client-side drag-and-drop uploads and edge CDN delivery.
+12. **Brand Consistency**: Unified Amazon/NextDor orange theme (`#ff9900` / `#f08804`) and motto *"Shop More, Wait Less"*.
+13. **Verified Email Onboarding & Recovery**: 6-digit OTP code email verification before account activation (`/verify-email`), 60-second cooldown protection, and full password recovery (`/forgot-password` $\rightarrow$ `/reset-password`) that invalidates all active sessions across devices upon password reset.
+14. **Super Admin Operations Center**: Live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), real-time notification popover (`AdminNotificationsPopover.tsx`) with 1-click "Mark read" and "Clear all", zero-scrollbar non-scrollable desktop sidebar with auto-dismissing mobile drawer, and complete product CRUD (`POST /api/v1/products`).
 
 ---
 

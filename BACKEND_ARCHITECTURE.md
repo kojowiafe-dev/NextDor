@@ -598,6 +598,7 @@ model AuditLog {
 | User session | `session:{userId}` | 1 hour | Logout |
 | Rate limit counter | `rl:{ip}:{route}` | 1 min sliding | Auto-expire |
 | Server-side cart | `cart:{sessionId}` | 7 days | Checkout / clear |
+| Autocomplete search | `products:autocomplete:{query}` | 3 min | Product create, edit, delete |
 | WC sync lock | `lock:wc-sync` | 30 sec | Released after sync |
 | Vendor WC sync lock | `lock:wc-sync:vendor:{vendorId}` | 10 min | Released after sync completion or failure |
 
@@ -606,6 +607,7 @@ model AuditLog {
 | Use case | Redis type | Rationale |
 |---|---|---|
 | Product / category cache | String (JSON) | Simple O(1) get/set |
+| Autocomplete suggestions | String (JSON) | O(1) lookup with 180s TTL |
 | Cart contents | Hash | Per-item updates without full re-serialisation |
 | Rate limiting | Sorted Set (sliding log) | O(log N) window check, no memory leak |
 | Popular products (leaderboard) | Sorted Set (score = view count) | O(log N) ZRANGEBYSCORE |
@@ -628,6 +630,7 @@ PATCH /admin/products/:id
   → UPDATE Postgres
   → DEL Redis product:{slug}
   → DEL Redis products:list:*  (scan + delete)
+  → DEL Redis products:autocomplete:* (scan + delete)
   → return updated product
 ```
 
@@ -1014,6 +1017,19 @@ Development
 - [x] Vendor product soft-deletion (`DELETE /portal/products/:id`)
 - [x] Super Admin merchant governance (approvals, suspensions, custom commission rates)
 - [x] Immutable platform audit logs (`audit_logs`) tracking all governance actions
+
+### Phase 6 — Search Intelligence & Faceted Taxonomy ✅ (Completed)
+- [x] `GET /products/autocomplete` instant debounce query with 3-minute Redis caching
+- [x] `GET /products` faceted query parameters (`minPrice`, `maxPrice`, `inStock`, `onSale`, `rating`, `category`, `vendor`, `sort`)
+- [x] Dynamic discount calculation (`salePrice` overrides base price with percentage computation)
+- [x] Category tree with product counts and slug lookups
+
+### Phase 7 — Mobile Optimization, Security Hardening & Production Health ✅ (Completed)
+- [x] O(1) indexed refresh token lookups via SHA-256 `lookupHash`
+- [x] Redis-backed distributed rate limiting (200 requests/minute per client IP)
+- [x] Next.js AVIF and WebP automatic edge media transcoding with `compress: true`
+- [x] Mobile touch targets $\ge 48\text{px}$, tap delay elimination (`touch-action: manipulation`), zero horizontal overflow
+- [x] Complete test and compile validation across backend and frontend (0 errors)
 
 ---
 

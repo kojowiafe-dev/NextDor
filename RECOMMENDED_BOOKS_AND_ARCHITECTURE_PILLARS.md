@@ -12,6 +12,9 @@ NextDor is not a toy e-commerce tutorial; it is engineered around **real-world c
 - Anti-collision Optimistic Concurrency Control (OCC) for inventory.
 - Strict multi-tenant isolation guarding merchant data.
 - 3-tier catalog ingestion (Single OCC form, bulk RFC 4180 CSV/Excel, and per-vendor WooCommerce REST API connector with Redis distributed locking).
+- Vendor moderation lifecycle (`PENDING_APPROVAL`, `ACTIVE`, `SUSPENDED`) and collision-free SKU generation (`ND-XXXXX`).
+- Real-time search autocomplete with debounced client UI and Redis edge caching.
+- Multi-faceted catalog discovery architecture (URL-synchronized facet filtering, non-blocking page transitions).
 - Dynamic compare-at pricing and automatic discount calculations (`-X%` / `X% OFF`).
 - GAAP/IFRS revenue integrity strictly excluding cancelled and refunded orders from all financial metrics.
 - Asynchronous integration with external systems (WooCommerce, Paystack, MTN Mobile Money, Cloudinary).
@@ -199,10 +202,15 @@ In traditional single-store e-commerce, checking out means "Customer pays $\righ
 E-commerce websites lose 1% of sales for every 100ms of latency. Storing high-resolution user-uploaded images directly on application servers consumes bandwidth, slows database backups, and degrades server response times. Furthermore, rendering pages dynamically without proper caching overwhelms serverless backends during flash sales.
 
 ### How NextDor Solves It:
-- **Serverless Cloudinary Pipeline**:
+- **Serverless Cloudinary & AVIF/WebP Pipeline**:
   - Delegates all image processing, storage, and optimization to Cloudinary.
   - Implements a signed server route [`next-frontend/app/api/upload/route.ts`](./next-frontend/app/api/upload/route.ts) that streams uploaded buffers directly to Cloudinary without exposing API secrets to browser bundles.
-  - Delivers auto-formatted WebP/AVIF assets across global edge CDNs.
+  - Delivers auto-formatted WebP/AVIF assets across global edge CDNs with responsive srcSets in Next.js 16 (`next.config.ts`).
+- **Real-Time Autocomplete & SWR Caching**:
+  - Client-side debounced search input (220ms) with in-flight request deduplication and memory caching (`lib/cache/clientCache.ts`), eliminating redundant network round-trips.
+  - Backend Redis caching (180s TTL) for high-frequency search prefix lookups.
+- **URL-Synchronized Faceted Filtering**:
+  - Non-blocking shallow transitions (`router.push(url, { scroll: false })`) preserving scroll positions while updating active filter state.
 - **Multi-Tier SWR Caching**:
   - Implements client-side in-flight request deduplication and memory caching (`lib/cache/clientCache.ts`), eliminating redundant network round-trips during navigation.
 

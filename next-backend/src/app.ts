@@ -28,6 +28,7 @@ import { vendorRoutes } from "./modules/vendors/vendor.routes.js";
 import { orderRoutes, adminOrderRoutes, vendorOrderRoutes } from "./modules/orders/order.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
 import { redis } from "./lib/redis.js";
+import { ResilientRateLimitStore } from "./lib/rateLimitStore.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -137,15 +138,16 @@ export async function buildApp() {
     secret: config.JWT_SECRET, // Signs cookies to prevent client-side tampering
   });
 
-  // Rate limiting — backed by Redis for accuracy across multiple instances
-  // WHAT IF: We use in-memory rate limiting? It's per-instance, not global.
-  // If you have 3 API servers, a client could make 3× the allowed requests
-  // by round-robin-ing between instances. Redis ensures global accuracy.
+  // Rate limiting — backed by ResilientRateLimitStore
+  // Self-healing: uses Redis for distributed rate limiting across clusters when ready,
+  // and seamlessly falls back to high-speed in-memory LRU if Redis is offline or unreachable.
+  // skipOnError guarantees that rate limiting never triggers an unhandled HTTP 500 error.
   await app.register(import("@fastify/rate-limit"), {
     global: true,
     max: 200,             // 200 requests per windowMs per IP
     timeWindow: "1 minute",
-    redis,                // FIX #12: Redis-backed distributed rate limit
+    store: ResilientRateLimitStore,
+    skipOnError: true,
     keyGenerator: (req: any) => req.ip,
     errorResponseBuilder: () => ({
       success: false,
@@ -154,7 +156,7 @@ export async function buildApp() {
         message: "Too many requests. Please slow down.",
       },
     }),
-  });
+  } as any);
 
   // OpenAPI / Swagger — auto-generates API docs from route schemas
   await app.register(import("@fastify/swagger"), {

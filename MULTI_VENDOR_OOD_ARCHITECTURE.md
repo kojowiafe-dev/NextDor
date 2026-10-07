@@ -508,6 +508,33 @@ To deliver world-class usability on mobile devices (over 80% of Ghanaian e-comme
 
 ---
 
+## 🛡️ 14. Vendor Moderation Queue & Public Catalog Visibility
+
+To prevent unvetted counterfeit items or unauthorized merchant stores from diluting platform quality:
+
+### The Vendor Moderation Lifecycle:
+$$\text{Registration} \xrightarrow{} \text{PENDING\_APPROVAL} \xrightarrow{\text{Admin Review}} \text{ACTIVE} \underset{\text{KYC / Dispute}}{\overset{\text{Violation}}{\rightleftharpoons}} \text{SUSPENDED}$$
+
+1. **Merchant Status Isolation**:
+   - Newly registered merchants enter `PENDING_APPROVAL`. They can access their isolated portal (`/vendor/dashboard`), configure payout settings, and stage products.
+   - However, their staged items are withheld from the public customer storefront until platform administrators verify their business registration and Ghana Card KYC details (`PATCH /api/v1/admin/merchants/:id/status`).
+2. **Public Catalog Invariant**:
+   - All storefront search, category, and catalog queries enforce the predicate:
+     ```prisma
+     where: {
+       deletedAt: null,
+       vendor: {
+         status: "ACTIVE"
+       }
+     }
+     ```
+   - If an active merchant is suspended (`SUSPENDED`), all their products immediately disappear from public search, category listings, and checkout without deleting historical order records.
+3. **Automated Collision-Free SKU Generation**:
+   - Ingested products receive an automated platform SKU formatted as `ND-XXXXX` (e.g. `ND-7F8A1`), combining a platform prefix with a cryptographically uniform alphanumeric sequence.
+   - SKUs are unique per platform instance, indexed for O(1) warehouse and courier scanning.
+
+---
+
 ## 🏆 Key Takeaways
 
 1. **Precision Finance**: Minor pesewa integer math avoids JavaScript floating-point errors.
@@ -516,7 +543,9 @@ To deliver world-class usability on mobile devices (over 80% of Ghanaian e-comme
 4. **Sub-Order Partitioning**: Master orders safely decompose into merchant-isolated line items.
 5. **Automated Escrow Protection**: 48-hour delivery verification window protects buyers while guaranteeing seller MoMo settlement.
 6. **3-Tier Catalog Ingestion**: Single product OCC forms, bulk RFC 4180 CSV batch uploads, and per-vendor WooCommerce REST API connectors with Redis distributed locking.
-7. **Pricing & Revenue Integrity**: Dynamic compare-at discount calculations with strict exclusion of cancelled orders from revenue metrics.
-8. **Decoupled Architecture**: High maintainability through SOLID, Dependency Inversion, Clean Architecture, and Cloudinary media pipelines.
+7. **Vendor Moderation Gate**: Staged vendor inventory requires administrative KYC approval before entering the public customer catalog.
+8. **Automated SKU Generation**: Collision-free `ND-XXXXX` identifier system for unified barcode and logistics handling.
+9. **Pricing & Revenue Integrity**: Dynamic compare-at discount calculations with strict exclusion of cancelled orders from revenue metrics.
+10. **Decoupled Architecture**: High maintainability through SOLID, Dependency Inversion, Clean Architecture, and Cloudinary media pipelines.
 
 

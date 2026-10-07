@@ -24,13 +24,13 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
 
   /**
    * GET /products
-   * Paginated product catalog with category filter, vendor filter, search, and sorting.
+   * Paginated product catalog with category filter, vendor filter, search, faceted filtering, and sorting.
    */
   app.get(
     "/",
     {
       schema: {
-        description: "List paginated products with category filtering and search",
+        description: "List paginated products with category filtering, search, and faceted filters",
         tags: ["Products"],
         querystring: {
           type: "object",
@@ -40,9 +40,14 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
             search: { type: "string" },
             category: { type: "string" },
             vendor: { type: "string" },
+            minPrice: { type: "number", minimum: 0 },
+            maxPrice: { type: "number", minimum: 0 },
+            inStock: { type: "boolean" },
+            onSale: { type: "boolean" },
+            rating: { type: "number", minimum: 0, maximum: 5 },
             sort: {
               type: "string",
-              enum: ["price_asc", "price_desc", "newest", "popular"],
+              enum: ["price_asc", "price_desc", "newest", "popular", "rating"],
               default: "newest",
             },
           },
@@ -52,6 +57,36 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const query = req.query as any;
       const data = await productService.listCatalogProducts(query);
+      return reply.send({
+        success: true,
+        data,
+      });
+    }
+  );
+
+  /**
+   * GET /products/autocomplete
+   * Instant search autocomplete suggestions and top matching products.
+   */
+  app.get(
+    "/autocomplete",
+    {
+      schema: {
+        description: "Instant debounce autocomplete suggestions for products and categories",
+        tags: ["Products"],
+        querystring: {
+          type: "object",
+          required: ["q"],
+          properties: {
+            q: { type: "string", minLength: 1 },
+            limit: { type: "integer", minimum: 1, maximum: 20, default: 6 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { q, limit = 6 } = req.query as { q: string; limit?: number };
+      const data = await productService.autocompleteSearch(q, Number(limit));
       return reply.send({
         success: true,
         data,

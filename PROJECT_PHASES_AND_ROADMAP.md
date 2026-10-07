@@ -24,9 +24,9 @@ graph TD
     style P2 fill:#dcfce7,stroke:#16a34a,stroke-width:2px
     style P3 fill:#dcfce7,stroke:#16a34a,stroke-width:2px
     style P4 fill:#dcfce7,stroke:#16a34a,stroke-width:2px
-    style P5 fill:#fef3c7,stroke:#d97706,stroke-width:2px
-    style P6 fill:#eff6ff,stroke:#2563eb,stroke-width:2px
-    style P7 fill:#f3e8ff,stroke:#9333ea,stroke-width:2px
+    style P5 fill:#dcfce7,stroke:#16a34a,stroke-width:2px
+    style P6 fill:#dcfce7,stroke:#16a34a,stroke-width:2px
+    style P7 fill:#dcfce7,stroke:#16a34a,stroke-width:2px
 ```
 
 ---
@@ -87,42 +87,42 @@ graph TD
 
 ---
 
-## 🟡 Phase 5: Multi-Vendor Catalog Ingestion, Moderation & Payouts
-**Status: IN PROGRESS (Core Built, Refinement Ongoing)**
+## 🟢 Phase 5: Multi-Vendor Catalog Ingestion, Moderation & Payouts
+**Status: COMPLETED (100%)**
 
 | ID | Item | Implementation Details |
 | :--- | :--- | :--- |
-| **#16 & #17**| **Vendor Order & Stock Management** | Vendor portal (`/vendor/dashboard`) with multi-vendor sub-orders (`VendorOrder`), status updates, and OCC optimistic concurrency stock editing. |
-| **#20** | **Unique SKU Generation** | Automated SKU assignment (`SKU-XXXXX`) per product variation. |
-| **#24** | **Product Moderation Queue** | Admin moderation workflow (`PENDING_APPROVAL`, `APPROVED`, `REJECTED`) before merchant products go live on public catalog. |
-| **#27** | **Vendor Commission & MoMo Payouts** | `CommissionCalculator.ts` handles platform fees (default 10%), 48-hour escrow retention, and Mobile Money payout ledger. |
-| **#38** | **3-Tier Product Ingestion Pipeline** | 1. Single product entry with OCC locking.<br/>2. Bulk CSV/Excel upload via `BulkUploadModal.tsx` with downloadable template and validation.<br/>3. External WooCommerce store synchronization via `StoreSyncModal.tsx`. |
+| **#16 & #17**| **Vendor Order & Stock Management** | Complete merchant portal (`/vendor/dashboard`) with tenant-isolated sub-orders (`VendorOrder`), line items, dispatch progressor, and OCC optimistic concurrency stock editing. |
+| **#20** | **Unique SKU Generation** | Automated SKU assignment (`ND-XXXXX` / `SKU-XXXXX`) per product variation, displayed on product specification sheets. |
+| **#24** | **Product Moderation Queue** | Admin moderation workflow (`/admin/merchants`) managing `PENDING_APPROVAL`, `ACTIVE`, `SUSPENDED` queues. Products from unapproved vendors are automatically staged and withheld from public catalog until approved. |
+| **#27** | **Vendor Commission & MoMo Payouts** | `CommissionCalculator.ts` handles platform fees (default 10%), 48-hour customer verification escrow retention, and Mobile Money payout ledger via `GET /api/v1/vendors/portal/payouts`. |
+| **#38** | **3-Tier Product Ingestion Pipeline** | 1. Single product entry with OCC locking.<br/>2. Bulk RFC 4180 CSV/Excel upload via `BulkUploadModal.tsx` with downloadable template and row validation.<br/>3. External WooCommerce store synchronization via `StoreSyncModal.tsx` with Redis locks. |
 
 ---
 
-## 🔵 Phase 6: Search Intelligence, Faceted Filtering & Taxonomy Refinement
-**Status: UPCOMING**
+## 🟢 Phase 6: Search Intelligence, Faceted Filtering & Taxonomy Refinement
+**Status: COMPLETED (100%)**
 
-| ID | Item | Scope |
+| ID | Item | Scope & Implementation |
 | :--- | :--- | :--- |
-| **#21** | **Category & Subcategory Hierarchy** | Standardize category $\rightarrow$ subcategory tree with breadcrumb trails and category banner landing pages. |
-| **#28** | **Intelligent Autocomplete Search** | Server search with instant debounce dropdown, category suggestion chips, and typo tolerance. |
-| **#29** | **Multi-Facet Catalog Filters** | Price slider, category tree, vendor selection, customer rating filter, in-stock toggle, and delivery speed filters on `/shop`. |
+| **#21** | **Category & Subcategory Hierarchy** | Enhanced `/category/[slug]` with category hero showcase banners, sibling category navigation pills, breadcrumbs, and live faceted filters. |
+| **#28** | **Intelligent Autocomplete Search** | Server search endpoint (`GET /api/v1/products/autocomplete`) paired with debounced live dropdown (`SearchBar.tsx`) featuring category suggestions, product preview cards (images, prices, vendor, in-stock badge), keyboard navigation, and trending search tags. |
+| **#29** | **Multi-Facet Catalog Filters** | Reusable `ShopFilters.tsx`, `ActiveFilterChips.tsx`, and `MobileFilterDrawer.tsx` on `/shop` and `/search` supporting price range presets & custom Min/Max inputs, "In Stock Only" toggle, "⚡ Deals & Discounts Only" toggle, 4★/3★ customer rating filters, category tree with counts, and dynamic sorting. |
 
 ---
 
-## 🟣 Phase 7: Mobile Performance, Low-End Android Optimization & Security
-**Status: UPCOMING (Final Polish)**
+## 🟢 Phase 7: Mobile Performance, Low-End Android Optimization & Security
+**Status: COMPLETED (100%)**
 
-| ID | Item | Scope |
+| ID | Item | Implementation & Verification |
 | :--- | :--- | :--- |
-| **#36** | **Performance & Asset Optimization** | Image WebP transcoding, route prefetching, bundle splitting, and Fastify HTTP compression. |
-| **#37** | **Low-End Android Device Polish** | Minimum touch targets $\ge 44\text{px}$, zero horizontal overflow, accessible thumb zones, and smooth mobile drawer animations. |
-| **#38** | **Comprehensive Platform Security** | Refresh token SHA-256 indexed lookup (O(1)), rate limiting, Helmet HTTP security headers, CORS protection, and Neon automated database backups. |
+| **#36** | **Performance & Asset Optimization** | Configured `next.config.ts` for AVIF & WebP automatic transcoding, `compress: true`, Turbopack tree-shaking, and multi-tier SWR client caching with Redis caching for API endpoints. |
+| **#37** | **Low-End Android Device Polish** | Minimum touch targets $\ge 48\text{px}$, persistent thumb navigation (`BottomNav.tsx`), Safe-Area inset support, `touch-action: manipulation` tap delay elimination, zero horizontal overflow (`overflow-x: hidden`), and responsive stacked cards (`< md`). |
+| **#38** | **Comprehensive Platform Security** | Refresh token SHA-256 indexed lookup (O(1)), Redis distributed rate limiting (200 req/min), Helmet HSTS security headers, CORS origin whitelist, constant-time token comparison, and full session revocation on password reset. |
 
 ---
 
-## 📅 Suggested Implementation Timeline
+## 📅 Implementation Summary
 
 ```
 Week 1 (COMPLETED):
@@ -130,11 +130,13 @@ Week 1 (COMPLETED):
   ├── Phase 2: Checkout, Pricing Integrity & Payments
   └── Phase 3: Order Lifecycle, Sequential Numbers & Logistics
 
-Week 2 (CURRENT & NEXT):
-  ├── Phase 4: Deals Hub, Page Loaders, Emailing & SEO (COMPLETED TODAY)
-  └── Phase 5: Multi-Vendor Moderation, Payouts & Bulk Ingestion
+Week 2 (COMPLETED):
+  ├── Phase 4: Deals Hub, Page Loaders, Emailing & SEO
+  ├── Phase 5: Multi-Vendor Moderation, Payouts & Bulk Ingestion
+  └── Phase 6: Search Intelligence, Faceted Taxonomy & Autocomplete
 
-Week 3:
-  ├── Phase 6: Search Intelligence & Faceted Taxonomy
-  └── Phase 7: Mobile Optimization, Security Hardening & Production Launch
+Week 3 (COMPLETED):
+  └── Phase 7: Mobile Optimization, Low-End Android Polish, Security Hardening & Launch Readiness
 ```
+
+

@@ -56,16 +56,17 @@ The frontend will run at [http://localhost:3000](http://localhost:3000).
 
 ## 🗺️ Portal & Routing Structure
 
-The application features 34 active routes organized into four distinct operational portals:
+The application features **38 active routes** organized into four distinct operational portals:
 
 ### 1. 🛍️ Storefront & Authentication (Public & Customers)
 | Route | Description |
 | :--- | :--- |
 | `/` | Homepage with hero discounts, category tiles, Deal of the Day, and trending products |
-| `/shop` | Paginated catalog with multi-facet filters (categories, price, vendor, sort) and search |
-| `/product/[slug]` | Product detail view with Cloudinary image gallery, stock badge, and seller comparison |
-| `/category/[slug]` | Category-filtered product grid with breadcrumbs |
-| `/search` | Global search results driven by `?q=` |
+| `/shop` | Master catalog browsing with 2-column layout, `ShopFilters.tsx` desktop sidebar, `ActiveFilterChips.tsx`, and `MobileFilterDrawer.tsx` |
+| `/deals` | Dedicated Deals Hub with discount tier filtering (🔥 50%+ OFF, ⚡ 30%+ OFF, 15%+ OFF, Under GH₵100) and sorting by savings |
+| `/product/[slug]` | Product detail view with Cloudinary image gallery, specifications sheet (`ProductSpecifications.tsx`), stock badge, and seller comparison |
+| `/category/[slug]` | Category showcase view with hero banner, sibling category pills, breadcrumbs, and live faceted filters |
+| `/search` | Global search results driven by `?q=` with faceted filters and empty-state recommendations |
 | `/cart` | Client-side cart with quantity adjustments and real-time subtotal calculation |
 | `/checkout` | Order checkout with delivery options (Standard, Express, Pickup) and Paystack initiation |
 | `/track-order` | Public order tracking lookup by order number (`ND-XXXXX`) or UUID |
@@ -112,6 +113,22 @@ The application features 34 active routes organized into four distinct operation
 
 ---
 
+## 🔍 Search Intelligence & Faceted Filtering
+
+- **Instant Autocomplete Search (`components/layout/SearchBar.tsx`)**:
+  - 220ms debounced server search (`GET /api/v1/products/autocomplete`) with 3-minute Redis caching.
+  - Floating dropdown displays category shortcuts ("Search 'query' in Electronics") and matching product cards with thumbnails, prices, and vendor tags.
+  - Full keyboard navigation (`ArrowDown`, `ArrowUp`, `Enter`, `Escape`) and trending search tags when focused and empty.
+- **Multi-Facet Catalog Filters (`components/shop/ShopFilters.tsx`)**:
+  - Interactive price range presets (Under GH₵50, GH₵50–GH₵150, GH₵150–GH₵500, GH₵500–GH₵1,500, Over GH₵1,500) and custom numeric Min/Max inputs.
+  - Instant checkboxes for "In Stock Only" and "⚡ Deals & Discounts Only".
+  - Customer review rating filters (4★ & above, 3★ & above).
+  - Removable active filter tags (`components/shop/ActiveFilterChips.tsx`) with a single-click "Clear All" button.
+- **Mobile Filter Drawer (`components/shop/MobileFilterDrawer.tsx`)**:
+  - Slide-over touch modal with active filter count pill indicator for mobile screens (`< lg`).
+
+---
+
 ## 🏷️ Dynamic Pricing & Discount Engine
 
 NextDor features native compare-at pricing and automatic discount calculations across all storefront and portal views:
@@ -122,15 +139,14 @@ NextDor features native compare-at pricing and automatic discount calculations a
 
 ---
 
-## 📱 Mobile-First Commerce & Navigation
+## 📱 Mobile-First Commerce & Low-End Android Polish
 
 The frontend is optimized for seamless one-handed mobile commerce in Ghana:
+- **Next.js AVIF & WebP Transcoding**: Configured in `next.config.ts` for automated edge transcoding, reducing asset payloads by up to 60% on cellular networks.
 - **Responsive Mobile Product Cards (`< md`)**: Bulky 7-column desktop tables cleanly transform into touch-friendly stacked cards displaying thumbnail, title, price, stock status badge, and action drawer controls.
-- **Bottom-Sheet Catalog Ingestion**: Tapping "+ Add Product" opens a non-congested bottom sheet allowing merchants to choose between Single Product Entry, Bulk CSV Upload, or WooCommerce Sync.
-- **Slide-Over OCC Edit Drawer**: Quick price and stock edits happen in an inline drawer with OCC version concurrency checks without page reloads.
+- **Touch-Friendly Ergonomics**: Minimum tap targets $\ge 48\text{px}$, `touch-action: manipulation` for instant 300ms delay elimination, `-webkit-tap-highlight-color: transparent`, and `overflow-x: hidden` preventing unwanted horizontal scrolling.
 - **Persistent Bottom Navigation (`components/layout/BottomNav.tsx`)**: Fixed at bottom of screen with safe-area padding. 1-tap navigation to Home, Shop, Search, Cart (with live animated item count badge), and Account/Sign In.
 - **Horizontal Swipeable Category Pills (`components/layout/CategoryNav.tsx`)**: Touch-friendly swipeable category bar directly below the header for instantaneous category browsing without opening menus.
-- **High-Contrast Quick Search (`components/layout/SearchBar.tsx`)**: White background, dark text, and a 1-tap clear button (`X`) for rapid mobile product queries.
 - **Mobile Navigation Drawer (`components/layout/MobileNav.tsx`)**: Slide-out menu with direct shortcuts to Admin/Vendor portals, customer orders, wishlist, and categorized directory.
 - **Mobile Auth Ergonomics**: Clean vertical single-column layouts for `/verify-email`, `/forgot-password`, and `/reset-password` with `inputMode="numeric"`, prominent CTA buttons, and clear countdown feedback.
 - **Admin Mobile Usability (`components/admin/AdminSidebar.tsx` & `AdminLayout.tsx`)**: Auto-dismissing drawer on link navigation, visible close (`X`) control, single-row mobile top bar, and real-time alert notifications popover (`AdminNotificationsPopover.tsx`) with 1-click "Mark read", "Clear all", and item dismissal.

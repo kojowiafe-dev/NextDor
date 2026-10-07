@@ -38,7 +38,12 @@ export class ProductService {
     search?: string;
     category?: string;
     vendor?: string;
-    sort?: "price_asc" | "price_desc" | "newest" | "popular";
+    minPrice?: number;
+    maxPrice?: number;
+    inStock?: boolean;
+    onSale?: boolean;
+    rating?: number;
+    sort?: "price_asc" | "price_desc" | "newest" | "popular" | "rating";
   }) {
     const page = Math.max(1, Number(filter.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(filter.limit) || 50));
@@ -47,8 +52,13 @@ export class ProductService {
     // Keys are sorted and string inputs trimmed/normalized to avoid cache misses.
     const normalized = {
       category: filter.category?.trim().toLowerCase() || "",
+      inStock: Boolean(filter.inStock),
       limit,
+      maxPrice: filter.maxPrice != null ? Number(filter.maxPrice) : null,
+      minPrice: filter.minPrice != null ? Number(filter.minPrice) : null,
+      onSale: Boolean(filter.onSale),
       page,
+      rating: filter.rating != null ? Number(filter.rating) : null,
       search: filter.search?.trim().toLowerCase() || "",
       sort: filter.sort || "newest",
       vendor: filter.vendor?.trim().toLowerCase() || "",
@@ -71,6 +81,11 @@ export class ProductService {
       search: filter.search?.trim(),
       category: filter.category?.trim(),
       vendorSlug: filter.vendor?.trim(),
+      minPrice: filter.minPrice != null ? Number(filter.minPrice) : undefined,
+      maxPrice: filter.maxPrice != null ? Number(filter.maxPrice) : undefined,
+      inStock: filter.inStock ? Boolean(filter.inStock) : undefined,
+      onSale: filter.onSale ? Boolean(filter.onSale) : undefined,
+      rating: filter.rating != null ? Number(filter.rating) : undefined,
       sort: filter.sort,
     });
 
@@ -87,6 +102,24 @@ export class ProductService {
     // 3. Populate cache for next request (fire-and-forget)
     await cacheSet(cacheKey, payload, 5 * 60);
     return payload;
+  }
+
+  /**
+   * Fast autocomplete search with 3-minute Redis caching.
+   */
+  async autocompleteSearch(query: string, limit = 6) {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
+      return { products: [], categories: [] };
+    }
+
+    const cacheKey = `products:autocomplete:${Buffer.from(trimmed).toString("base64url")}:${limit}`;
+    const cached = await cacheGet<any>(cacheKey);
+    if (cached) return cached;
+
+    const data = await this.productRepo.autocomplete(trimmed, limit);
+    await cacheSet(cacheKey, data, 3 * 60);
+    return data;
   }
 
   /**

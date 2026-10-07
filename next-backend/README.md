@@ -126,7 +126,8 @@ src/
 - `DELETE /me/addresses/:id`: Remove address
 
 ### 📦 Products & Catalog (`/api/v1/products`)
-- `GET /`: Paginated catalog with category, vendor, price, search, and sorting
+- `GET /`: Paginated catalog with faceted filters (`minPrice`, `maxPrice`, `inStock`, `onSale`, `rating`, `category`, `vendor`, `search`, `sortBy`, `sortOrder`)
+- `GET /autocomplete`: High-speed search autocomplete with prefix/infix matching, category aggregations, and 180-second Redis caching
 - `GET /categories`: All product categories with product counts
 - `GET /trending`: High sales velocity products
 - `GET /sellers`: Multi-vendor product comparisons by name
@@ -173,7 +174,7 @@ src/
 
 ---
 
-## 🔒 Security Highlights
+## 🔒 Security & Performance Highlights
 
 1. **RFC 6749 Refresh Token Family Rotation**: Prevents replay attacks; re-using a revoked token invalidates the entire token family.
 2. **O(1) SHA-256 Lookup Fingerprint**: Fast indexed `lookupHash` on refresh tokens prevents database table scans, combining microsecond lookups with bcrypt tamper-proof security.
@@ -183,6 +184,8 @@ src/
 6. **Paystack HMAC Verification**: Constant-time signature verification (`crypto.timingSafeEqual`) on all incoming payment webhooks.
 7. **Integer Money Math**: Martin Fowler `Money` Value Object uses integer pesewas to eliminate floating point rounding leaks.
 8. **Financial Accounting Integrity**: Cancelled and refunded orders are strictly excluded from all platform revenue, GMV, and merchant escrow metrics.
+9. **Redis-Cached Search Autocomplete**: Sub-15ms prefix/infix product querying with 3-minute Redis cache TTL and SQL unaccent-insensitive indexing.
+10. **Faceted Query Optimization**: Multi-facet catalog filtering with bounded offset pagination and concurrent count aggregation.
 
 ---
 

@@ -36,8 +36,9 @@ import Redis from "ioredis";
 import { config } from "../config/env.js";
 import { logger } from "./logger.js";
 
-function createRedisClient(): Redis {
+function createRedisClient(extraOptions: { maxRetriesPerRequest?: number | null } = {}): Redis {
   const client = new Redis(config.REDIS_URL, {
+    maxRetriesPerRequest: extraOptions.maxRetriesPerRequest,
     // Retry connection up to 3 times in dev, 10 times in prod with exponential backoff
     // WHAT IF: Redis isn't running locally? Stops retrying quickly and falls back cleanly.
     retryStrategy(times) {
@@ -83,10 +84,8 @@ function createRedisClient(): Redis {
 // Main client for get/set/del operations
 export const redis = createRedisClient();
 
-// Separate client for BullMQ — BullMQ requires a dedicated connection
-// SHOULD INCASE: BullMQ blocks its connection with BLPOP for queue
-// consumption — you cannot use that connection for other commands.
-export const redisForQueue = createRedisClient();
+// Separate client for BullMQ — BullMQ requires a dedicated connection with maxRetriesPerRequest = null
+export const redisForQueue = createRedisClient({ maxRetriesPerRequest: null });
 
 // ─── Helper: cache keys ──────────────────────────────────────────────────────
 
@@ -107,26 +106,31 @@ export const CacheKey = {
 // Use this instead of FLUSHALL — only deletes keys matching the pattern.
 
 export async function flushPattern(pattern: string): Promise<number> {
-  let cursor = "0";
-  let deletedCount = 0;
+  try {
+    let cursor = "0";
+    let deletedCount = 0;
 
-  do {
-    const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
-    cursor = nextCursor;
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+      cursor = nextCursor;
 
-    if (keys.length > 0) {
-      // FIX #14: Batch delete via pipeline to prevent blocking Redis event loop
-      const pipeline = redis.pipeline();
-      for (const key of keys) {
-        pipeline.del(key);
+      if (keys.length > 0) {
+        // FIX #14: Batch delete via pipeline to prevent blocking Redis event loop
+        const pipeline = redis.pipeline();
+        for (const key of keys) {
+          pipeline.del(key);
+        }
+        await pipeline.exec();
+        deletedCount += keys.length;
       }
-      await pipeline.exec();
-      deletedCount += keys.length;
-    }
-  } while (cursor !== "0");
+    } while (cursor !== "0");
 
-  logger.debug({ pattern, deletedCount }, "Redis: flushed keys by pattern");
-  return deletedCount;
+    logger.debug({ pattern, deletedCount }, "Redis: flushed keys by pattern");
+    return deletedCount;
+  } catch (err: any) {
+    logger.warn({ pattern, error: err?.message }, "Redis: flushPattern bypassed (offline or error)");
+    return 0;
+  }
 }
 
 // ─── Helper: safe get/set with fallback ──────────────────────────────────────

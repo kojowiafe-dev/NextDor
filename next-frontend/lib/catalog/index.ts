@@ -8,6 +8,9 @@ import type {
   OtherSellerOffer,
   MerchantGroup,
   ConsolidatedProduct,
+  AutocompleteResult,
+  AutocompleteProduct,
+  AutocompleteCategory,
 } from "./types";
 import {
   fetchWCCategories,
@@ -41,6 +44,22 @@ function sortToWCParams(sort?: ProductSort): {
       return { orderby: "price", order: "desc" };
     default:
       return {};
+  }
+}
+
+function sortToBackendParam(sort?: ProductSort): string {
+  switch (sort) {
+    case "price-asc":
+      return "price_asc";
+    case "price-desc":
+      return "price_desc";
+    case "rating":
+      return "rating";
+    case "date":
+      return "newest";
+    case "popularity":
+    default:
+      return "popular";
   }
 }
 
@@ -86,9 +105,23 @@ export async function getProducts(
 
   // Graceful fallback to backend PostgreSQL catalog
   try {
+    const queryParts = [
+      `page=${page}`,
+      `limit=${perPage}`,
+      options.sort ? `sort=${sortToBackendParam(options.sort)}` : "",
+      options.search ? `search=${encodeURIComponent(options.search)}` : "",
+      options.category ? `category=${encodeURIComponent(options.category)}` : "",
+      options.vendor ? `vendor=${encodeURIComponent(options.vendor)}` : "",
+      options.minPrice != null ? `minPrice=${options.minPrice}` : "",
+      options.maxPrice != null ? `maxPrice=${options.maxPrice}` : "",
+      options.inStock ? `inStock=true` : "",
+      options.onSale ? `onSale=true` : "",
+      options.rating ? `rating=${options.rating}` : "",
+    ].filter(Boolean).join("&");
+
     const res = await fetch(
-      `${API_BASE}/products?page=${page}&limit=${perPage}${options.search ? `&search=${encodeURIComponent(options.search)}` : ""}`,
-      { next: { revalidate: 60 } }
+      `${API_BASE}/products?${queryParts}`,
+      { next: { revalidate: 30 } }
     );
     if (res.ok) {
       const json = await res.json();
@@ -485,6 +518,36 @@ export function groupProductsByName(products: Product[]): ConsolidatedProduct[] 
   return Array.from(map.values());
 }
 
+/**
+ * Client/Server function for real-time instant autocomplete search suggestions.
+ */
+export async function fetchAutocomplete(
+  query: string,
+  limit = 6
+): Promise<AutocompleteResult> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { products: [], categories: [] };
+  }
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/products/autocomplete?q=${encodeURIComponent(trimmed)}&limit=${limit}`,
+      { next: { revalidate: 30 } }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        return json.data;
+      }
+    }
+  } catch (err) {
+    console.warn("Autocomplete fetch failed:", err);
+  }
+
+  return { products: [], categories: [] };
+}
+
 export type {
   Category,
   Product,
@@ -495,4 +558,8 @@ export type {
   OtherSellerOffer,
   MerchantGroup,
   ConsolidatedProduct,
+  AutocompleteResult,
+  AutocompleteProduct,
+  AutocompleteCategory,
 };
+

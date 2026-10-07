@@ -20,7 +20,12 @@ export interface FindProductsFilter {
   search?: string;
   category?: string;
   vendorSlug?: string;
-  sort?: "price_asc" | "price_desc" | "newest" | "popular";
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  onSale?: boolean;
+  rating?: number;
+  sort?: "price_asc" | "price_desc" | "newest" | "popular" | "rating";
   page: number;
   limit: number;
 }
@@ -34,15 +39,16 @@ export interface PaginatedProducts {
 
 export class ProductRepository {
   /**
-   * Queries paginated products matching search, category, and vendor criteria.
+   * Queries paginated products matching search, category, vendor, and faceted filter criteria.
    *
    * IMPORTANT LINES EXPLAINED:
    * - `deletedAt: null`: Soft-delete filter ensuring deleted items never appear in catalog queries.
    * - `images.orderBy: { sortOrder: "asc" }`: Ensures the primary merchant image displays first.
    * - `vendor.select`: Proactively projects vendor branding (name, slug, logo) to avoid N+1 queries.
+   * - Faceted filters: Dynamically filters by price ranges (handling salePrice), stock status, on-sale flags, and customer ratings.
    */
   async findMany(filter: FindProductsFilter): Promise<PaginatedProducts> {
-    const { page, limit, search, category, vendorSlug, sort } = filter;
+    const { page, limit, search, category, vendorSlug, minPrice, maxPrice, inStock, onSale, rating, sort } = filter;
     const skip = (page - 1) * limit;
 
     const andConditions: Prisma.ProductWhereInput[] = [
@@ -60,6 +66,43 @@ export class ProductRepository {
           { name: { contains: search, mode: "insensitive" } },
           { description: { contains: search, mode: "insensitive" } },
         ],
+      });
+    }
+
+    if (minPrice !== undefined && !isNaN(minPrice)) {
+      andConditions.push({
+        OR: [
+          { AND: [{ salePrice: { not: null } }, { salePrice: { gte: minPrice } }] },
+          { AND: [{ salePrice: null }, { price: { gte: minPrice } }] },
+        ],
+      });
+    }
+
+    if (maxPrice !== undefined && !isNaN(maxPrice)) {
+      andConditions.push({
+        OR: [
+          { AND: [{ salePrice: { not: null } }, { salePrice: { lte: maxPrice } }] },
+          { AND: [{ salePrice: null }, { price: { lte: maxPrice } }] },
+        ],
+      });
+    }
+
+    if (inStock) {
+      andConditions.push({
+        stockStatus: { not: "OUT_OF_STOCK" },
+        OR: [{ stockQty: null }, { stockQty: { gt: 0 } }],
+      });
+    }
+
+    if (onSale) {
+      andConditions.push({
+        salePrice: { not: null, gt: 0 },
+      });
+    }
+
+    if (rating && rating > 0) {
+      andConditions.push({
+        averageRating: { gte: rating },
       });
     }
 
@@ -82,6 +125,7 @@ export class ProductRepository {
     if (sort === "price_asc") orderBy = { price: "asc" };
     if (sort === "price_desc") orderBy = { price: "desc" };
     if (sort === "popular") orderBy = { reviewCount: "desc" };
+    if (sort === "rating") orderBy = { averageRating: "desc" };
 
     // Parallel count & query for optimal database latency
     const [total, products] = await Promise.all([
@@ -455,4 +499,108 @@ export class ProductRepository {
 
     return result;
   }
+
+  /**
+   * Search autocomplete: finds top matching products and categories for instant live dropdown.
+   */
+  async autocomplete(query: string, limit = 6) {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return { products: [], categories: [] };
+    }
+
+    const [products, categories] = await Promise.all([
+      prisma.product.findMany({
+        where: {
+          deletedAt: null,
+          OR: [
+            { vendorId: null },
+            { vendor: { status: "ACTIVE", deletedAt: null } },
+          ],
+          AND: [
+            {
+              OR: [
+                { name: { contains: trimmed, mode: "insensitive" } },
+                { description: { contains: trimmed, mode: "insensitive" } },
+                { categories: { some: { name: { contains: trimmed, mode: "insensitive" } } } },
+              ],
+            },
+          ],
+        },
+        take: limit,
+        orderBy: [{ reviewCount: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          price: true,
+          salePrice: true,
+          currency: true,
+          stockStatus: true,
+          averageRating: true,
+          reviewCount: true,
+          images: {
+            take: 1,
+            orderBy: { sortOrder: "asc" },
+            select: { url: true, alt: true },
+          },
+          vendor: {
+            select: { name: true, slug: true },
+          },
+          categories: {
+            take: 2,
+            select: { name: true, slug: true },
+          },
+        },
+      }),
+      prisma.category.findMany({
+        where: {
+          name: { contains: trimmed, mode: "insensitive" },
+        },
+        take: 4,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          _count: {
+            select: {
+              products: {
+                where: {
+                  deletedAt: null,
+                  OR: [
+                    { vendorId: null },
+                    { vendor: { status: "ACTIVE", deletedAt: null } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      products: products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        price: Number(p.price),
+        salePrice: p.salePrice ? Number(p.salePrice) : null,
+        currency: p.currency,
+        stockStatus: p.stockStatus,
+        rating: Number(p.averageRating),
+        reviewCount: p.reviewCount,
+        image: p.images[0]?.url || null,
+        vendorName: p.vendor?.name || "NextDor Official",
+        categoryName: p.categories[0]?.name || null,
+      })),
+      categories: categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        count: c._count.products,
+      })),
+    };
+  }
 }
+

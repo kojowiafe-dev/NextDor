@@ -16,10 +16,19 @@
   --font-sans: var(--font-outfit);
 }
 
+html,
 body {
+  overflow-x: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-outfit), Arial, Helvetica, sans-serif;
+}
+
+/* Ensure smooth touch scrolling on low-end mobile devices */
+* {
+  -webkit-overflow-scrolling: touch;
 }
 
 a {

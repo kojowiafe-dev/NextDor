@@ -98,13 +98,14 @@ NextDor/
 │   └── tsconfig.json
 │
 ├── next-frontend/                    # Next.js 16 Web Application (App Router + Turbopack)
-│   ├── app/                          # Next.js App Router directory (34 routes)
+│   ├── app/                          # Next.js App Router directory (38 routes)
 │   │   ├── account/                  # Customer profile, orders, addresses, wishlists
 │   │   ├── admin/                    # Admin portal (products, merchants, orders, audit logs)
 │   │   ├── api/upload/               # Serverless Cloudinary streaming upload handler
 │   │   ├── cart/                     # Shopping cart page
 │   │   ├── category/[slug]/          # Category browsing page
 │   │   ├── checkout/                 # Multi-vendor checkout flow with MoMo/Paystack mock
+│   │   ├── deals/                    # Dedicated deals and promotions hub
 │   │   ├── login/ & register/        # Authentication pages
 │   │   ├── product/[slug]/           # Dynamic product detail page with resilient gallery
 │   │   ├── search/                   # Search results page
@@ -115,6 +116,7 @@ NextDor/
 │   │   └── globals.css               # Global theme tokens (brand orange #ff9900)
 │   ├── components/                   # Reusable UI components
 │   │   ├── ui/ImageUpload.tsx        # Drag-and-drop Cloudinary image upload component
+│   │   ├── shop/                     # ShopFilters, ActiveFilterChips, MobileFilterDrawer
 │   │   ├── product/                  # Product cards, galleries, other sellers
 │   │   ├── layout/                   # Header, Footer ("Shop More, Wait Less"), SearchBar
 │   │   └── admin/                    # Admin forms and layouts
@@ -143,9 +145,14 @@ NextDor/
 | :--- | :--- | :--- |
 | **Homepage & Hero Banners** | `next-frontend/app/page.tsx` | `http://localhost:3000/` |
 | **Product Detail Page (PDP)** | `next-frontend/app/product/[slug]/page.tsx` | `http://localhost:3000/product/[slug]` |
-| **Storewide Catalog Browsing** | `next-frontend/app/shop/page.tsx` | `http://localhost:3000/shop` |
-| **Category Filtered View** | `next-frontend/app/category/[slug]/page.tsx` | `http://localhost:3000/category/[slug]` |
-| **Search Results & Filters** | `next-frontend/app/search/page.tsx` | `http://localhost:3000/search?q=cake` |
+| **Storewide Catalog Browsing** | `next-frontend/app/shop/page.tsx` | `http://localhost:3000/shop`<br>(2-Column layout with `ShopFilters.tsx` sidebar, active chips, and mobile drawer) |
+| **Faceted Catalog Filters** | `next-frontend/components/shop/ShopFilters.tsx` | Price presets & custom inputs, in-stock toggle, deals toggle, and star ratings |
+| **Mobile Filter Drawer** | `next-frontend/components/shop/MobileFilterDrawer.tsx` | Slide-over drawer with active filter count badge for mobile viewports |
+| **Active Filter Chips** | `next-frontend/components/shop/ActiveFilterChips.tsx` | Interactive removable tags for active facets with "Clear All" |
+| **Category Filtered View** | `next-frontend/app/category/[slug]/page.tsx` | `http://localhost:3000/category/[slug]`<br>(Hero showcase banner, sibling category pills, and faceted filters) |
+| **Dedicated Deals Hub** | `next-frontend/app/deals/page.tsx` | `http://localhost:3000/deals` (Discount tiers: 50%+ OFF, 30%+ OFF, Under GH₵100) |
+| **Search Results & Filters** | `next-frontend/app/search/page.tsx` | `http://localhost:3000/search?q=cake`<br>(Faceted filters, sort bar, and no-results recommendations) |
+| **Instant Autocomplete Search** | `next-frontend/components/layout/SearchBar.tsx` | 220ms debounced live dropdown with product cards, category chips, and keyboard navigation |
 | **Customer Shopping Cart** | `next-frontend/app/cart/page.tsx` | `http://localhost:3000/cart` |
 | **Checkout & Payment Form** | `next-frontend/app/checkout/page.tsx` | `http://localhost:3000/checkout` |
 | **Order Confirmation Page** | `next-frontend/app/checkout/success/page.tsx` | `http://localhost:3000/checkout/success` |
@@ -208,7 +215,8 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Admin Orders Queue** | Orders Service | `src/modules/orders/order.service.ts` | `GET /api/v1/admin/orders?limit=100`<br>`PATCH /api/v1/admin/orders/:id/status` |
 | **Admin Customer Aggregates** | Admin Customer Service | `src/modules/admin/admin.customer.service.ts` | `GET /api/v1/admin/customers`<br>`GET /api/v1/admin/customers/:id` |
 | **Admin Platform Analytics** | Admin Analytics Service | `src/modules/admin/admin.analytics.service.ts` | `GET /api/v1/admin/analytics/overview` (Excludes `CANCELLED`/`REFUNDED` from revenue; live counts for customers, products, orders) |
-| **Public Catalog & Search** | Products Controller | `src/modules/products/product.routes.ts` | `GET /api/v1/products`<br>`GET /api/v1/products/:slugOrId` |
+| **Public Catalog & Faceted Filters** | Products Controller | `src/modules/products/product.routes.ts` | `GET /api/v1/products` (`minPrice`, `maxPrice`, `inStock`, `onSale`, `rating`, `category`, `sort`)<br>`GET /api/v1/products/:slugOrId` |
+| **Instant Search Autocomplete** | Products Service | `src/modules/products/product.service.ts` | `GET /api/v1/products/autocomplete?q=...` (Products & categories preview with Redis caching) |
 | **Admin Product Creation** | Products Service | `src/modules/products/product.service.ts` | `POST /api/v1/products` (Admin & Super Admin) |
 | **Admin Bulk Product Creation**| Products Service | `src/modules/products/product.service.ts` | `POST /api/v1/products/bulk` (Admin batch catalog upload) |
 | **Product Mutation & OCC** | Products Service | `src/modules/products/product.service.ts` | `PATCH /api/v1/products/:id` (Admin & Vendor Owner) |

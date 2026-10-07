@@ -52,9 +52,14 @@ export type GetProductsOptions = {
   page?: number;
   perPage?: number;
   category?: string;
+  vendor?: string;
   search?: string;
   sort?: ProductSort;
   onSale?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  rating?: number;
 };
 
 export type PaginatedProducts = {
@@ -62,6 +67,33 @@ export type PaginatedProducts = {
   total: number;
   totalPages: number;
   page: number;
+};
+
+export type AutocompleteProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  salePrice: number | null;
+  currency: string;
+  stockStatus: string;
+  rating: number;
+  reviewCount: number;
+  image: string | null;
+  vendorName: string;
+  categoryName: string | null;
+};
+
+export type AutocompleteCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  count: number;
+};
+
+export type AutocompleteResult = {
+  products: AutocompleteProduct[];
+  categories: AutocompleteCategory[];
 };
 
 export type TrendingProduct = Product & {
