@@ -18,6 +18,7 @@ import { config } from "../../config/env.js";
 import { redis, CacheKey, flushPattern } from "../../lib/redis.js";
 import { slugify } from "../../lib/slugify.js";
 import { NotFoundError, BadRequestError } from "../../lib/errors.js";
+import { assertSafePublicUrl } from "../../lib/urlSafety.js";
 
 interface WcImage {
   id: number;
@@ -401,7 +402,17 @@ export class SyncService {
     });
 
     const startTime = Date.now();
-    const baseUrl = vendor.wcStoreUrl.replace(/\/$/, "");
+    let baseUrl: string;
+    try {
+      baseUrl = await assertSafePublicUrl(vendor.wcStoreUrl);
+    } catch (err: any) {
+      await prisma.vendor.update({
+        where: { id: vendorId },
+        data: { wcSyncStatus: "FAILED" },
+      });
+      logger.error({ err, vendorId, url: vendor.wcStoreUrl }, "SSRF guard blocked unsafe vendor WooCommerce store URL");
+      throw new BadRequestError(`Invalid or unsafe WooCommerce store URL: ${err.message}`);
+    }
     const hasKeys = Boolean(vendor.wcConsumerKey && vendor.wcConsumerSecret);
     const endpoint = hasKeys
       ? `${baseUrl}/wp-json/wc/v3/products`

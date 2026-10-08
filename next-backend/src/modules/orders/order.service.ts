@@ -130,59 +130,7 @@ export class OrderService {
 
     // ── Find products in database (by UUID, WooCommerce wcId, or slug) ────────
     const productIdentifiers = input.cart.map((i) => i.productId);
-    let products = await this.repo.findProductsForCheckout(productIdentifiers);
-
-    // If any item was not found in PostgreSQL (e.g. from live WooCommerce catalog)
-    // auto-upsert a database record under the flagship vendor
-    let flagshipVendorId: string | null = null;
-    for (const cartItem of input.cart) {
-      let product = products.find(
-        (p: any) =>
-          p.id === cartItem.productId ||
-          (p.wcId !== null && String(p.wcId) === String(cartItem.productId)) ||
-          p.slug === cartItem.productId,
-      );
-
-      if (!product) {
-        if (!flagshipVendorId) {
-          const flagship = await prisma.vendor.findFirst({
-            where: { slug: "nextdor" },
-            select: { id: true },
-          });
-          flagshipVendorId = flagship?.id ?? null;
-        }
-
-        const numericWcId = Number(cartItem.productId);
-        const isNumeric = !isNaN(numericWcId) && Number.isInteger(numericWcId) && numericWcId > 0;
-        const fallbackSlug = cartItem.slug || (isNumeric ? `wc-product-${numericWcId}` : `product-${Date.now()}`);
-        const fallbackName = cartItem.name || (isNumeric ? `Catalog Item #${numericWcId}` : `Product #${cartItem.productId}`);
-        const fallbackPrice = cartItem.price && cartItem.price > 0 ? cartItem.price : 50;
-
-        const created = await prisma.product.upsert({
-          where: isNumeric ? { wcId: numericWcId } : { slug: fallbackSlug },
-          update: {},
-          create: {
-            wcId: isNumeric ? numericWcId : undefined,
-            slug: fallbackSlug,
-            name: fallbackName,
-            description: fallbackName,
-            price: fallbackPrice,
-            currency: "GHS",
-            stockStatus: "IN_STOCK",
-            vendorId: flagshipVendorId,
-            images: cartItem.image
-              ? { create: [{ url: cartItem.image, alt: fallbackName }] }
-              : undefined,
-          },
-          include: {
-            images: { take: 1, orderBy: { sortOrder: "asc" } },
-            vendor: { select: { id: true, commissionRate: true, status: true } },
-          },
-        });
-
-        products.push(created);
-      }
-    }
+    const products = await this.repo.findProductsForCheckout(productIdentifiers);
 
     // ── Validate each cart item ──────────────────────────────────────────────
     const enrichedItems = input.cart.map((cartItem) => {

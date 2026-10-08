@@ -1,4 +1,4 @@
-# NextDor — Master Phased Implementation Roadmap
+       # NextDor — Master Phased Implementation Roadmap
 > **Platform Motto:** *"Shop More, Wait Less"*  
 > **Status:** Enterprise Multi-Vendor Marketplace (Ghana)  
 > **Architecture:** Next.js 16 (App Router + React 19) + Fastify v5 + Prisma ORM (Neon PostgreSQL)  

@@ -55,11 +55,12 @@ export async function buildApp() {
     },
   });
 
-  // Gracefully handle empty JSON bodies (e.g. POST requests with Content-Type: application/json but no body)
+  // Gracefully handle empty JSON bodies and store rawBody for webhook HMAC verification
   app.addContentTypeParser(
     "application/json",
     { parseAs: "string" },
-    (_req, body: string, done) => {
+    (req, body: string, done) => {
+      (req as any).rawBody = body;
       if (!body || body.trim() === "") {
         done(null, {});
         return;

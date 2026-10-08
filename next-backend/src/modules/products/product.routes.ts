@@ -414,13 +414,13 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   /**
    * PATCH /products/:id
    * Updates product details (name, price, stock, category, etc.).
-   * Requires ADMIN, SUPER_ADMIN, or VENDOR_OWNER role.
+   * Requires ADMIN or SUPER_ADMIN role (Vendors must update via /vendors/portal/products/:id).
    */
   app.patch(
     "/:id",
     {
       schema: {
-        description: "Update product details (Admin or Vendor)",
+        description: "Update product details (Admin only)",
         tags: ["Products"],
         security: [{ bearerAuth: [] }],
         params: {
@@ -456,10 +456,10 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (!["ADMIN", "SUPER_ADMIN", "VENDOR_OWNER"].includes(payload.role)) {
+      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
         return reply.status(403).send({
           success: false,
-          error: { code: "FORBIDDEN", message: "Insufficient permissions to update product" },
+          error: { code: "FORBIDDEN", message: "Admin privileges required to update catalog products" },
         });
       }
 

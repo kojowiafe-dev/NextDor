@@ -12,39 +12,11 @@ import type {
   AutocompleteProduct,
   AutocompleteCategory,
 } from "./types";
-import {
-  fetchWCCategories,
-  fetchWCProductById,
-  fetchWCProducts,
-  fetchWCProductsWithMeta,
-  fetchWCRelatedProducts,
-} from "@/lib/woocommerce/client";
-import {
-  getDiscountPercent,
-  mapWCCategory,
-  mapWCProduct,
-  mapWCProducts,
-} from "@/lib/woocommerce/mappers";
 import { API_BASE } from "@/lib/api-config";
 
-function sortToWCParams(sort?: ProductSort): {
-  orderby?: string;
-  order?: string;
-} {
-  switch (sort) {
-    case "popularity":
-      return { orderby: "popularity", order: "desc" };
-    case "rating":
-      return { orderby: "rating", order: "desc" };
-    case "date":
-      return { orderby: "date", order: "desc" };
-    case "price-asc":
-      return { orderby: "price", order: "asc" };
-    case "price-desc":
-      return { orderby: "price", order: "desc" };
-    default:
-      return {};
-  }
+export function getDiscountPercent(product: { price: number; regularPrice?: number | null }): number {
+  if (!product.regularPrice || product.regularPrice <= product.price) return 0;
+  return Math.round(((product.regularPrice - product.price) / product.regularPrice) * 100);
 }
 
 function sortToBackendParam(sort?: ProductSort): string {
@@ -63,47 +35,53 @@ function sortToBackendParam(sort?: ProductSort): string {
   }
 }
 
+function mapBackendProduct(p: any): Product {
+  const price = Number(p.salePrice ?? p.price ?? 0);
+  const regularPrice = p.salePrice ? Number(p.price) : null;
+
+  return {
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    description: p.description || "",
+    shortDescription: p.shortDesc || "",
+    price,
+    regularPrice,
+    currency: p.currency || "GHS",
+    onSale: Boolean(p.salePrice && p.salePrice < p.price),
+    images: Array.isArray(p.images) && p.images.length > 0
+      ? p.images.map((img: any) => ({
+          src: typeof img === "string" ? img : img.url || img.src || "",
+          alt: typeof img === "object" ? img.alt || p.name : p.name,
+        }))
+      : [{ src: "", alt: p.name }],
+    categories: Array.isArray(p.categories)
+      ? p.categories.map((c: any) => ({ slug: c.slug, name: c.name }))
+      : [],
+    rating: Number(p.averageRating || 0),
+    reviewCount: p.reviewCount || 0,
+    inStock: p.stockStatus === "IN_STOCK",
+    vendor: p.vendor
+      ? {
+          id: p.vendor.id,
+          name: p.vendor.name,
+          slug: p.vendor.slug,
+          isVerified: p.vendor.status === "ACTIVE",
+          logoUrl: p.vendor.logoUrl ?? null,
+        }
+      : undefined,
+  };
+}
+
+/**
+ * Fetches paginated products from the NextDor marketplace catalog.
+ */
 export async function getProducts(
   options: GetProductsOptions = {},
 ): Promise<PaginatedProducts> {
   const page = options.page ?? 1;
   const perPage = options.perPage ?? 12;
 
-  const params: Record<string, string | number | undefined> = {
-    page,
-    per_page: perPage,
-    ...sortToWCParams(options.sort),
-  };
-
-  if (options.search) {
-    params.search = options.search;
-  }
-
-  if (options.category) {
-    const category = await getCategoryBySlug(options.category);
-    if (category) {
-      params.category = category.id;
-    }
-  }
-
-  const { products: rawProducts, total, totalPages } =
-    await fetchWCProductsWithMeta(params);
-  if (rawProducts.length > 0) {
-    let products = mapWCProducts(rawProducts);
-    if (options.onSale) {
-      products = products.filter((product) => product.onSale);
-    }
-    return {
-      products,
-      total,
-      totalPages: options.onSale
-        ? Math.max(1, Math.ceil(products.length / perPage))
-        : Math.max(1, totalPages),
-      page,
-    };
-  }
-
-  // Graceful fallback to backend PostgreSQL catalog
   try {
     const queryParts = [
       `page=${page}`,
@@ -119,31 +97,14 @@ export async function getProducts(
       options.rating ? `rating=${options.rating}` : "",
     ].filter(Boolean).join("&");
 
-    const res = await fetch(
-      `${API_BASE}/products?${queryParts}`,
-      { next: { revalidate: 30 } }
-    );
+    const res = await fetch(`${API_BASE}/products?${queryParts}`, {
+      next: { revalidate: 30 },
+    });
+
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.data?.products)) {
-        let products: Product[] = json.data.products.map((p: any): Product => ({
-          id: p.id,
-          slug: p.slug,
-          name: p.name,
-          description: p.description || "",
-          shortDescription: p.shortDesc || "",
-          price: Number(p.salePrice ?? p.price),
-          regularPrice: p.salePrice ? Number(p.price) : null,
-          currency: p.currency || "GHS",
-          onSale: Boolean(p.salePrice),
-          images: p.images?.length > 0
-            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
-            : [{ src: "", alt: p.name }],
-          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
-          rating: Number(p.averageRating || 0),
-          reviewCount: p.reviewCount || 0,
-          inStock: p.stockStatus === "IN_STOCK",
-        }));
+        let products: Product[] = json.data.products.map(mapBackendProduct);
         if (options.onSale) {
           products = products.filter((product) => product.onSale);
         }
@@ -155,8 +116,8 @@ export async function getProducts(
         };
       }
     }
-  } catch {
-    // Backend also warming up
+  } catch (err) {
+    console.warn("Failed to fetch products from backend:", err);
   }
 
   return {
@@ -167,138 +128,80 @@ export async function getProducts(
   };
 }
 
+/**
+ * Fetches all products matching options from NextDor marketplace catalog.
+ */
 export async function getAllProducts(
   options: Omit<GetProductsOptions, "page" | "perPage"> = {},
 ): Promise<Product[]> {
-  const params: Record<string, string | number | undefined> = {
-    per_page: 100,
-    ...sortToWCParams(options.sort),
-  };
-
-  if (options.search) {
-    params.search = options.search;
-  }
-
-  if (options.category) {
-    const category = await getCategoryBySlug(options.category);
-    if (category) {
-      params.category = category.id;
-    }
-  }
-
-  const rawProducts = await fetchWCProducts(params);
-  if (rawProducts.length > 0) {
-    let products = mapWCProducts(rawProducts);
-    if (options.onSale) {
-      products = products.filter((product) => product.onSale);
-    }
-    return products;
-  }
-
-  // Graceful fallback to backend PostgreSQL catalog
   try {
-    const res = await fetch(`${API_BASE}/products?limit=50`, {
+    const queryParts = [
+      `page=1`,
+      `limit=100`,
+      options.sort ? `sort=${sortToBackendParam(options.sort)}` : "",
+      options.search ? `search=${encodeURIComponent(options.search)}` : "",
+      options.category ? `category=${encodeURIComponent(options.category)}` : "",
+      options.vendor ? `vendor=${encodeURIComponent(options.vendor)}` : "",
+      options.minPrice != null ? `minPrice=${options.minPrice}` : "",
+      options.maxPrice != null ? `maxPrice=${options.maxPrice}` : "",
+      options.inStock ? `inStock=true` : "",
+      options.onSale ? `onSale=true` : "",
+      options.rating ? `rating=${options.rating}` : "",
+    ].filter(Boolean).join("&");
+
+    const res = await fetch(`${API_BASE}/products?${queryParts}`, {
       next: { revalidate: 60 },
     });
+
     if (res.ok) {
       const json = await res.json();
-      if (json.success && Array.isArray(json.data?.products) && json.data.products.length > 0) {
-        let products: Product[] = json.data.products.map((p: any): Product => ({
-          id: p.id,
-          slug: p.slug,
-          name: p.name,
-          description: p.description || "",
-          shortDescription: p.shortDesc || "",
-          price: Number(p.salePrice ?? p.price),
-          regularPrice: p.salePrice ? Number(p.price) : null,
-          currency: p.currency || "GHS",
-          onSale: Boolean(p.salePrice),
-          images: p.images?.length > 0
-            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
-            : [{ src: "", alt: p.name }],
-          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
-          rating: Number(p.averageRating || 0),
-          reviewCount: p.reviewCount || 0,
-          inStock: p.stockStatus === "IN_STOCK",
-        }));
+      if (json.success && Array.isArray(json.data?.products)) {
+        let products: Product[] = json.data.products.map(mapBackendProduct);
         if (options.onSale) {
           products = products.filter((product) => product.onSale);
         }
         return products;
       }
     }
-  } catch {
-    // Backend also warming up
+  } catch (err) {
+    console.warn("Failed to fetch all products from backend:", err);
   }
 
   return [];
 }
 
+/**
+ * Single product lookup by slug from NextDor catalog.
+ */
 export async function getProductBySlug(slug: string): Promise<Product | null> {
-  const rawProducts = await fetchWCProducts({ per_page: 100 });
-  const product = mapWCProducts(rawProducts).find(
-    (entry) => entry.slug === slug,
-  );
-  if (product) return product;
-
-  // Fallback to backend API
   try {
-    const res = await fetch(`${API_BASE}/products/${slug}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_BASE}/products/${encodeURIComponent(slug)}`, {
+      next: { revalidate: 60 },
+    });
     if (res.ok) {
       const json = await res.json();
       if (json.success && json.data?.product) {
-        const p = json.data.product;
-        return {
-          id: p.id,
-          slug: p.slug,
-          name: p.name,
-          description: p.description || "",
-          shortDescription: p.shortDesc || "",
-          price: Number(p.salePrice ?? p.price),
-          regularPrice: p.salePrice ? Number(p.price) : null,
-          currency: p.currency || "GHS",
-          onSale: Boolean(p.salePrice),
-          images: p.images?.length > 0
-            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
-            : [{ src: "", alt: p.name }],
-          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
-          rating: Number(p.averageRating || 0),
-          reviewCount: p.reviewCount || 0,
-          inStock: p.stockStatus === "IN_STOCK",
-        };
+        return mapBackendProduct(json.data.product);
       }
     }
-  } catch {
-    // Backend also warming up
+  } catch (err) {
+    console.warn(`Failed to fetch product '${slug}':`, err);
   }
 
   return null;
 }
 
+/**
+ * Single product lookup by ID from NextDor catalog.
+ */
 export async function getProductById(id: string): Promise<Product | null> {
-  const rawProduct = await fetchWCProductById(Number(id));
-  if (rawProduct) {
-    const product = mapWCProduct(rawProduct);
-    return product.price > 0 ? product : null;
-  }
-  return null;
+  return getProductBySlug(id);
 }
 
+/**
+ * Fetches all product categories from NextDor catalog.
+ */
 export async function getCategories(): Promise<Category[]> {
-  const rawCategories = await fetchWCCategories();
-  if (rawCategories.length > 0) {
-    return rawCategories
-      .map(mapWCCategory)
-      .filter(
-        (category) =>
-          category.count > 0 &&
-          category.slug !== "uncategorized" &&
-          category.parentId === null,
-      )
-      .sort((a, b) => b.count - a.count);
-  }
-
-  // Graceful fallback to backend PostgreSQL catalog
   try {
     const res = await fetch(`${API_BASE}/products/categories`, {
       next: { revalidate: 120 },
@@ -310,42 +213,64 @@ export async function getCategories(): Promise<Category[]> {
           id: c.id,
           name: c.name,
           slug: c.slug,
-          count: c._count?.products ?? 0,
+          description: c.description || "",
           parentId: c.parentId ?? null,
+          count: c._count?.products ?? c.count ?? 0,
         }));
       }
     }
-  } catch {
-    // Backend also warming up
+  } catch (err) {
+    console.warn("Failed to fetch categories from backend:", err);
   }
 
   return [];
 }
 
-export async function getCategoryBySlug(
-  slug: string,
-): Promise<Category | null> {
-  const categories = await fetchWCCategories();
-  const match = categories.find((category) => category.slug === slug);
-  return match ? mapWCCategory(match) : null;
+/**
+ * Retrieves a single category by slug from NextDor catalog.
+ */
+export async function getCategoryBySlug(slug: string): Promise<Category | null> {
+  const categories = await getCategories();
+  return categories.find((category) => category.slug === slug) ?? null;
 }
 
+/**
+ * Fetches related products from the same category or marketplace catalog.
+ */
 export async function getRelatedProducts(
   productId: string,
   limit = 8,
 ): Promise<Product[]> {
-  const numericId = Number(productId);
-  if (!numericId || Number.isNaN(numericId)) {
-    return [];
+  try {
+    const current = await getProductById(productId);
+    const categorySlug = current?.categories[0]?.slug;
+
+    const query = categorySlug ? `category=${encodeURIComponent(categorySlug)}&limit=${limit + 1}` : `limit=${limit + 1}`;
+    const res = await fetch(`${API_BASE}/products?${query}`, {
+      next: { revalidate: 60 },
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.products)) {
+        return json.data.products
+          .map(mapBackendProduct)
+          .filter((p: Product) => p.id !== productId && p.slug !== productId)
+          .slice(0, limit);
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch related products:", err);
   }
-  const rawProducts = await fetchWCRelatedProducts(numericId, limit);
-  return mapWCProducts(rawProducts);
+
+  return [];
 }
 
 export async function getDealOfTheDay(): Promise<Product | null> {
   const products = await getAllProducts({ onSale: true });
   if (products.length === 0) {
-    return null;
+    const popular = await getPopularProducts(1);
+    return popular[0] ?? null;
   }
 
   return products.reduce((best, current) =>
@@ -374,45 +299,34 @@ export async function getTrendingProducts(limit = 8): Promise<TrendingProduct[]>
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.data?.products) && json.data.products.length > 0) {
-        return json.data.products.map((p: any): TrendingProduct => ({
-          id: p.id,
-          slug: p.slug,
-          name: p.name,
-          description: p.description || "",
-          shortDescription: p.shortDesc || "",
-          price: Number(p.salePrice ?? p.price),
-          regularPrice: p.salePrice ? Number(p.price) : null,
-          currency: p.currency || "GHS",
-          onSale: Boolean(p.salePrice),
-          images: p.images?.length > 0
-            ? p.images.map((img: any) => ({ src: img.url, alt: img.alt || p.name }))
-            : [{ src: "", alt: p.name }],
-          categories: p.categories?.map((c: any) => ({ slug: c.slug, name: c.name })) || [],
-          rating: Number(p.averageRating || 0),
-          reviewCount: p.reviewCount || 0,
-          inStock: p.stockStatus === "IN_STOCK",
-          recentSales: p.recentSales || 1,
-          trendingBadge: p.trendingBadge || "🔥 Trending Fast",
-          vendor: p.vendor ? {
-            id: p.vendor.id,
-            name: p.vendor.name,
-            slug: p.vendor.slug,
-            logoUrl: p.vendor.logoUrl,
-          } : undefined,
-        }));
+        return json.data.products.map((p: any): TrendingProduct => {
+          const mapped = mapBackendProduct(p);
+          return {
+            ...mapped,
+            recentSales: p.recentSales || 1,
+            trendingBadge: p.trendingBadge || "🔥 Trending Fast",
+            vendor: mapped.vendor
+              ? {
+                  id: mapped.vendor.id,
+                  name: mapped.vendor.name,
+                  slug: mapped.vendor.slug,
+                  logoUrl: mapped.vendor.logoUrl ?? null,
+                }
+              : undefined,
+          };
+        });
       }
     }
   } catch (err) {
-    console.warn("Failed to fetch live trending products, falling back to popular:", err);
+    console.warn("Failed to fetch live trending products:", err);
   }
 
-  // Graceful fallback to catalog popular products if backend is warming up
   const fallback = await getPopularProducts(limit);
   return fallback.map((p) => ({
     ...p,
     trendingBadge: "🔥 Trending Fast",
     recentSales: Math.max(1, p.reviewCount * 3),
-    vendor: { name: "Nextdor Direct", slug: "nextdor" },
+    vendor: p.vendor || { name: "Nextdor Direct", slug: "nextdor" },
   }));
 }
 
@@ -487,7 +401,7 @@ export function groupProductsByName(products: Product[]): ConsolidatedProduct[] 
             price,
             currency: prod.currency,
             stockStatus: prod.inStock ? "IN_STOCK" : "OUT_OF_STOCK",
-            vendor: {
+            vendor: prod.vendor || {
               name: "Nextdor Direct",
               slug: "nextdor",
             },
@@ -506,7 +420,7 @@ export function groupProductsByName(products: Product[]): ConsolidatedProduct[] 
         price,
         currency: prod.currency,
         stockStatus: prod.inStock ? "IN_STOCK" : "OUT_OF_STOCK",
-        vendor: {
+        vendor: prod.vendor || {
           name: "Nextdor Direct",
           slug: "nextdor",
         },
@@ -562,4 +476,3 @@ export type {
   AutocompleteProduct,
   AutocompleteCategory,
 };
-

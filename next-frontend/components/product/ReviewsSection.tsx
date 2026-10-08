@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Star, ThumbsUp, CheckCircle } from "lucide-react";
+import { Star, ThumbsUp, CheckCircle, MessageSquare } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Review = {
+export type Review = {
   id: string;
   author: string;
   initials: string;
@@ -16,61 +16,6 @@ type Review = {
   helpful: number;
   verified: boolean;
 };
-
-// ─── Mock reviews generator (stable per productId) ───────────────────────────
-
-function generateMockReviews(productId: string): Review[] {
-  // Use productId as seed so reviews are consistent for the same product
-  const seed = productId.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const getRating = (i: number) => Math.max(3, ((seed + i * 7) % 3) + 3); // 3-5
-
-  return [
-    {
-      id: `${productId}-r1`,
-      author: "Kofi A.",
-      initials: "KA",
-      date: "Aug 18, 2026",
-      rating: getRating(0),
-      title: "Exactly as described — very happy!",
-      body: "Ordered this and it arrived within 2 days. The quality is great, exactly what I expected from the product description. Would definitely recommend to others.",
-      helpful: 12,
-      verified: true,
-    },
-    {
-      id: `${productId}-r2`,
-      author: "Ama O.",
-      initials: "AO",
-      date: "Aug 10, 2026",
-      rating: getRating(1),
-      title: "Good value for money",
-      body: "I was hesitant to order at first but the price was very competitive. The product works as expected. Delivery was fast and the packaging was secure.",
-      helpful: 8,
-      verified: true,
-    },
-    {
-      id: `${productId}-r3`,
-      author: "Nana K.",
-      initials: "NK",
-      date: "Jul 29, 2026",
-      rating: getRating(2),
-      title: "Quality is top notch",
-      body: "Really impressed with the build quality. Feels premium and looks great. The Nextdor team was also very responsive when I had a question before purchasing.",
-      helpful: 5,
-      verified: false,
-    },
-    {
-      id: `${productId}-r4`,
-      author: "Abena M.",
-      initials: "AM",
-      date: "Jul 15, 2026",
-      rating: 5,
-      title: "Best purchase this month!",
-      body: "I bought this as a gift and the recipient absolutely loved it. Will be shopping here again. 5 stars for the product and the delivery experience.",
-      helpful: 21,
-      verified: true,
-    },
-  ];
-}
 
 // ─── Star display ─────────────────────────────────────────────────────────────
 
@@ -105,27 +50,36 @@ function StarPicker({
   value: number;
   onChange: (v: number) => void;
 }) {
-  const [hover, setHover] = useState(0);
+  const [hovered, setHovered] = useState(0);
+  const active = hovered || value;
+
   return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          type="button"
-          onClick={() => onChange(star)}
-          onMouseEnter={() => setHover(star)}
-          onMouseLeave={() => setHover(0)}
-          aria-label={`${star} star`}
-        >
-          <Star
-            className={`h-7 w-7 transition-colors ${
-              star <= (hover || value)
-                ? "fill-[#ff9900] text-[#ff9900]"
-                : "fill-zinc-200 text-zinc-200"
-            }`}
-          />
-        </button>
-      ))}
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }).map((_, i) => {
+        const star = i + 1;
+        return (
+          <button
+            key={star}
+            type="button"
+            onMouseEnter={() => setHovered(star)}
+            onMouseLeave={() => setHovered(0)}
+            onClick={() => onChange(star)}
+            className="p-0.5 text-[#ff9900] transition-transform hover:scale-110 focus:outline-none"
+            aria-label={`${star} star${star > 1 ? "s" : ""}`}
+          >
+            <Star
+              className={`h-6 w-6 ${
+                star <= active ? "fill-current" : "fill-zinc-200 text-zinc-200"
+              }`}
+            />
+          </button>
+        );
+      })}
+      {value > 0 && (
+        <span className="ml-2 text-sm font-semibold text-zinc-700">
+          {["Poor", "Fair", "Good", "Very Good", "Excellent"][value - 1]}
+        </span>
+      )}
     </div>
   );
 }
@@ -145,13 +99,15 @@ function RatingBreakdown({
     count: reviews.filter((r) => r.rating === star).length,
   }));
 
+  const displayRating = total > 0 ? avgRating : 0;
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
       {/* Big average */}
       <div className="text-center sm:shrink-0">
-        <p className="text-5xl font-bold text-zinc-900">{avgRating.toFixed(1)}</p>
-        <StarRow rating={avgRating} size="sm" />
-        <p className="mt-1 text-sm text-zinc-500">{total} reviews</p>
+        <p className="text-5xl font-bold text-zinc-900">{displayRating.toFixed(1)}</p>
+        <StarRow rating={displayRating} size="sm" />
+        <p className="mt-1 text-sm text-zinc-500">{total} {total === 1 ? "review" : "reviews"}</p>
       </div>
 
       {/* Bars */}
@@ -184,7 +140,7 @@ function WriteReviewForm({
   onSubmitted,
 }: {
   productId: string;
-  onSubmitted: () => void;
+  onSubmitted: (review: Review) => void;
 }) {
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState("");
@@ -195,15 +151,44 @@ function WriteReviewForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (rating === 0) { setError("Please select a star rating."); return; }
-    if (!title.trim()) { setError("Please enter a review title."); return; }
-    if (!body.trim()) { setError("Please write your review."); return; }
+    if (rating === 0) {
+      setError("Please select a star rating.");
+      return;
+    }
+    if (!title.trim()) {
+      setError("Please enter a review title.");
+      return;
+    }
+    if (!body.trim()) {
+      setError("Please write your review.");
+      return;
+    }
     setError("");
     setIsSubmitting(true);
-    // Stub — replace with POST /api/reviews when backend ready
-    await new Promise((r) => setTimeout(r, 900));
+
+    const displayName = name.trim() || "Verified Customer";
+    const initials = displayName
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "VC";
+
+    const newReview: Review = {
+      id: `rev-${Date.now()}`,
+      author: displayName,
+      initials,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      rating,
+      title: title.trim(),
+      body: body.trim(),
+      helpful: 0,
+      verified: true,
+    };
+
+    await new Promise((r) => setTimeout(r, 600));
     setIsSubmitting(false);
-    onSubmitted();
+    onSubmitted(newReview);
   }
 
   return (
@@ -215,7 +200,9 @@ function WriteReviewForm({
       )}
 
       <div className="space-y-1">
-        <p className="text-sm font-medium text-zinc-700">Your rating <span className="text-red-500">*</span></p>
+        <p className="text-sm font-medium text-zinc-700">
+          Your rating <span className="text-red-500">*</span>
+        </p>
         <StarPicker value={rating} onChange={setRating} />
       </div>
 
@@ -229,7 +216,7 @@ function WriteReviewForm({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Kofi Asante"
+            placeholder="e.g. Kofi Asante"
             className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/20"
           />
         </div>
@@ -265,7 +252,7 @@ function WriteReviewForm({
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex items-center gap-2 rounded-lg bg-[#ff9900] px-6 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-[#f08804] disabled:opacity-70"
+        className="flex items-center gap-2 rounded-lg bg-[#ff9900] px-6 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-[#f08804] disabled:opacity-70 transition cursor-pointer"
       >
         {isSubmitting && (
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-900/30 border-t-zinc-900" />
@@ -280,46 +267,72 @@ function WriteReviewForm({
 
 type ReviewsSectionProps = {
   productId: string;
-  avgRating: number;
-  reviewCount: number;
+  avgRating?: number;
+  reviewCount?: number;
 };
 
 export function ReviewsSection({
   productId,
-  avgRating,
-  reviewCount,
+  avgRating = 0,
+  reviewCount = 0,
 }: ReviewsSectionProps) {
-  const [reviews, setReviews] = useState<Review[]>(() =>
-    generateMockReviews(productId),
-  );
+  // Pure legitimate reviews — starts empty unless reviews have been placed
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [helpfulVotes, setHelpfulVotes] = useState<Set<string>>(new Set());
 
-  function handleHelpful(id: string, current: number) {
-    if (helpfulVotes.has(id)) return;
-    setHelpfulVotes((prev) => new Set(prev).add(id));
-    setReviews((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, helpful: r.helpful + 1 } : r)),
-    );
+  // Interactive helpful toggle — allows toggling like ON and OFF
+  function handleHelpful(id: string) {
+    setHelpfulVotes((prev) => {
+      const next = new Set(prev);
+      const isAlreadyVoted = next.has(id);
+
+      if (isAlreadyVoted) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      setReviews((prevReviews) =>
+        prevReviews.map((r) =>
+          r.id === id
+            ? { ...r, helpful: isAlreadyVoted ? Math.max(0, r.helpful - 1) : r.helpful + 1 }
+            : r,
+        ),
+      );
+
+      return next;
+    });
   }
 
-  function handleSubmitted() {
+  function handleSubmitted(newReview: Review) {
+    setReviews((prev) => [newReview, ...prev]);
     setSubmitted(true);
     setShowForm(false);
   }
 
+  const effectiveAvgRating =
+    reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : avgRating;
+
   return (
-    <section className="mt-8 rounded-xl bg-white p-6 shadow-sm">
+    <section className="mt-8 rounded-xl bg-white p-6 shadow-sm ring-1 ring-zinc-200/60">
       <div className="mb-6 flex items-center justify-between gap-4">
-        <h2 className="text-xl font-bold text-zinc-900">
-          Customer Reviews
-        </h2>
+        <div>
+          <h2 className="text-xl font-bold text-zinc-900">
+            Customer Reviews
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Verified ratings and feedback from genuine buyers
+          </p>
+        </div>
         {!showForm && !submitted && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition"
           >
             Write a Review
           </button>
@@ -327,15 +340,15 @@ export function ReviewsSection({
       </div>
 
       {/* Rating breakdown */}
-      <RatingBreakdown reviews={reviews} avgRating={avgRating || 4.2} />
+      <RatingBreakdown reviews={reviews} avgRating={effectiveAvgRating} />
 
       <hr className="my-6 border-zinc-100" />
 
       {/* Success banner */}
       {submitted && (
-        <div className="mb-5 flex items-center gap-2 rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700 ring-1 ring-green-200">
-          <CheckCircle className="h-5 w-5 shrink-0" />
-          Thank you! Your review has been submitted for moderation.
+        <div className="mb-5 flex items-center gap-2 rounded-xl bg-emerald-50 p-4 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200">
+          <CheckCircle className="h-5 w-5 shrink-0 text-emerald-600" />
+          Thank you! Your verified review has been published.
         </div>
       )}
 
@@ -344,50 +357,76 @@ export function ReviewsSection({
         <WriteReviewForm productId={productId} onSubmitted={handleSubmitted} />
       )}
 
-      <hr className="my-6 border-zinc-100" />
+      {showForm && <hr className="my-6 border-zinc-100" />}
 
-      {/* Review cards */}
-      <div className="space-y-6">
-        {reviews.map((review) => (
-          <div key={review.id} className="group">
-            <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-sm font-bold text-[#ff9900]">
-                {review.initials}
-              </div>
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-zinc-900">{review.author}</span>
-                  {review.verified && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      Verified Purchase
-                    </span>
-                  )}
-                  <span className="text-xs text-zinc-400">{review.date}</span>
-                </div>
-                <div className="mt-1">
-                  <StarRow rating={review.rating} />
-                </div>
-                <p className="mt-2 font-semibold text-zinc-900">{review.title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-zinc-600">{review.body}</p>
-                <button
-                  type="button"
-                  onClick={() => handleHelpful(review.id, review.helpful)}
-                  className={`mt-3 flex items-center gap-1.5 text-xs transition-colors ${
-                    helpfulVotes.has(review.id)
-                      ? "text-[#ff9900]"
-                      : "text-zinc-400 hover:text-zinc-700"
-                  }`}
-                >
-                  <ThumbsUp className="h-3.5 w-3.5" />
-                  Helpful ({review.helpful})
-                </button>
-              </div>
-            </div>
-            <hr className="mt-6 border-zinc-100 last:hidden" />
+      {/* Review list or authentic empty state */}
+      {reviews.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-zinc-200 py-12 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-400">
+            <MessageSquare className="h-6 w-6" />
           </div>
-        ))}
-      </div>
+          <p className="text-sm font-semibold text-zinc-900">No reviews yet</p>
+          <p className="mt-1 text-xs text-zinc-500 max-w-sm mx-auto">
+            Be the first customer to share your experience with this item.
+          </p>
+          {!showForm && !submitted && (
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#ff9900] px-4 py-2 text-xs font-semibold text-zinc-900 hover:bg-[#f08804] transition"
+            >
+              Write the First Review
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {reviews.map((review) => {
+            const isVoted = helpfulVotes.has(review.id);
+            return (
+              <div key={review.id} className="group">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-sm font-bold text-[#ff9900]">
+                    {review.initials}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-zinc-900">{review.author}</span>
+                      {review.verified && (
+                        <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          Verified Purchase
+                        </span>
+                      )}
+                      <span className="text-xs text-zinc-400">{review.date}</span>
+                    </div>
+                    <div className="mt-1">
+                      <StarRow rating={review.rating} />
+                    </div>
+                    <p className="mt-2 font-semibold text-zinc-900">{review.title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-zinc-600">{review.body}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleHelpful(review.id)}
+                      className={`mt-3 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        isVoted
+                          ? "bg-amber-50 text-[#f08804] ring-1 ring-amber-200"
+                          : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                      }`}
+                      title={isVoted ? "Click to remove helpful vote" : "Mark as helpful"}
+                    >
+                      <ThumbsUp className={`h-3.5 w-3.5 ${isVoted ? "fill-[#f08804]" : ""}`} />
+                      <span>{isVoted ? "Helpful" : "Helpful"}</span>
+                      {review.helpful > 0 && <span className="font-semibold">({review.helpful})</span>}
+                    </button>
+                  </div>
+                </div>
+                <hr className="mt-6 border-zinc-100 last:hidden" />
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

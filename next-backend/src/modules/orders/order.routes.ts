@@ -210,15 +210,16 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 
   /**
    * GET /api/v1/orders/:number
-   * Get full order detail + tracking timeline.
+   * Get full order detail + tracking timeline (Authenticated customer only).
    */
   app.get(
     "/:number",
     {
-      preHandler: optionalAuth,
+      preHandler: requireAuth,
       schema: {
         description: "Get order detail and tracking timeline",
         tags: ["Orders"],
+        security: [{ bearerAuth: [] }],
         params: {
           type: "object",
           properties: {
@@ -324,6 +325,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       // ── Verify with Paystack API ──────────────────────────────────────────
       let paystackData: any = null;
       let isVerified = false;
+      const expectedPesewas = Math.round(Number(order.total) * 100);
 
       try {
         const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
@@ -333,8 +335,18 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         });
         const resJson = (await paystackRes.json()) as any;
         if (resJson.status && resJson.data?.status === "success") {
-          paystackData = resJson.data;
-          isVerified = true;
+          const verifiedData = resJson.data;
+          const currency = String(verifiedData.currency || "").toUpperCase();
+          const amount = Number(verifiedData.amount);
+
+          if (currency !== "GHS") {
+            req.log.warn({ reference, currency }, "Paystack verification failed: currency mismatch");
+          } else if (isNaN(amount) || amount < expectedPesewas) {
+            req.log.warn({ reference, amount, expectedPesewas }, "Paystack verification failed: underpayment detected");
+          } else {
+            paystackData = verifiedData;
+            isVerified = true;
+          }
         } else {
           req.log.warn({ reference, resJson }, "Paystack verification response returned unverified status");
         }
@@ -342,16 +354,22 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         req.log.error({ err, reference }, "Failed to reach Paystack verify endpoint");
       }
 
-      // Fallback for local sandbox/test mode if Paystack test keys are used or offline mock
-      if (!isVerified && (reference.startsWith("test_") || reference.startsWith("ND-") || config.PAYSTACK_SECRET_KEY.startsWith("sk_test_"))) {
-        isVerified = true;
-        paystackData = {
-          reference,
-          status: "success",
-          channel: "card",
-          amount: Math.round(Number(order.total) * 100),
-          paid_at: new Date().toISOString(),
-        };
+      // Safe local sandbox/test fallback: STRICTLY prohibited in production
+      if (!isVerified && config.NODE_ENV !== "production") {
+        const isTestKey = config.PAYSTACK_SECRET_KEY.startsWith("sk_test_");
+        const isMockReference = reference.startsWith("mock_test_") || (isTestKey && reference.startsWith("test_"));
+        if (isMockReference) {
+          isVerified = true;
+          paystackData = {
+            reference,
+            status: "success",
+            channel: "card",
+            amount: expectedPesewas,
+            currency: "GHS",
+            paid_at: new Date().toISOString(),
+          };
+          req.log.info({ reference }, "Development mock sandbox payment accepted");
+        }
       }
 
       if (!isVerified) {
@@ -659,10 +677,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(400).send({ success: false, message: "Missing x-paystack-signature header" });
       }
 
-      const bodyStr = JSON.stringify(req.body);
+      const rawBody = (req as any).rawBody || JSON.stringify(req.body);
       const computedHash = crypto
         .createHmac("sha512", config.PAYSTACK_WEBHOOK_SECRET)
-        .update(bodyStr)
+        .update(rawBody)
         .digest("hex");
 
       const signatureBuf = Buffer.from(signature, "hex");
@@ -698,6 +716,17 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         });
 
         if (payment) {
+          const webhookAmount = Number(payload.data?.amount);
+          const webhookCurrency = String(payload.data?.currency || "").toUpperCase();
+          const expectedPesewas = Math.round(Number(payment.amount) * 100);
+
+          if (webhookCurrency !== "GHS" || isNaN(webhookAmount) || webhookAmount < expectedPesewas) {
+            req.log.warn(
+              { paystackRef, webhookAmount, expectedPesewas, webhookCurrency },
+              "Paystack webhook: underpayment or currency mismatch detected — refusing to mark paid"
+            );
+            return reply.status(400).send({ success: false, message: "Payment amount or currency mismatch" });
+          }
           await prisma.$transaction([
             prisma.payment.update({
               where: { id: payment.id },

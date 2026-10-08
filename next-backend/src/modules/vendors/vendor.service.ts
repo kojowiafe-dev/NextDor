@@ -27,6 +27,7 @@ import { flushPattern } from "../../lib/redis.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { slugify } from "../../lib/slugify.js";
+import { assertSafePublicUrl } from "../../lib/urlSafety.js";
 import type { UserRole, VendorOrderStatus, PayoutStatus } from "@prisma/client";
 
 export interface RegisterVendorDto {
@@ -615,7 +616,14 @@ export class VendorService {
     data: { wcStoreUrl?: string; wcConsumerKey?: string; wcConsumerSecret?: string }
   ) {
     const updateData: any = {};
-    if (data.wcStoreUrl !== undefined) updateData.wcStoreUrl = data.wcStoreUrl?.trim() || null;
+    if (data.wcStoreUrl !== undefined) {
+      const trimmed = data.wcStoreUrl?.trim();
+      if (trimmed) {
+        updateData.wcStoreUrl = await assertSafePublicUrl(trimmed);
+      } else {
+        updateData.wcStoreUrl = null;
+      }
+    }
     if (data.wcConsumerKey !== undefined) updateData.wcConsumerKey = data.wcConsumerKey?.trim() || null;
     if (data.wcConsumerSecret !== undefined) updateData.wcConsumerSecret = data.wcConsumerSecret?.trim() || null;
 

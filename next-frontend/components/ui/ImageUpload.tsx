@@ -42,6 +42,13 @@ export function ImageUpload({
     setIsUploading(true);
     setError(null);
 
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("nextdor-token") ||
+          localStorage.getItem("vendor_token") ||
+          localStorage.getItem("nextdor_access_token")
+        : null;
+
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -49,6 +56,9 @@ export function ImageUpload({
 
       const res = await fetch("/api/upload", {
         method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: formData,
       });
 
