@@ -37,7 +37,7 @@ graph TD
 | ID | Item | Implementation & Verification |
 | :--- | :--- | :--- |
 | **#1** | **Review Count & Rating Consistency** | Standardized across all `ProductCard`, `ProductRow`, and product detail pages (`reviewCount`, `rating`). |
-| **#2 & #3** | **NextDor Ghana Contact & Address** | Replaced placeholders with real Accra, Ghana physical address and contact phone number (`+233 55 123 4567`). |
+| **#2 & #3** | **NextDor Ghana Contact & Address** | Replaced placeholders with real Accra, Ghana physical address and contact phone number (`+233 55 750 7693`). |
 | **#6** | **"Buy Now" Button** | Direct 1-click purchase button added alongside "Add to Cart", routing straight to checkout. |
 | **#9 & #10** | **Delivery Cost & Time on Product Pages** | `ProductDeliveryInfo.tsx` displays regional delivery costs (Accra: GH₵25, Kumasi: GH₵35, Nationwide: GH₵45) and delivery windows (1–2 days Accra, 2–4 days nationwide). |
 | **#22 & #23** | **Rich Product Specifications & Gallery** | Multi-image zoom gallery (`ProductGallery.tsx`), specifications tab (`ProductSpecifications.tsx`), and warranty details. |

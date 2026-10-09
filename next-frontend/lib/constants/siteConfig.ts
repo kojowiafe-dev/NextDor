@@ -11,10 +11,10 @@ export const SITE_CONFIG = {
   domain: "https://www.nextdor.online",
   
   // ─── Contact & Customer Support ─────────────────────────────────────────────
-  phone: process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+233 24 123 4567",
-  phoneDisplay: process.env.NEXT_PUBLIC_SUPPORT_PHONE_DISPLAY || "+233 24 123 4567",
-  whatsapp: process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "+233241234567",
-  whatsappUrl: `https://wa.me/${(process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "+233241234567").replace(/[^0-9]/g, "")}?text=${encodeURIComponent("Hello NextDor Support, I have an inquiry about an order / product.")}`,
+  phone: (process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+233557507693").replace(/\s+/g, ""),
+  phoneDisplay: process.env.NEXT_PUBLIC_SUPPORT_PHONE_DISPLAY || "+233 55 750 7693",
+  whatsapp: (process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "+233557507693").replace(/\s+/g, ""),
+  whatsappUrl: `https://wa.me/${(process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "233557507693").replace(/[^0-9]/g, "")}?text=${encodeURIComponent("Hello NextDor Support, I have an inquiry about an order / product.")}`,
   email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "hello@nextdor.online",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@nextdor.online",
 

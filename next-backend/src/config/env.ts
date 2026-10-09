@@ -66,10 +66,16 @@ const envSchema = z.object({
   PAYSTACK_WEBHOOK_SECRET: z.string().min(10),
 
   // ── Email ────────────────────────────────────────────────────────────────
-  RESEND_API_KEY: z.string().min(5),
-  EMAIL_FROM: z.string().email().or(
-    z.string().regex(/^.+ <.+@.+>$/, "EMAIL_FROM must be 'Name <email@domain.com>'"),
-  ),
+  // Cloudflare Email Sending (Primary)
+  CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
+  CLOUDFLARE_API_TOKEN: z.string().optional(),
+  // Resend (Optional fallback)
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z
+    .string()
+    .email()
+    .or(z.string().regex(/^.+ <.+@.+>$/, "EMAIL_FROM must be 'Name <email@domain.com>'"))
+    .default("NextDor <nextdor@nextdor.online>"),
 
   // ── SMS ──────────────────────────────────────────────────────────────────
   ARKESEL_API_KEY: z.string().min(5),

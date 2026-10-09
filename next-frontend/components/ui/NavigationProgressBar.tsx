@@ -1,27 +1,92 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 export function NavigationProgressBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(false);
+
+  const [status, setStatus] = useState<"idle" | "loading" | "completing">("idle");
   const [progress, setProgress] = useState(0);
 
-  // Complete progress on pathname or searchParams change
-  useEffect(() => {
-    if (loading) {
-      setProgress(100);
-      const timer = setTimeout(() => {
-        setLoading(false);
-        setProgress(0);
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [pathname, searchParams]);
+  const statusRef = useRef<"idle" | "loading" | "completing">("idle");
+  const isFirstRender = useRef(true);
 
-  // Intercept click on internal links to start progress immediately
+  const trickleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const safetyTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const updateStatus = useCallback((newStatus: "idle" | "loading" | "completing") => {
+    statusRef.current = newStatus;
+    setStatus(newStatus);
+  }, []);
+
+  const clearAllTimers = useCallback(() => {
+    if (trickleTimerRef.current) {
+      clearInterval(trickleTimerRef.current);
+      trickleTimerRef.current = null;
+    }
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
+  }, []);
+
+  const completeProgress = useCallback(() => {
+    clearAllTimers();
+
+    if (statusRef.current === "idle") return;
+
+    updateStatus("completing");
+    setProgress(100);
+
+    resetTimerRef.current = setTimeout(() => {
+      updateStatus("idle");
+      setProgress(0);
+    }, 280);
+  }, [clearAllTimers, updateStatus]);
+
+  const startProgress = useCallback(() => {
+    clearAllTimers();
+    updateStatus("loading");
+    setProgress(25);
+
+    // Smooth trickle: advance towards 90% in diminishing increments
+    trickleTimerRef.current = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) return prev;
+        if (prev < 40) return prev + 12;
+        if (prev < 65) return prev + 6;
+        if (prev < 80) return prev + 3;
+        return prev + 1;
+      });
+    }, 200);
+
+    // Safety timeout: auto-complete if navigation stalls or is cancelled
+    safetyTimerRef.current = setTimeout(() => {
+      completeProgress();
+    }, 6000);
+  }, [clearAllTimers, updateStatus, completeProgress]);
+
+  // Complete progress on pathname or searchParams change
+  const searchParamsString = searchParams.toString();
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (statusRef.current === "loading") {
+      completeProgress();
+    }
+  }, [pathname, searchParamsString, completeProgress]);
+
+  // Intercept clicks on internal links to start progress
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       const target = (e.target as HTMLElement).closest("a");
@@ -33,9 +98,9 @@ export function NavigationProgressBar() {
         href.startsWith("#") ||
         href.startsWith("mailto:") ||
         href.startsWith("tel:") ||
-        href.startsWith("http://") ||
-        href.startsWith("https://") ||
+        href.startsWith("javascript:") ||
         target.target === "_blank" ||
+        target.hasAttribute("download") ||
         e.ctrlKey ||
         e.metaKey ||
         e.shiftKey ||
@@ -44,30 +109,39 @@ export function NavigationProgressBar() {
         return;
       }
 
-      // Check if clicking current URL
-      const currentUrl = window.location.pathname + window.location.search;
-      if (href === currentUrl) return;
+      try {
+        const targetUrl = new URL(target.href, window.location.href);
+        // External link
+        if (targetUrl.origin !== window.location.origin) return;
 
-      // Start animation
-      setLoading(true);
-      setProgress(25);
+        // Same exact pathname and search query (anchor jump or same page)
+        const isSamePage =
+          targetUrl.pathname === window.location.pathname &&
+          targetUrl.search === window.location.search;
 
-      const t1 = setTimeout(() => setProgress(65), 150);
-      const t2 = setTimeout(() => setProgress(85), 400);
+        if (isSamePage) return;
+      } catch {
+        return;
+      }
 
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-      };
+      startProgress();
+    }
+
+    function handlePopState() {
+      startProgress();
     }
 
     document.addEventListener("click", handleClick);
+    window.addEventListener("popstate", handlePopState);
+
     return () => {
       document.removeEventListener("click", handleClick);
+      window.removeEventListener("popstate", handlePopState);
+      clearAllTimers();
     };
-  }, []);
+  }, [startProgress, clearAllTimers]);
 
-  if (!loading && progress === 0) return null;
+  if (status === "idle") return null;
 
   return (
     <div
@@ -78,11 +152,11 @@ export function NavigationProgressBar() {
       className="pointer-events-none fixed top-0 left-0 right-0 z-[99999] h-1 bg-transparent"
     >
       <div
-        className="h-full bg-gradient-to-r from-[#ff9900] via-[#ffb84d] to-[#ff9900] shadow-[0_0_12px_rgba(255,153,0,0.85)] transition-all ease-out duration-200"
+        className="h-full bg-gradient-to-r from-[#ff9900] via-[#ffb84d] to-[#ff9900] shadow-[0_0_12px_rgba(255,153,0,0.85)] transition-all ease-out"
         style={{
           width: `${progress}%`,
-          opacity: progress === 100 ? 0 : 1,
-          transitionDuration: progress === 100 ? "200ms" : "300ms",
+          opacity: status === "completing" ? 0 : 1,
+          transitionDuration: status === "completing" ? "250ms" : "200ms",
         }}
       />
     </div>

@@ -1,8 +1,8 @@
 /**
  * NextDor Email Dispatcher Service.
  *
- * Supports live dispatch via Resend API and resilient terminal fallback
- * in development environments to ensure testing is never blocked.
+ * Supports live dispatch via Cloudflare Email Sending API (with optional Resend fallback)
+ * and resilient terminal fallback in development environments to ensure testing is never blocked.
  */
 
 import { config } from "../config/env.js";
@@ -16,58 +16,109 @@ type SendEmailOptions = {
 };
 
 export class EmailService {
-  private static isPlaceholderKey(): boolean {
-    return (
-      !config.RESEND_API_KEY ||
-      config.RESEND_API_KEY.includes("placeholder") ||
-      config.RESEND_API_KEY.startsWith("re_dev_")
+  private static isConfigured(): boolean {
+    const hasCloudflare = Boolean(
+      config.CLOUDFLARE_API_TOKEN &&
+      config.CLOUDFLARE_ACCOUNT_ID &&
+      !config.CLOUDFLARE_API_TOKEN.includes("placeholder")
     );
+    const hasResend = Boolean(
+      config.RESEND_API_KEY &&
+      !config.RESEND_API_KEY.includes("placeholder") &&
+      !config.RESEND_API_KEY.startsWith("re_dev_")
+    );
+    return hasCloudflare || hasResend;
   }
 
   /**
-   * Dispatches an email via Resend API, with automatic terminal fallback in dev.
+   * Dispatches an email via Cloudflare Email Sending API (or Resend fallback),
+   * with automatic terminal fallback in dev.
    */
   static async sendEmail({ to, subject, html, text }: SendEmailOptions): Promise<boolean> {
     const isDev = config.NODE_ENV === "development";
 
-    // If using placeholder key in development, log to terminal directly
-    if (this.isPlaceholderKey()) {
-      logger.info({ to, subject }, "📧 [DEV EMAIL] Resend API key is a placeholder — message logged locally.");
+    // If using placeholder key or not configured in dev, log to terminal directly
+    if (!this.isConfigured()) {
+      logger.info({ to, subject }, "📧 [DEV EMAIL] Email service not configured or using placeholder — message logged locally.");
       return true;
     }
 
-    try {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: config.EMAIL_FROM || "NextDor <nextdor@nextdor.online>",
-          to: [to],
-          subject,
-          html,
-          text: text || subject,
-        }),
-      });
+    // 1. Cloudflare Email Sending API (Primary)
+    if (config.CLOUDFLARE_API_TOKEN && config.CLOUDFLARE_ACCOUNT_ID) {
+      try {
+        const response = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${config.CLOUDFLARE_ACCOUNT_ID}/email/sending/send`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${config.CLOUDFLARE_API_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: config.EMAIL_FROM || "NextDor <nextdor@nextdor.online>",
+              to,
+              subject,
+              html,
+              text: text || subject,
+            }),
+          }
+        );
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Resend");
-        if (isDev) {
-          logger.warn("Development mode active: continuing despite external email error.");
-          return true;
+        if (!response.ok) {
+          const errorBody = await response.text();
+          logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Cloudflare Email Service");
+          if (isDev) {
+            logger.warn("Development mode active: continuing despite external email error.");
+            return true;
+          }
+          return false;
         }
-        return false;
-      }
 
-      logger.info({ to, subject }, "Email dispatched successfully via Resend");
-      return true;
-    } catch (err) {
-      logger.error({ err, to }, "Network error during email dispatch");
-      return isDev; // don't fail registration in development
+        logger.info({ to, subject }, "Email dispatched successfully via Cloudflare");
+        return true;
+      } catch (err) {
+        logger.error({ err, to }, "Network error during Cloudflare email dispatch");
+        return isDev;
+      }
     }
+
+    // 2. Resend API (Fallback if configured)
+    if (config.RESEND_API_KEY) {
+      try {
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: config.EMAIL_FROM || "NextDor <nextdor@nextdor.online>",
+            to: [to],
+            subject,
+            html,
+            text: text || subject,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Resend");
+          if (isDev) {
+            logger.warn("Development mode active: continuing despite external email error.");
+            return true;
+          }
+          return false;
+        }
+
+        logger.info({ to, subject }, "Email dispatched successfully via Resend");
+        return true;
+      } catch (err) {
+        logger.error({ err, to }, "Network error during Resend email dispatch");
+        return isDev;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -345,7 +396,7 @@ export class EmailService {
               </a>
             </div>
             <div class="footer">
-              <p style="margin: 0 0 6px 0;">Need support? WhatsApp or call us at <strong>+233 55 123 4567</strong> or email support@nextdor.online.</p>
+              <p style="margin: 0 0 6px 0;">Need support? WhatsApp or call us at <strong>+233 55 750 7693</strong> or email support@nextdor.online.</p>
               <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
