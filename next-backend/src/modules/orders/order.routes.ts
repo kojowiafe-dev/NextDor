@@ -442,14 +442,16 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       const customerName = shipAddr.recipientName || order.user?.name || "Customer";
 
       if (customerEmail) {
-        EmailService.sendOrderStatusUpdate({
+        EmailService.sendPaymentReceipt({
           email: customerEmail,
           customerName,
           orderNumber: order.number,
-          status: "PAYMENT VERIFIED & CONFIRMED",
-          note: `Your payment of GH₵${Number(order.total).toFixed(2)} was successfully verified via Paystack (${reference}).`,
+          paystackRef: reference,
+          amountPaid: Number(order.total),
+          paymentChannel: method,
+          paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
         }).catch((err) => {
-          req.log.warn({ err, orderNumber: order.number }, "Failed to send payment verified email");
+          req.log.warn({ err, orderNumber: order.number }, "Failed to send payment receipt email");
         });
       }
 
@@ -750,9 +752,43 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
                 status: "CONFIRMED",
               },
             }),
+            prisma.orderStatusHistory.create({
+              data: {
+                orderId: payment.orderId,
+                status: "CONFIRMED",
+                note: `Payment verified via Paystack Webhook (${paystackRef})`,
+              },
+            }),
           ]);
 
           req.log.info({ orderId: payment.orderId, paystackRef }, "Order marked PAID via Paystack webhook");
+
+          // Asynchronously dispatch payment receipt email
+          const updatedOrder = await prisma.order.findUnique({
+            where: { id: payment.orderId },
+            include: { user: true },
+          });
+
+          if (updatedOrder) {
+            const shipAddr = (updatedOrder.shippingAddress as any) || {};
+            const customerEmail = updatedOrder.guestEmail || updatedOrder.user?.email;
+            const customerName = shipAddr.recipientName || updatedOrder.user?.name || "Customer";
+
+            if (customerEmail) {
+              const channel = String(payload.data?.channel || "Card/MoMo");
+              EmailService.sendPaymentReceipt({
+                email: customerEmail,
+                customerName,
+                orderNumber: updatedOrder.number,
+                paystackRef,
+                amountPaid: Number(updatedOrder.total),
+                paymentChannel: channel,
+                paidAt: payload.data?.paid_at ? new Date(payload.data.paid_at) : new Date(),
+              }).catch((err) => {
+                req.log.warn({ err, orderNumber: updatedOrder.number }, "Failed to send webhook payment receipt email");
+              });
+            }
+          }
         }
       }
 

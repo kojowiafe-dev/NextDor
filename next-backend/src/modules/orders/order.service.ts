@@ -72,10 +72,10 @@ const DELIVERY_FEES: Record<DeliveryMethod, number> = {
 // Guards against illegal state jumps (e.g. DELIVERED → PENDING is nonsensical).
 
 const ALLOWED_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
-  PENDING:     ["CONFIRMED", "CANCELLED"],
-  CONFIRMED:   ["PROCESSING", "CANCELLED"],
-  PROCESSING:  ["SHIPPED", "CANCELLED"],
-  SHIPPED:     ["DELIVERED"],
+  PENDING:     ["CONFIRMED", "PROCESSING", "CANCELLED"],
+  CONFIRMED:   ["PROCESSING", "SHIPPED", "CANCELLED"],
+  PROCESSING:  ["SHIPPED", "DELIVERED", "CANCELLED"],
+  SHIPPED:     ["DELIVERED", "CANCELLED"],
   DELIVERED:   ["REFUNDED"],
   CANCELLED:   [],
   REFUNDED:    [],

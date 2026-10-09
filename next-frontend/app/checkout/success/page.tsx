@@ -9,6 +9,8 @@ type SuccessPageProps = {
     status?: string;
     payment?: string;
     method?: string;
+    reference?: string;
+    trxref?: string;
   }>;
 };
 
@@ -21,7 +23,8 @@ export default async function CheckoutSuccessPage({ searchParams }: SuccessPageP
   const orderNumber = params.order ?? "ND-00001";
   const total = params.total ? Number(params.total) : null;
   const currency = params.currency ?? "GHS";
-  const isPaid = params.status === "PAID";
+  const ref = params.reference || params.trxref;
+  const isPaid = params.status === "PAID" || Boolean(ref);
   const isCod = params.method === "cod" || params.payment === "cod";
 
   // Format total

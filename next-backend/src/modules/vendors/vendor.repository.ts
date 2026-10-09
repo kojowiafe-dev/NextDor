@@ -314,6 +314,8 @@ export class VendorRepository {
           select: {
             id: true,
             number: true,
+            guestEmail: true,
+            deliveryMethod: true,
             shippingAddress: true,
             paymentStatus: true,
             createdAt: true,
@@ -321,6 +323,7 @@ export class VendorRepository {
             items: { where: { vendorId } },
           },
         },
+        vendor: { select: { name: true } },
         payout: true,
       },
     });

@@ -461,6 +461,97 @@ export class VendorService {
       "Merchant updated sub-order dispatch status"
     );
 
+    // ── Customer Notification & Parent Order Synchronization ────────────────
+    const orderObj = existing.order;
+    const shipAddr = (orderObj.shippingAddress as any) || {};
+    const customerEmail = orderObj.guestEmail || orderObj.user?.email;
+    const customerName = shipAddr.recipientName || orderObj.user?.name || "Valued Customer";
+    const storeName = existing.vendor?.name || "NextDor Merchant";
+    const destinationCity = `${shipAddr.city || "Accra"}, ${shipAddr.region || "Greater Accra"}`;
+    const isPickup = orderObj.deliveryMethod === "PICKUP";
+
+    if (customerEmail) {
+      if (status === "SHIPPED") {
+        // Customer Alert: Package is ready and out for delivery / hub pickup
+        EmailService.sendPackageReadyNotification({
+          email: customerEmail,
+          customerName,
+          orderNumber: orderObj.number,
+          destinationCity,
+          storeName,
+          isPickup,
+        }).catch((err) => {
+          logger.warn({ err, orderNumber: orderObj.number }, "Failed to send package ready email");
+        });
+      } else if (status === "PROCESSING") {
+        EmailService.sendOrderStatusUpdate({
+          email: customerEmail,
+          customerName,
+          orderNumber: orderObj.number,
+          status: "PREPARING & PACKAGING",
+          note: `Merchant "${storeName}" has accepted your items and is currently packaging your order for courier dispatch.`,
+        }).catch((err) => {
+          logger.warn({ err, orderNumber: orderObj.number }, "Failed to send processing update email");
+        });
+      } else if (status === "DELIVERED") {
+        EmailService.sendOrderStatusUpdate({
+          email: customerEmail,
+          customerName,
+          orderNumber: orderObj.number,
+          status: "DELIVERED",
+          note: `Your order from "${storeName}" has been successfully delivered. 48-Hour Escrow protection active.`,
+        }).catch((err) => {
+          logger.warn({ err, orderNumber: orderObj.number }, "Failed to send delivery update email");
+        });
+      }
+    }
+
+    // Advance master order status if all vendor sub-orders are at least this stage
+    try {
+      const allSubOrders = await prisma.vendorOrder.findMany({
+        where: { orderId: orderObj.id },
+        select: { status: true },
+      });
+
+      const allStatuses = allSubOrders.map((s) => s.status);
+      const allShipped = allStatuses.every((s) => s === "SHIPPED" || s === "DELIVERED");
+      const allDelivered = allStatuses.every((s) => s === "DELIVERED");
+      const allProcessing = allStatuses.every((s) => s === "PROCESSING" || s === "SHIPPED" || s === "DELIVERED");
+
+      let masterNewStatus: "PROCESSING" | "SHIPPED" | "DELIVERED" | null = null;
+      if (allDelivered) {
+        masterNewStatus = "DELIVERED";
+      } else if (allShipped) {
+        masterNewStatus = "SHIPPED";
+      } else if (allProcessing) {
+        masterNewStatus = "PROCESSING";
+      }
+
+      if (masterNewStatus) {
+        const parentOrder = await prisma.order.findUnique({
+          where: { id: orderObj.id },
+          select: { status: true },
+        });
+
+        if (parentOrder && parentOrder.status !== masterNewStatus && parentOrder.status !== "DELIVERED" && parentOrder.status !== "CANCELLED") {
+          await prisma.order.update({
+            where: { id: orderObj.id },
+            data: { status: masterNewStatus },
+          });
+
+          await prisma.orderStatusHistory.create({
+            data: {
+              orderId: orderObj.id,
+              status: masterNewStatus,
+              note: `All merchants have updated fulfillment to ${masterNewStatus}`,
+            },
+          });
+        }
+      }
+    } catch (syncErr) {
+      logger.warn({ syncErr, orderId: orderObj.id }, "Error syncing master order status with sub-orders");
+    }
+
     return updated;
   }
 

@@ -21,7 +21,7 @@ const statusConfig: Record<string, { label: string; classes: string }> = {
   refunded: { label: "Refunded", classes: "bg-zinc-100 text-zinc-700" },
 };
 
-const STATUSES = ["processing", "shipped", "delivered", "cancelled"] as const;
+const STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"] as const;
 
 export default function AdminOrderDetailPage() {
   const params = useParams<{ id: string }>();

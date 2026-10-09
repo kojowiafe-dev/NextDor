@@ -559,4 +559,194 @@ export class EmailService {
       text: `Hi ${customerName}, your order ${orderNumber} is now ${status}. Track it here: ${trackUrl}`,
     });
   }
+
+  /**
+   * Dispatches official Paystack payment receipt email to customer.
+   */
+  static async sendPaymentReceipt(params: {
+    email: string;
+    customerName: string;
+    orderNumber: string;
+    paystackRef: string;
+    amountPaid: number | string | any;
+    paymentChannel: string;
+    paidAt?: Date | string;
+  }): Promise<boolean> {
+    const { email, customerName, orderNumber, paystackRef, amountPaid, paymentChannel, paidAt } = params;
+    const trackUrl = `https://nextdor.online/track?order=${encodeURIComponent(orderNumber)}`;
+    const dateFormatted = paidAt
+      ? new Date(paidAt).toLocaleDateString("en-GH", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : new Date().toLocaleDateString("en-GH");
+
+    const channelLabel =
+      paymentChannel.toUpperCase() === "MOMO" || paymentChannel.toLowerCase().includes("momo")
+        ? "Mobile Money (MoMo)"
+        : "Debit / Credit Card (Paystack)";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+            .header { background: #131921; padding: 28px 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .badge { display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-weight: 700; font-size: 13px; padding: 6px 16px; border-radius: 20px; margin-bottom: 16px; }
+            .receipt-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0; font-size: 13px; }
+            .receipt-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; }
+            .receipt-row:last-child { border-bottom: none; }
+            .btn { display: block; width: fit-content; margin: 28px auto 0 auto; background: #ff9900; color: #131921 !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 32px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(255,153,0,0.3); }
+            .escrow-callout { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px; margin-top: 24px; font-size: 12px; color: #1e40af; line-height: 1.5; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 26px; letter-spacing: 1px;">NEXTDOR</h1>
+              <p style="color: #a1a1aa; margin: 4px 0 0 0; font-size: 11px;">Official Payment Receipt</p>
+            </div>
+            <div class="content">
+              <div class="badge">✓ Payment Verified &amp; Secured</div>
+              <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 8px 0; color: #09090b;">Payment Received, ${customerName}!</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6; margin: 0;">
+                Your online payment for Order <strong style="color: #18181b;">${orderNumber}</strong> has been successfully processed and verified via Paystack.
+              </p>
+
+              <div class="receipt-box">
+                <table style="width: 100%; font-size: 13px; color: #334155;">
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Order Number:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${orderNumber}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Paystack Reference:</td>
+                    <td style="padding: 6px 0; text-align: right; font-family: monospace; font-size: 12px; color: #0f172a;">${paystackRef}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Payment Method:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${channelLabel}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Payment Date:</td>
+                    <td style="padding: 6px 0; text-align: right; color: #0f172a;">${dateFormatted}</td>
+                  </tr>
+                  <tr style="border-top: 2px solid #cbd5e1;">
+                    <td style="padding: 10px 0 4px 0; font-size: 15px; font-weight: 800; color: #0f172a;">Amount Paid:</td>
+                    <td style="padding: 10px 0 4px 0; text-align: right; font-size: 17px; font-weight: 800; color: #047857;">GH₵${Number(amountPaid).toFixed(2)}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <div class="escrow-callout">
+                🛡️ <strong>Buyer Escrow Assurance:</strong> Your money is held in 48-Hour NextDor Buyer Escrow until after your package is safely delivered and inspected.
+              </div>
+
+              <a href="${trackUrl}" class="btn">
+                Track Live Order Progress &rarr;
+              </a>
+            </div>
+            <div class="footer">
+              <p style="margin: 0 0 6px 0;">Need help with this payment? WhatsApp or call us at <strong>+233 55 750 7693</strong>.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: `Payment Receipt: GH₵${Number(amountPaid).toFixed(2)} for Order ${orderNumber} — NextDor`,
+      html,
+      text: `Hello ${customerName}, your payment of GH₵${Number(amountPaid).toFixed(2)} for order ${orderNumber} has been successfully verified via Paystack (Ref: ${paystackRef}). Track your order here: ${trackUrl}`,
+    });
+  }
+
+  /**
+   * Alerts customer that package is packaged & ready / dispatched.
+   */
+  static async sendPackageReadyNotification(params: {
+    email: string;
+    customerName: string;
+    orderNumber: string;
+    destinationCity?: string;
+    storeName?: string;
+    isPickup?: boolean;
+  }): Promise<boolean> {
+    const { email, customerName, orderNumber, destinationCity, storeName, isPickup } = params;
+    const trackUrl = `https://nextdor.online/track?order=${encodeURIComponent(orderNumber)}`;
+
+    const titleText = isPickup
+      ? "Your package is ready for hub pickup!"
+      : "Your package is ready and on the way!";
+
+    const subText = isPickup
+      ? `Your order from <strong>${storeName || "NextDor Merchant"}</strong> has been prepared and is ready for collection at the Accra Digital Centre Pickup Hub.`
+      : `Your order from <strong>${storeName || "NextDor Merchant"}</strong> has been securely packaged, inspected, and handed over to our dispatch courier delivering to <strong>${destinationCity || "your destination"}</strong>.`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+            .header { background: #131921; padding: 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .badge { display: inline-block; background: #eff6ff; color: #2563eb; font-weight: 700; font-size: 12px; padding: 4px 14px; border-radius: 20px; margin-bottom: 14px; }
+            .btn { display: block; width: fit-content; margin: 24px auto 0 auto; background: #ff9900; color: #131921 !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px; text-align: center; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 24px;">NEXTDOR</h1>
+              <p style="color: #a1a1aa; margin: 4px 0 0 0; font-size: 11px;">Package Dispatch Alert</p>
+            </div>
+            <div class="content">
+              <div class="badge">📦 Package Ready</div>
+              <h2 style="font-size: 20px; font-weight: 800; margin: 0 0 12px 0;">Hi ${customerName},</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
+                ${titleText}
+              </p>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
+                ${subText}
+              </p>
+              
+              <div style="background: #f8fafc; border-left: 3px solid #ff9900; padding: 12px 16px; margin: 20px 0; font-size: 13px; color: #334155;">
+                <strong>Order Reference:</strong> ${orderNumber}<br />
+                <strong>Dispatch Status:</strong> ${isPickup ? "READY FOR PICKUP" : "DISPATCHED / OUT FOR DELIVERY"}
+              </div>
+
+              <a href="${trackUrl}" class="btn">
+                Track Live Courier Progress &rarr;
+              </a>
+            </div>
+            <div class="footer">
+              <p style="margin: 0 0 6px 0;">Questions? Call/WhatsApp support at <strong>+233 55 750 7693</strong>.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: `Package Ready: ${orderNumber} is on the way! — NextDor`,
+      html,
+      text: `Hi ${customerName}, your package for order ${orderNumber} is ready and dispatched! Track live here: ${trackUrl}`,
+    });
+  }
 }

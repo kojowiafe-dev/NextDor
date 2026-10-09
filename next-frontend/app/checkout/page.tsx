@@ -245,8 +245,14 @@ export default function CheckoutPage() {
 
       // Online payment (MoMo or Card via Paystack gateway)
       try {
+        const callbackUrl =
+          typeof window !== "undefined"
+            ? `${window.location.origin}/checkout/success?order=${encodeURIComponent(orderNumber)}&total=${total}&currency=${currency}&status=PAID`
+            : undefined;
+
         const payInit = await initializePayment(orderNumber, {
           email: form.email.trim(),
+          callbackUrl,
           token: activeToken,
         });
 
