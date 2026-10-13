@@ -22,6 +22,8 @@ import { Money } from "../../domain/Money.js";
 import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
 import { logger } from "../../lib/logger.js";
 import { EmailService } from "../../lib/email.js";
+import { dispatchEmailAsync } from "../../lib/email.queue.js";
+import { SmsService } from "../../lib/sms.js";
 import {
   NotFoundError,
   BadRequestError,
@@ -61,8 +63,8 @@ export type CheckoutInput = {
   couponId?: string;
 };
 
-// Delivery fee schedule (GHS) — Phase 2: pull from a delivery zone config table
-const DELIVERY_FEES: Record<DeliveryMethod, number> = {
+// Delivery fee schedule (GHS) — Roadmap: pull from a region-based delivery zone config table
+export const DELIVERY_FEES: Record<DeliveryMethod, number> = {
   STANDARD: 25.0,
   EXPRESS: 50.0,
   PICKUP: 0.0,
@@ -71,7 +73,7 @@ const DELIVERY_FEES: Record<DeliveryMethod, number> = {
 // ─── Allowed status transitions ───────────────────────────────────────────────
 // Guards against illegal state jumps (e.g. DELIVERED → PENDING is nonsensical).
 
-const ALLOWED_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
+export const ALLOWED_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   PENDING:     ["CONFIRMED", "PROCESSING", "CANCELLED"],
   CONFIRMED:   ["PROCESSING", "SHIPPED", "CANCELLED"],
   PROCESSING:  ["SHIPPED", "DELIVERED", "CANCELLED"],
@@ -81,7 +83,7 @@ const ALLOWED_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   REFUNDED:    [],
 };
 
-const ALLOWED_VENDOR_TRANSITIONS: Partial<Record<VendorOrderStatus, VendorOrderStatus[]>> = {
+export const ALLOWED_VENDOR_TRANSITIONS: Partial<Record<VendorOrderStatus, VendorOrderStatus[]>> = {
   PENDING:    ["PROCESSING", "CANCELLED"],
   PROCESSING: ["SHIPPED", "CANCELLED"],
   SHIPPED:    ["DELIVERED"],
@@ -195,11 +197,24 @@ export class OrderService {
     const discount = Money.zero(); // Phase 2: apply coupon discount here
     const total = itemsSubtotal.add(deliveryFee).subtract(discount);
 
+    // ── Resolve the owning vendor for merchant-less catalog items ────────────
+    // VendorOrder.vendorId is a real UUID foreign key, so items with no merchant are
+    // attributed to the flagship "NextDor Direct" vendor (looked up by slug).
+    if (enrichedItems.some((i) => !i.vendorId)) {
+      const platformVendorId = await this.repo.findPlatformVendorId();
+      if (!platformVendorId) {
+        throw new UnprocessableError(
+          "The NextDor Direct store is not configured, so merchant-less items cannot be ordered right now.",
+        );
+      }
+      for (const item of enrichedItems) item.vendorId ??= platformVendorId;
+    }
+
     // ── Build per-vendor breakdown using CommissionCalculator ────────────────
     // Group items by vendorId
     const vendorGroups = new Map<string, typeof enrichedItems>();
     for (const item of enrichedItems) {
-      const vid = item.vendorId ?? "nextdor"; // fallback to platform store
+      const vid = item.vendorId as string;
       if (!vendorGroups.has(vid)) vendorGroups.set(vid, []);
       vendorGroups.get(vid)!.push(item);
     }
@@ -285,7 +300,41 @@ export class OrderService {
   }
 
   /**
+   * Public order tracking projection (guests / buyers without an account).
+   * Returns ONLY non-sensitive fulfilment data — no street address, phone, email, pricing or internal notes.
+   */
+  async getPublicTracking(number: string) {
+    const order = await this.repo.findPublicTracking(number.trim());
+    if (!order) throw new NotFoundError(`Order #${number.trim()}`);
+
+    const shipping = (order.shippingAddress || {}) as any;
+
+    return {
+      orderNumber: order.number,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      deliveryMethod: order.deliveryMethod,
+      createdAt: order.createdAt,
+      destinationCity: shipping.city ?? "Accra",
+      destinationRegion: shipping.region ?? "Greater Accra",
+      items: order.items,
+      statusHistory: order.statusHistory,
+      vendorOrders: order.vendorOrders.map((vo) => ({
+        id: vo.id,
+        vendorName: vo.vendor.name,
+        vendorSlug: vo.vendor.slug,
+        vendorLogo: vo.vendor.logoUrl,
+        status: vo.status,
+      })),
+    };
+  }
+
+  /**
    * Customer cancellation — only allowed from PENDING or CONFIRMED states.
+   *
+   * Paid orders cannot be self-cancelled yet: cancelling would release the goods but
+   * leave the customer's money with the platform because the automated Paystack
+   * refund flow is not live (see roadmap). They are routed to support instead.
    */
   async cancelOrder(number: string, userId: string) {
     const order = await this.repo.findByNumber(number, userId);
@@ -298,11 +347,18 @@ export class OrderService {
       );
     }
 
+    if (order.paymentStatus === "PAID") {
+      throw new UnprocessableError(
+        "This order has already been paid. Please contact NextDor support to cancel it so your refund can be processed.",
+      );
+    }
+
     const updated = await this.repo.updateStatus(
       order.id,
       "CANCELLED",
       "Cancelled by customer",
       userId,
+      order.status,
     );
 
     const shipAddr = order.shippingAddress as any;
@@ -341,7 +397,7 @@ export class OrderService {
       );
     }
 
-    const updated = await this.repo.updateStatus(order.id, newStatus, note, adminId);
+    const updated = await this.repo.updateStatus(order.id, newStatus, note, adminId, order.status);
 
     const shipAddr = order.shippingAddress as any;
     this.dispatchStatusUpdateEmail(
@@ -354,6 +410,19 @@ export class OrderService {
     ).catch((err) => {
       logger.warn({ err, orderNumber: order.number }, "Order status update email dispatch error");
     });
+
+    // Trigger Ghana SMS notifications for key courier milestones
+    if (shipAddr?.recipientPhone) {
+      if (newStatus === "SHIPPED") {
+        SmsService.sendOrderShipped(shipAddr.recipientPhone, order.number).catch((err) => {
+          logger.warn({ err, orderNumber: order.number }, "Order shipped SMS dispatch error");
+        });
+      } else if (newStatus === "DELIVERED") {
+        SmsService.sendOrderDelivered(shipAddr.recipientPhone, order.number).catch((err) => {
+          logger.warn({ err, orderNumber: order.number }, "Order delivered SMS dispatch error");
+        });
+      }
+    }
 
     return updated;
   }
@@ -441,28 +510,42 @@ export class OrderService {
         }
       }
 
-      // 1. Dispatch confirmation to customer/guest
+      // 1. Dispatch confirmation to customer/guest via resilient queue
       if (customerEmail) {
-        await EmailService.sendOrderConfirmation({
-          email: customerEmail,
-          customerName,
-          orderNumber,
-          total: Number(total),
-          subtotal: Number(subtotal),
-          deliveryFee: Number(deliveryFee),
-          paymentMethod: "Online Payment / Cash on Delivery",
-          shippingAddress,
-          items: items.map((i) => ({
-            productName: i.productName,
-            quantity: i.quantity,
-            unitPrice: Number(i.unitPrice),
-            subtotal: Number(i.subtotal),
-            productImage: i.productImage,
-          })),
+        dispatchEmailAsync({
+          type: "order_confirmation",
+          params: {
+            email: customerEmail,
+            customerName,
+            orderNumber,
+            total: Number(total),
+            subtotal: Number(subtotal),
+            deliveryFee: Number(deliveryFee),
+            paymentMethod: "Online Payment / Cash on Delivery",
+            shippingAddress,
+            items: items.map((i) => ({
+              productName: i.productName,
+              quantity: i.quantity,
+              unitPrice: Number(i.unitPrice),
+              subtotal: Number(i.subtotal),
+              productImage: i.productImage,
+            })),
+          },
+        }).catch((err) => {
+          logger.warn({ err, orderNumber }, "Queue order confirmation email error");
         });
       }
 
-      // 2. Group items by vendor and dispatch merchant notifications
+      // 1b. Dispatch SMS acknowledgement if recipient phone number is provided.
+      // NOTE: this is an "order received" message. The "payment confirmed" SMS is sent
+      // once, by the PaymentService, when the payment is actually settled.
+      if (shippingAddress?.recipientPhone) {
+        SmsService.sendOrderReceived(shippingAddress.recipientPhone, orderNumber, Number(total)).catch((err) => {
+          logger.warn({ err, orderNumber }, "Failed to dispatch order received SMS");
+        });
+      }
+
+      // 2. Group items by vendor and dispatch merchant notifications via resilient queue
       const vendorItemsMap = new Map<string, typeof items>();
       for (const item of items) {
         if (item.vendorId) {
@@ -482,20 +565,25 @@ export class OrderService {
           const storeName = vendor?.name || "NextDor Vendor";
 
           if (vendorEmail) {
-            await EmailService.sendVendorNewOrderNotification({
-              vendorEmail,
-              storeName,
-              orderNumber,
-              destinationCity: `${shippingAddress.city}, ${shippingAddress.region}`,
-              items: vItems.map((i) => ({
-                productName: i.productName,
-                quantity: i.quantity,
-                unitPrice: Number(i.unitPrice),
-              })),
+            dispatchEmailAsync({
+              type: "vendor_new_order",
+              params: {
+                vendorEmail,
+                storeName,
+                orderNumber,
+                destinationCity: `${shippingAddress.city}, ${shippingAddress.region}`,
+                items: vItems.map((i) => ({
+                  productName: i.productName,
+                  quantity: i.quantity,
+                  unitPrice: Number(i.unitPrice),
+                })),
+              },
+            }).catch((vErr) => {
+              logger.warn({ vErr, vendorId, orderNumber }, "Failed to queue vendor notification");
             });
           }
         } catch (vErr) {
-          logger.warn({ vErr, vendorId, orderNumber }, "Failed to send vendor notification");
+          logger.warn({ vErr, vendorId, orderNumber }, "Failed to prepare vendor notification");
         }
       }
     } catch (err) {
@@ -524,12 +612,17 @@ export class OrderService {
       }
 
       if (customerEmail) {
-        await EmailService.sendOrderStatusUpdate({
-          email: customerEmail,
-          customerName,
-          orderNumber,
-          status,
-          note,
+        dispatchEmailAsync({
+          type: "order_status_update",
+          params: {
+            email: customerEmail,
+            customerName,
+            orderNumber,
+            status,
+            note,
+          },
+        }).catch((err) => {
+          logger.warn({ err, orderNumber }, "Failed to queue status update email");
         });
       }
     } catch (err) {

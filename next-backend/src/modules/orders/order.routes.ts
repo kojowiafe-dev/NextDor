@@ -4,90 +4,33 @@
  * DESIGN PATTERN: Thin Controller / Clean Architecture
  * ─────────────────────────────────────────────────────
  * HTTP-only concerns:
- * - JWT token verification and userId extraction
- * - Zod/JSON-schema request body validation
- * - Delegating all domain logic to OrderService
+ * - Token verification via shared guards (lib/auth.guards.ts)
+ * - JSON-schema request validation
+ * - Delegating ALL domain logic to OrderService / PaymentService
  * - Formatting and sending HTTP responses
  *
- * ZERO direct database queries in this file.
+ * ZERO direct database queries in this file (payments live in modules/payments).
  *
  * Registered at:
  *   Customer  → /api/v1/orders
- *   Vendor    → /api/v1/vendors/orders (vendorOrderId scope)
+ *   Vendor    → /api/v1/vendors/my-orders
  *   Admin     → /api/v1/admin/orders
  */
 
-import crypto from "node:crypto";
-import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { orderService } from "./order.service.js";
-import { AuthService } from "../auth/auth.service.js";
-import { prisma } from "../../lib/prisma.js";
-import { config } from "../../config/env.js";
-import { EmailService } from "../../lib/email.js";
+import { paymentService } from "../payments/payment.service.js";
+import { optionalAuth, requireAdmin, requireAuth, requireVendor, resolveVendorId } from "../../lib/auth.guards.js";
 import type { OrderStatus, VendorOrderStatus } from "@prisma/client";
 
-// ─── Auth helpers ─────────────────────────────────────────────────────────────
-
-function extractUser(req: FastifyRequest): { userId: string; role: string } | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  try {
-    const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-    return { userId: payload.sub, role: payload.role };
-  } catch {
-    return null;
-  }
-}
-
-async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
-  const user = extractUser(req);
-  if (!user) {
-    return reply.status(401).send({
-      success: false,
-      error: { code: "UNAUTHORIZED", message: "Authentication required" },
-    });
-  }
-  (req as any).authUser = user;
-}
-
-async function optionalAuth(req: FastifyRequest) {
-  const user = extractUser(req);
-  if (user) {
-    (req as any).authUser = user;
-  }
-}
-
-async function requireAdmin(req: FastifyRequest, reply: FastifyReply) {
-  const user = extractUser(req);
-  if (!user || !["ADMIN", "SUPER_ADMIN"].includes(user.role)) {
-    return reply.status(403).send({
-      success: false,
-      error: { code: "FORBIDDEN", message: "Admin access required" },
-    });
-  }
-  (req as any).authUser = user;
-}
-
-async function requireVendor(req: FastifyRequest, reply: FastifyReply) {
-  const user = extractUser(req);
-  if (
-    !user ||
-    !["VENDOR_OWNER", "VENDOR_STAFF", "ADMIN", "SUPER_ADMIN"].includes(user.role)
-  ) {
-    return reply.status(403).send({
-      success: false,
-      error: { code: "FORBIDDEN", message: "Vendor access required" },
-    });
-  }
-  (req as any).authUser = user;
-}
+const ORDER_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"];
 
 // ─── Customer Order Routes ────────────────────────────────────────────────────
 
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   /**
    * POST /api/v1/orders
-   * Place a new order (checkout - supports authenticated or guest checkout).
+   * Place a new order (checkout — authenticated customers or guests).
    */
   app.post(
     "/",
@@ -100,16 +43,17 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           type: "object",
           required: ["cart", "shippingAddress"],
           properties: {
-            guestEmail: { type: "string" },
+            guestEmail: { type: "string", format: "email", maxLength: 254 },
             cart: {
               type: "array",
               minItems: 1,
+              maxItems: 100,
               items: {
                 type: "object",
                 required: ["productId", "quantity"],
                 properties: {
-                  productId: { type: "string" },
-                  quantity: { type: "integer", minimum: 1 },
+                  productId: { type: "string", minLength: 1, maxLength: 200 },
+                  quantity: { type: "integer", minimum: 1, maximum: 100 },
                   name: { type: "string" },
                   price: { type: "number" },
                   slug: { type: "string" },
@@ -121,32 +65,27 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
               type: "object",
               required: ["street", "city", "region"],
               properties: {
-                label: { type: "string" },
-                street: { type: "string" },
-                city: { type: "string" },
-                region: { type: "string" },
-                recipientName: { type: "string" },
-                recipientPhone: { type: "string" },
+                label: { type: "string", maxLength: 50 },
+                street: { type: "string", minLength: 1, maxLength: 300 },
+                city: { type: "string", minLength: 1, maxLength: 100 },
+                region: { type: "string", minLength: 1, maxLength: 100 },
+                recipientName: { type: "string", maxLength: 150 },
+                recipientPhone: { type: "string", maxLength: 30 },
               },
             },
             addressId: { type: "string", format: "uuid" },
-            deliveryMethod: {
-              type: "string",
-              enum: ["STANDARD", "EXPRESS", "PICKUP"],
-            },
-            notes: { type: "string" },
+            deliveryMethod: { type: "string", enum: ["STANDARD", "EXPRESS", "PICKUP"] },
+            notes: { type: "string", maxLength: 1000 },
             couponId: { type: "string", format: "uuid" },
           },
         },
       },
     },
     async (req, reply) => {
-      const authUser = (req as any).authUser;
-      const userId = authUser?.userId;
       const body = req.body as any;
 
       const order = await orderService.checkout({
-        userId,
+        userId: req.authUser?.userId,
         guestEmail: body.guestEmail,
         cart: body.cart,
         shippingAddress: body.shippingAddress,
@@ -190,7 +129,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const { userId } = (req as any).authUser;
+      const { userId } = req.authUser!;
       const { page, limit } = req.query as { page: number; limit: number };
 
       const result = await orderService.getMyOrders(userId, page, limit);
@@ -198,19 +137,14 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({
         success: true,
         data: result.orders,
-        meta: {
-          total: result.total,
-          page,
-          limit,
-          pages: Math.ceil(result.total / limit),
-        },
+        meta: { total: result.total, page, limit, pages: Math.ceil(result.total / limit) },
       });
     },
   );
 
   /**
    * GET /api/v1/orders/:number
-   * Get full order detail + tracking timeline (Authenticated customer only).
+   * Full order detail + tracking timeline (authenticated customer only).
    */
   app.get(
     "/:number",
@@ -220,21 +154,12 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         description: "Get order detail and tracking timeline",
         tags: ["Orders"],
         security: [{ bearerAuth: [] }],
-        params: {
-          type: "object",
-          properties: {
-            number: { type: "string", example: "ND-00001" },
-          },
-        },
+        params: { type: "object", properties: { number: { type: "string", example: "ND-00001" } } },
       },
     },
     async (req, reply) => {
-      const authUser = (req as any).authUser;
-      const userId = authUser?.userId;
       const { number } = req.params as { number: string };
-
-      const order = await orderService.getOrderByNumber(number, userId);
-
+      const order = await orderService.getOrderByNumber(number, req.authUser!.userId);
       return reply.send({ success: true, data: order });
     },
   );
@@ -251,31 +176,19 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         description: "Cancel an order (customer)",
         tags: ["Orders"],
         security: [{ bearerAuth: [] }],
-        params: {
-          type: "object",
-          properties: {
-            number: { type: "string" },
-          },
-        },
+        params: { type: "object", properties: { number: { type: "string" } } },
       },
     },
     async (req, reply) => {
-      const { userId } = (req as any).authUser;
       const { number } = req.params as { number: string };
-
-      const order = await orderService.cancelOrder(number, userId);
-
-      return reply.send({
-        success: true,
-        data: { orderNumber: number, status: order.status },
-      });
+      const order = await orderService.cancelOrder(number, req.authUser!.userId);
+      return reply.send({ success: true, data: { orderNumber: number, status: order.status } });
     },
   );
 
   /**
    * POST /api/v1/orders/verify-payment
-   * Verifies a Paystack transaction reference server-side, idempotently updates
-   * Payment & Order to PAID, and returns the confirmed order. (Recommendation #5)
+   * Verifies a Paystack reference server-side and idempotently settles the order.
    */
   app.post(
     "/verify-payment",
@@ -288,188 +201,22 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           type: "object",
           required: ["orderNumber", "reference"],
           properties: {
-            orderNumber: { type: "string" },
-            reference: { type: "string" },
+            orderNumber: { type: "string", maxLength: 50 },
+            reference: { type: "string", minLength: 4, maxLength: 200 },
           },
         },
       },
     },
     async (req, reply) => {
       const { orderNumber, reference } = req.body as { orderNumber: string; reference: string };
-
-      const order = await prisma.order.findFirst({
-        where: { number: orderNumber },
-        include: { payments: true, user: true },
-      });
-
-      if (!order) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: "NOT_FOUND", message: `Order ${orderNumber} not found` },
-        });
-      }
-
-      // If already paid, return early (idempotent)
-      if (order.paymentStatus === "PAID") {
-        return reply.send({
-          success: true,
-          data: {
-            orderNumber: order.number,
-            status: order.status,
-            paymentStatus: order.paymentStatus,
-            alreadyVerified: true,
-          },
-        });
-      }
-
-      // ── Verify with Paystack API ──────────────────────────────────────────
-      let paystackData: any = null;
-      let isVerified = false;
-      const expectedPesewas = Math.round(Number(order.total) * 100);
-
-      try {
-        const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-          headers: {
-            Authorization: `Bearer ${config.PAYSTACK_SECRET_KEY}`,
-          },
-        });
-        const resJson = (await paystackRes.json()) as any;
-        if (resJson.status && resJson.data?.status === "success") {
-          const verifiedData = resJson.data;
-          const currency = String(verifiedData.currency || "").toUpperCase();
-          const amount = Number(verifiedData.amount);
-
-          if (currency !== "GHS") {
-            req.log.warn({ reference, currency }, "Paystack verification failed: currency mismatch");
-          } else if (isNaN(amount) || amount < expectedPesewas) {
-            req.log.warn({ reference, amount, expectedPesewas }, "Paystack verification failed: underpayment detected");
-          } else {
-            paystackData = verifiedData;
-            isVerified = true;
-          }
-        } else {
-          req.log.warn({ reference, resJson }, "Paystack verification response returned unverified status");
-        }
-      } catch (err) {
-        req.log.error({ err, reference }, "Failed to reach Paystack verify endpoint");
-      }
-
-      // Safe local sandbox/test fallback: STRICTLY prohibited in production
-      if (!isVerified && config.NODE_ENV !== "production") {
-        const isTestKey = config.PAYSTACK_SECRET_KEY.startsWith("sk_test_");
-        const isMockReference = reference.startsWith("mock_test_") || (isTestKey && reference.startsWith("test_"));
-        if (isMockReference) {
-          isVerified = true;
-          paystackData = {
-            reference,
-            status: "success",
-            channel: "card",
-            amount: expectedPesewas,
-            currency: "GHS",
-            paid_at: new Date().toISOString(),
-          };
-          req.log.info({ reference }, "Development mock sandbox payment accepted");
-        }
-      }
-
-      if (!isVerified) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: "PAYMENT_NOT_VERIFIED",
-            message: "Payment transaction could not be verified by payment gateway.",
-          },
-        });
-      }
-
-      const method = String(paystackData.channel || "").toLowerCase().includes("momo") ||
-                     String(paystackData.channel || "").toLowerCase().includes("mobile")
-        ? "MOMO"
-        : "CARD";
-
-      // ── Atomically record payment and mark order confirmed ────────────────
-      await prisma.$transaction(async (tx) => {
-        // Upsert payment record
-        const payment = await tx.payment.upsert({
-          where: { paystackRef: reference },
-          update: {
-            status: "SUCCESS",
-            paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
-            metadata: paystackData,
-          },
-          create: {
-            orderId: order.id,
-            paystackRef: reference,
-            amount: order.total,
-            method: method as any,
-            status: "SUCCESS",
-            paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
-            metadata: paystackData,
-          },
-        });
-
-        // Record attempt
-        await tx.paymentAttempt.create({
-          data: {
-            paymentId: payment.id,
-            status: "SUCCESS",
-            gatewayResp: paystackData,
-          },
-        });
-
-        // Update master order to PAID & CONFIRMED
-        await tx.order.update({
-          where: { id: order.id },
-          data: {
-            paymentStatus: "PAID",
-            status: "CONFIRMED",
-          },
-        });
-
-        // Update status history
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: order.id,
-            status: "CONFIRMED",
-            note: `Payment verified via Paystack (${reference})`,
-          },
-        });
-      });
-
-      // Asynchronously notify customer that payment is confirmed
-      const shipAddr = (order.shippingAddress as any) || {};
-      const customerEmail = order.guestEmail || order.user?.email;
-      const customerName = shipAddr.recipientName || order.user?.name || "Customer";
-
-      if (customerEmail) {
-        EmailService.sendPaymentReceipt({
-          email: customerEmail,
-          customerName,
-          orderNumber: order.number,
-          paystackRef: reference,
-          amountPaid: Number(order.total),
-          paymentChannel: method,
-          paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
-        }).catch((err) => {
-          req.log.warn({ err, orderNumber: order.number }, "Failed to send payment receipt email");
-        });
-      }
-
-      return reply.send({
-        success: true,
-        data: {
-          orderNumber: order.number,
-          status: "CONFIRMED",
-          paymentStatus: "PAID",
-          reference,
-        },
-      });
+      const data = await paymentService.verify(orderNumber, reference, req.authUser ?? null);
+      return reply.send({ success: true, data });
     },
   );
 
   /**
    * POST /api/v1/orders/:number/initialize-payment
-   * Server-side initialization of Paystack payment.
+   * Server-side initialization of a Paystack transaction.
    */
   app.post(
     "/:number/initialize-payment",
@@ -478,114 +225,28 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         description: "Initialize Paystack transaction server-side",
         tags: ["Orders"],
-        params: {
-          type: "object",
-          properties: {
-            number: { type: "string" },
-          },
-        },
+        params: { type: "object", properties: { number: { type: "string" } } },
         body: {
           type: "object",
           properties: {
-            email: { type: "string" },
-            callbackUrl: { type: "string" },
+            email: { type: "string", format: "email" },
+            callbackUrl: { type: "string", maxLength: 2000 },
+            method: { type: "string", enum: ["CARD", "MOMO", "card", "momo"] },
           },
         },
       },
     },
     async (req, reply) => {
       const { number } = req.params as { number: string };
-      const body = (req.body || {}) as { email?: string; callbackUrl?: string };
-
-      const order = await prisma.order.findFirst({
-        where: { number },
-        include: { user: { select: { email: true } } },
-      });
-
-      if (!order) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: "NOT_FOUND", message: `Order ${number} not found` },
-        });
-      }
-
-      if (order.paymentStatus === "PAID") {
-        return reply.send({
-          success: true,
-          data: {
-            orderNumber: order.number,
-            alreadyPaid: true,
-          },
-        });
-      }
-
-      const email = body.email || order.guestEmail || order.user?.email || "customer@nextdor.com";
-      const amountInPesewas = Math.round(Number(order.total) * 100);
-      const reference = `ND-${order.number}-${Date.now()}`;
-
-      try {
-        const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${config.PAYSTACK_SECRET_KEY}`,
-          },
-          body: JSON.stringify({
-            email,
-            amount: amountInPesewas,
-            currency: "GHS",
-            reference,
-            callback_url: body.callbackUrl,
-            metadata: {
-              orderId: order.id,
-              orderNumber: order.number,
-            },
-          }),
-        });
-
-        const data = (await paystackRes.json()) as any;
-        if (data.status && data.data) {
-          // Pre-create pending payment record
-          await prisma.payment.create({
-            data: {
-              orderId: order.id,
-              paystackRef: reference,
-              amount: order.total,
-              method: "CARD",
-              status: "PENDING",
-            },
-          });
-
-          return reply.send({
-            success: true,
-            data: {
-              authorizationUrl: data.data.authorization_url,
-              accessCode: data.data.access_code,
-              reference,
-              publicKey: config.PAYSTACK_PUBLIC_KEY,
-            },
-          });
-        }
-      } catch (err) {
-        req.log.error({ err }, "Paystack initialize transaction failed");
-      }
-
-      // Fallback response with public key and local reference for inline widget
-      return reply.send({
-        success: true,
-        data: {
-          authorizationUrl: null,
-          accessCode: null,
-          reference,
-          publicKey: config.PAYSTACK_PUBLIC_KEY,
-        },
-      });
+      const body = (req.body || {}) as { email?: string; callbackUrl?: string; method?: string };
+      const data = await paymentService.initialize(number, body, req.authUser ?? null);
+      return reply.send({ success: true, data });
     },
   );
 
   /**
    * GET /api/v1/orders/track/:number
-   * Public tracking endpoint for guests or buyers without authentication (Item #15, #31).
+   * Public tracking (guests / buyers without authentication) with privacy masking.
    */
   app.get(
     "/track/:number",
@@ -593,206 +254,39 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         description: "Public order tracking timeline with privacy masking",
         tags: ["Orders"],
-        params: {
-          type: "object",
-          properties: {
-            number: { type: "string" },
-          },
-        },
+        params: { type: "object", properties: { number: { type: "string" } } },
       },
     },
     async (req, reply) => {
       const { number } = req.params as { number: string };
-
-      const order = await prisma.order.findFirst({
-        where: { number },
-        include: {
-          statusHistory: { orderBy: { createdAt: "asc" } },
-          vendorOrders: {
-            include: {
-              vendor: { select: { name: true, slug: true, logoUrl: true } },
-            },
-          },
-          items: {
-            select: {
-              productName: true,
-              productImage: true,
-              quantity: true,
-            },
-          },
-        },
-      });
-
-      if (!order) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: "NOT_FOUND", message: `Order #${number} not found. Please check your order reference.` },
-        });
-      }
-
-      const shipping = (order.shippingAddress || {}) as any;
-
-      return reply.send({
-        success: true,
-        data: {
-          orderNumber: order.number,
-          status: order.status,
-          paymentStatus: order.paymentStatus,
-          deliveryMethod: order.deliveryMethod,
-          createdAt: order.createdAt,
-          destinationCity: shipping.city ?? "Accra",
-          destinationRegion: shipping.region ?? "Greater Accra",
-          items: order.items,
-          statusHistory: order.statusHistory,
-          vendorOrders: order.vendorOrders.map((vo) => ({
-            id: vo.id,
-            vendorName: vo.vendor.name,
-            vendorSlug: vo.vendor.slug,
-            vendorLogo: vo.vendor.logoUrl,
-            status: vo.status,
-          })),
-        },
-      });
+      const data = await orderService.getPublicTracking(number);
+      return reply.send({ success: true, data });
     },
   );
 
   /**
    * POST /api/v1/orders/webhook/paystack
-   * Paystack Payment Webhook Handler.
-   *
-   * FIX #8:
-   * 1. Constant-time HMAC-SHA512 verification against PAYSTACK_WEBHOOK_SECRET.
-   * 2. Idempotency guard: deduplicates multiple webhook deliveries before processing.
-   * 3. Atomically updates Payment to SUCCESS, records PaymentAttempt, and marks Order PAID.
+   * Paystack payment webhook (HMAC-SHA512 verified, idempotent).
+   * Rate limiting is disabled here: authenticity is enforced by the signature,
+   * and throttling Paystack's retries would only delay legitimate settlements.
    */
   app.post(
     "/webhook/paystack",
     {
+      config: { rateLimit: false },
       schema: {
         description: "Paystack Payment Webhook Handler (Idempotent)",
         tags: ["Orders"],
       },
     },
     async (req, reply) => {
-      const signature = req.headers["x-paystack-signature"] as string;
-      if (!signature) {
-        return reply.status(400).send({ success: false, message: "Missing x-paystack-signature header" });
-      }
-
-      const rawBody = (req as any).rawBody || JSON.stringify(req.body);
-      const computedHash = crypto
-        .createHmac("sha512", config.PAYSTACK_WEBHOOK_SECRET)
-        .update(rawBody)
-        .digest("hex");
-
-      const signatureBuf = Buffer.from(signature, "hex");
-      const hashBuf = Buffer.from(computedHash, "hex");
-
-      if (signatureBuf.length !== hashBuf.length || !crypto.timingSafeEqual(signatureBuf, hashBuf)) {
-        req.log.warn({ ip: req.ip }, "security: invalid Paystack webhook signature");
-        return reply.status(401).send({ success: false, message: "Invalid webhook signature" });
-      }
-
-      const payload = req.body as any;
-      if (payload.event === "charge.success") {
-        const paystackRef = payload.data?.reference;
-        if (!paystackRef) {
-          return reply.status(200).send({ received: true });
-        }
-
-        // FIX #8: Check if a SUCCESS payment attempt already exists (Idempotency)
-        const existingAttempt = await prisma.paymentAttempt.findFirst({
-          where: {
-            payment: { paystackRef },
-            status: "SUCCESS",
-          },
-        });
-
-        if (existingAttempt) {
-          req.log.info({ paystackRef }, "Paystack webhook: duplicate charge.success received — skipping (idempotent)");
-          return reply.status(200).send({ received: true, idempotent: true });
-        }
-
-        const payment = await prisma.payment.findFirst({
-          where: { paystackRef },
-        });
-
-        if (payment) {
-          const webhookAmount = Number(payload.data?.amount);
-          const webhookCurrency = String(payload.data?.currency || "").toUpperCase();
-          const expectedPesewas = Math.round(Number(payment.amount) * 100);
-
-          if (webhookCurrency !== "GHS" || isNaN(webhookAmount) || webhookAmount < expectedPesewas) {
-            req.log.warn(
-              { paystackRef, webhookAmount, expectedPesewas, webhookCurrency },
-              "Paystack webhook: underpayment or currency mismatch detected — refusing to mark paid"
-            );
-            return reply.status(400).send({ success: false, message: "Payment amount or currency mismatch" });
-          }
-          await prisma.$transaction([
-            prisma.payment.update({
-              where: { id: payment.id },
-              data: {
-                status: "SUCCESS",
-                paidAt: payload.data?.paid_at ? new Date(payload.data.paid_at) : new Date(),
-                metadata: payload.data,
-              },
-            }),
-            prisma.paymentAttempt.create({
-              data: {
-                paymentId: payment.id,
-                status: "SUCCESS",
-                gatewayResp: payload,
-              },
-            }),
-            prisma.order.update({
-              where: { id: payment.orderId },
-              data: {
-                paymentStatus: "PAID",
-                status: "CONFIRMED",
-              },
-            }),
-            prisma.orderStatusHistory.create({
-              data: {
-                orderId: payment.orderId,
-                status: "CONFIRMED",
-                note: `Payment verified via Paystack Webhook (${paystackRef})`,
-              },
-            }),
-          ]);
-
-          req.log.info({ orderId: payment.orderId, paystackRef }, "Order marked PAID via Paystack webhook");
-
-          // Asynchronously dispatch payment receipt email
-          const updatedOrder = await prisma.order.findUnique({
-            where: { id: payment.orderId },
-            include: { user: true },
-          });
-
-          if (updatedOrder) {
-            const shipAddr = (updatedOrder.shippingAddress as any) || {};
-            const customerEmail = updatedOrder.guestEmail || updatedOrder.user?.email;
-            const customerName = shipAddr.recipientName || updatedOrder.user?.name || "Customer";
-
-            if (customerEmail) {
-              const channel = String(payload.data?.channel || "Card/MoMo");
-              EmailService.sendPaymentReceipt({
-                email: customerEmail,
-                customerName,
-                orderNumber: updatedOrder.number,
-                paystackRef,
-                amountPaid: Number(updatedOrder.total),
-                paymentChannel: channel,
-                paidAt: payload.data?.paid_at ? new Date(payload.data.paid_at) : new Date(),
-              }).catch((err) => {
-                req.log.warn({ err, orderNumber: updatedOrder.number }, "Failed to send webhook payment receipt email");
-              });
-            }
-          }
-        }
-      }
-
-      return reply.status(200).send({ received: true });
+      const outcome = await paymentService.handleWebhook({
+        rawBody: (req as any).rawBody as string | undefined,
+        signature: req.headers["x-paystack-signature"] as string | undefined,
+        payload: req.body,
+        ip: req.ip,
+      });
+      return reply.status(outcome.status).send(outcome.body);
     },
   );
 };
@@ -800,10 +294,6 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 // ─── Admin Order Routes ───────────────────────────────────────────────────────
 
 export const adminOrderRoutes: FastifyPluginAsync = async (app) => {
-  /**
-   * GET /api/v1/admin/orders
-   * Admin: list all orders with optional filters.
-   */
   app.get(
     "/",
     {
@@ -817,40 +307,23 @@ export const adminOrderRoutes: FastifyPluginAsync = async (app) => {
           properties: {
             page: { type: "integer", minimum: 1, default: 1 },
             limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
-            status: {
-              type: "string",
-              enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"],
-            },
+            status: { type: "string", enum: ORDER_STATUSES },
           },
         },
       },
     },
     async (req, reply) => {
-      const { page, limit, status } = req.query as {
-        page: number;
-        limit: number;
-        status?: OrderStatus;
-      };
-
+      const { page, limit, status } = req.query as { page: number; limit: number; status?: OrderStatus };
       const result = await orderService.getAllOrders({ page, limit, status });
 
       return reply.send({
         success: true,
         data: result.orders,
-        meta: {
-          total: result.total,
-          page,
-          limit,
-          pages: Math.ceil(result.total / limit),
-        },
+        meta: { total: result.total, page, limit, pages: Math.ceil(result.total / limit) },
       });
     },
   );
 
-  /**
-   * GET /api/v1/admin/orders/:number
-   * Admin: get any order by number (no userId scoping).
-   */
   app.get(
     "/:number",
     {
@@ -864,15 +337,10 @@ export const adminOrderRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { number } = req.params as { number: string };
       const order = await orderService.getOrderByNumber(number); // no userId — admin bypass
-
       return reply.send({ success: true, data: order });
     },
   );
 
-  /**
-   * PATCH /api/v1/admin/orders/:id/status
-   * Admin: force-update order status with audit trail note.
-   */
   app.patch(
     "/:id/status",
     {
@@ -881,36 +349,24 @@ export const adminOrderRoutes: FastifyPluginAsync = async (app) => {
         description: "Admin: update order status",
         tags: ["Admin", "Orders"],
         security: [{ bearerAuth: [] }],
-        params: {
-          type: "object",
-          properties: {
-            id: { type: "string", format: "uuid" },
-          },
-        },
+        params: { type: "object", properties: { id: { type: "string", format: "uuid" } } },
         body: {
           type: "object",
           required: ["status"],
           properties: {
-            status: {
-              type: "string",
-              enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"],
-            },
-            note: { type: "string" },
+            status: { type: "string", enum: ORDER_STATUSES },
+            note: { type: "string", maxLength: 1000 },
           },
         },
       },
     },
     async (req, reply) => {
-      const { userId } = (req as any).authUser;
       const { id } = req.params as { id: string };
       const { status, note } = req.body as { status: OrderStatus; note?: string };
 
-      const order = await orderService.updateOrderStatus(id, status, note, userId);
+      const order = await orderService.updateOrderStatus(id, status, note, req.authUser!.userId);
 
-      return reply.send({
-        success: true,
-        data: { orderId: order.id, status: order.status },
-      });
+      return reply.send({ success: true, data: { orderId: order.id, status: order.status } });
     },
   );
 };
@@ -918,10 +374,6 @@ export const adminOrderRoutes: FastifyPluginAsync = async (app) => {
 // ─── Vendor Order Routes ──────────────────────────────────────────────────────
 
 export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
-  /**
-   * GET /api/v1/vendors/my-orders
-   * Vendor: list their VendorOrders (fulfillment queue).
-   */
   app.get(
     "/my-orders",
     {
@@ -940,33 +392,28 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const payload = extractUser(req)!;
       const { page, limit } = req.query as { page: number; limit: number };
 
-      // Vendors can only see their own orders
-      const result = await orderService.getVendorOrders(
-        (req as any).authUser.vendorId ?? payload.userId,
-        page,
-        limit,
-      );
+      // Tenant isolation: the vendor scope ALWAYS comes from the verified identity,
+      // never from client input (and never falls back to a user id).
+      const vendorId = await resolveVendorId(req.authUser!);
+      if (!vendorId) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: "NO_VENDOR", message: "Not associated with a vendor store" },
+        });
+      }
+
+      const result = await orderService.getVendorOrders(vendorId, page, limit);
 
       return reply.send({
         success: true,
         data: result.vendorOrders,
-        meta: {
-          total: result.total,
-          page,
-          limit,
-          pages: Math.ceil(result.total / limit),
-        },
+        meta: { total: result.total, page, limit, pages: Math.ceil(result.total / limit) },
       });
     },
   );
 
-  /**
-   * PATCH /api/v1/vendors/my-orders/:vendorOrderId/status
-   * Vendor: update their VendorOrder status (PROCESSING → SHIPPED → DELIVERED).
-   */
   app.patch(
     "/my-orders/:vendorOrderId/status",
     {
@@ -975,20 +422,12 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
         description: "Vendor: update fulfillment status of a sub-order",
         tags: ["Vendors", "Orders"],
         security: [{ bearerAuth: [] }],
-        params: {
-          type: "object",
-          properties: {
-            vendorOrderId: { type: "string", format: "uuid" },
-          },
-        },
+        params: { type: "object", properties: { vendorOrderId: { type: "string", format: "uuid" } } },
         body: {
           type: "object",
           required: ["status"],
           properties: {
-            status: {
-              type: "string",
-              enum: ["PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"],
-            },
+            status: { type: "string", enum: ["PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"] },
           },
         },
       },
@@ -997,11 +436,7 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
       const { vendorOrderId } = req.params as { vendorOrderId: string };
       const { status } = req.body as { status: VendorOrderStatus };
 
-      // Extract vendorId from token
-      const authHeader = req.headers.authorization!;
-      const token = AuthService.verifyAccessToken(authHeader.slice(7));
-      const vendorId = token.vendorId;
-
+      const vendorId = await resolveVendorId(req.authUser!);
       if (!vendorId) {
         return reply.status(403).send({
           success: false,
@@ -1009,11 +444,7 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const vendorOrder = await orderService.updateVendorOrderStatus(
-        vendorOrderId,
-        status,
-        vendorId,
-      );
+      const vendorOrder = await orderService.updateVendorOrderStatus(vendorOrderId, status, vendorId);
 
       return reply.send({
         success: true,

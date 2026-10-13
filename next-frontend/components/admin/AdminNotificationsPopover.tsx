@@ -33,6 +33,18 @@ interface NotificationItem {
   isUrgent?: boolean;
 }
 
+function formatTimeAgo(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(isoString).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function AdminNotificationsPopover() {
   const { token } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -280,18 +292,6 @@ export function AdminNotificationsPopover() {
       setUnreadCount((prev) => Math.max(0, prev - 1));
     }
     setIsOpen(false);
-  }
-
-  function formatTimeAgo(isoString: string): string {
-    const diffMs = Date.now() - new Date(isoString).getTime();
-    const mins = Math.floor(diffMs / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return new Date(isoString).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
   return (

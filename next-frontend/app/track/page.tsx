@@ -17,31 +17,53 @@ import {
   Store,
   ChevronRight,
   ArrowRight,
+  Share2,
+  Check,
+  RefreshCw,
 } from "lucide-react";
 import { fetchPublicOrderTracking, type PublicOrderTracking } from "@/lib/orders/api";
 import { SITE_CONFIG } from "@/lib/constants/siteConfig";
 import { NextDorPageLoader } from "@/components/ui/NextDorPageLoader";
 
-// ─── 7-Stage Order Lifecycle Progression (Item #12) ───────────────────────────
+// ─── 5-Stage Order Lifecycle Progression (Aligned with Prisma Schema) ────────
 
 const ORDER_LIFECYCLE_STEPS = [
-  { id: "PENDING", label: "Pending", sub: "Order placed, awaiting payment" },
-  { id: "PAID", label: "Paid", sub: "Payment verified by Paystack" },
-  { id: "CONFIRMED", label: "Seller Confirmed", sub: "Merchant accepted order" },
-  { id: "PROCESSING", label: "Preparing", sub: "Packaging & quality check" },
-  { id: "PICKED_UP", label: "Picked Up", sub: "Collected by dispatch courier" },
-  { id: "SHIPPED", label: "Out for Delivery", sub: "On the way to your door" },
-  { id: "DELIVERED", label: "Delivered", sub: "Order completed & received" },
+  { id: "PENDING", label: "Placed", sub: "Order registered in system" },
+  { id: "CONFIRMED", label: "Confirmed", sub: "Payment verified by Paystack" },
+  { id: "PROCESSING", label: "Preparing", sub: "Merchant inspecting & packaging" },
+  { id: "SHIPPED", label: "Out for Delivery", sub: "Courier on the way to your door" },
+  { id: "DELIVERED", label: "Delivered", sub: "Package received & completed" },
 ];
 
 function getStepIndex(status: string, paymentStatus: string): number {
   if (status === "CANCELLED" || status === "REFUNDED") return -1;
-  if (status === "DELIVERED") return 6;
-  if (status === "SHIPPED") return 5;
-  if (status === "PROCESSING") return 3;
-  if (status === "CONFIRMED") return 2;
-  if (paymentStatus === "PAID") return 1;
+  if (status === "DELIVERED") return 4;
+  if (status === "SHIPPED") return 3;
+  if (status === "PROCESSING") return 2;
+  if (status === "CONFIRMED" || paymentStatus === "PAID") return 1;
   return 0; // PENDING
+}
+
+function calculateEstimatedDelivery(createdAtStr: string, deliveryMethod: string): string {
+  try {
+    const created = new Date(createdAtStr);
+    const start = new Date(created);
+    const end = new Date(created);
+
+    if (deliveryMethod === "EXPRESS") {
+      start.setDate(start.getDate() + 1);
+      return `Estimated: ${start.toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" })}`;
+    } else if (deliveryMethod === "PICKUP") {
+      return "Ready for Hub Pickup within 24 hours (Mon-Sat, 8am-7pm)";
+    } else {
+      // Standard: 2 - 4 business days
+      start.setDate(start.getDate() + 2);
+      end.setDate(end.getDate() + 4);
+      return `Estimated: ${start.toLocaleDateString("en-GH", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-GH", { month: "short", day: "numeric", year: "numeric" })}`;
+    }
+  } catch {
+    return "2 – 4 business days";
+  }
 }
 
 function TrackingContent() {
@@ -51,24 +73,30 @@ function TrackingContent() {
   const [orderNumberInput, setOrderNumberInput] = useState(initialOrder);
   const [activeTracking, setActiveTracking] = useState<PublicOrderTracking | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  const performLookup = async (orderNum: string) => {
+  const performLookup = async (orderNum: string, silent = false) => {
     const clean = orderNum.trim().toUpperCase();
     if (!clean) return;
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
+    else setIsRefreshing(true);
     setErrorMessage(null);
 
     try {
       const data = await fetchPublicOrderTracking(clean);
       setActiveTracking(data);
     } catch (err: any) {
-      setActiveTracking(null);
-      setErrorMessage(
-        err?.message || `Unable to find order "${clean}". Please verify your order number.`
-      );
+      if (!silent) {
+        setActiveTracking(null);
+        setErrorMessage(
+          err?.message || `Unable to find order "${clean}". Please verify your order number.`
+        );
+      }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -78,10 +106,32 @@ function TrackingContent() {
     }
   }, [initialOrder]);
 
+  // 30-Second Polling for in-transit / active orders
+  useEffect(() => {
+    if (!activeTracking?.orderNumber) return;
+    const isTerminal = ["DELIVERED", "CANCELLED", "REFUNDED"].includes(activeTracking.status);
+    if (isTerminal) return;
+
+    const intervalId = setInterval(() => {
+      performLookup(activeTracking.orderNumber, true);
+    }, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [activeTracking?.orderNumber, activeTracking?.status]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (orderNumberInput.trim()) {
       performLookup(orderNumberInput);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (typeof window !== "undefined" && activeTracking) {
+      const url = `${window.location.origin}/track?order=${encodeURIComponent(activeTracking.orderNumber)}`;
+      navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2200);
     }
   };
 
@@ -91,6 +141,8 @@ function TrackingContent() {
 
   const isCancelled = activeTracking?.status === "CANCELLED";
   const isRefunded = activeTracking?.status === "REFUNDED";
+  const isLivePollingActive =
+    activeTracking && !["DELIVERED", "CANCELLED", "REFUNDED"].includes(activeTracking.status);
 
   return (
     <div className="min-h-screen bg-zinc-50/60 pb-16 pt-8">
@@ -103,16 +155,32 @@ function TrackingContent() {
         </div>
 
         {/* Hero header */}
-        <div className="mb-8 text-center sm:text-left">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff9900]/10 px-3 py-1 text-xs font-bold text-[#b86200]">
-            <Truck className="h-3.5 w-3.5" /> NextDor Real-Time Logistics Tracking
-          </span>
-          <h1 className="mt-2 text-2xl font-black text-zinc-900 sm:text-3xl">
-            Track Your Order
-          </h1>
-          <p className="mt-1 text-sm text-zinc-600">
-            Enter your NextDor Order Number (e.g. <span className="font-mono font-semibold">ND-00001</span>) to see live courier milestones.
-          </p>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff9900]/10 px-3 py-1 text-xs font-bold text-[#b86200]">
+              <Truck className="h-3.5 w-3.5" /> NextDor Real-Time Logistics Tracking
+            </span>
+            <h1 className="mt-2 text-2xl font-black text-zinc-900 sm:text-3xl">
+              Track Your Order
+            </h1>
+            <p className="mt-1 text-sm text-zinc-600">
+              Enter your NextDor Order Number (e.g. <span className="font-mono font-semibold">ND-00001</span>) to see live courier milestones.
+            </p>
+          </div>
+
+          {/* Live auto-refresh indicator */}
+          {isLivePollingActive && (
+            <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-xs">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+              </span>
+              <span>Live Updates (30s auto-refresh)</span>
+              {isRefreshing && (
+                <RefreshCw className="h-3 w-3 animate-spin text-emerald-600 ml-1" />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Search bar card */}
@@ -217,6 +285,24 @@ function TrackingContent() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+                  >
+                    {copiedLink ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                        Copied Link!
+                      </>
+                    ) : (
+                      <>
+                        <Share2 className="h-3.5 w-3.5" />
+                        Share Link
+                      </>
+                    )}
+                  </button>
+
                   <div className="text-right">
                     <p className="text-xs text-zinc-400">Payment Status</p>
                     <p
@@ -235,7 +321,7 @@ function TrackingContent() {
                 </div>
               </div>
 
-              {/* Destination badge */}
+              {/* Destination & Estimated Delivery */}
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-300">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-[#ff9900]" />
@@ -243,16 +329,24 @@ function TrackingContent() {
                     Destination: <strong className="text-white">{activeTracking.destinationCity}, {activeTracking.destinationRegion}</strong>
                   </span>
                 </div>
+
                 <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-emerald-400" />
+                  <Clock className="h-4 w-4 text-emerald-400" />
                   <span>
-                    Package Contents: <strong className="text-white">{activeTracking.items.length} unique catalog items</strong>
+                    {calculateEstimatedDelivery(activeTracking.createdAt, activeTracking.deliveryMethod)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-amber-400" />
+                  <span>
+                    Package: <strong className="text-white">{activeTracking.items.length} catalog items</strong>
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Visual 7-Stage Stepper (Item #12 & #15) */}
+            {/* Visual 5-Stage Stepper (Canonical Prisma mapping) */}
             <div className="rounded-2xl bg-white p-6 shadow-xs ring-1 ring-zinc-200">
               <div className="mb-6 flex items-center justify-between">
                 <div>
@@ -262,12 +356,17 @@ function TrackingContent() {
                       ? "This order was cancelled."
                       : isRefunded
                       ? "This order was refunded."
-                      : `Current Status: Stage ${currentStepIdx + 1} of ${ORDER_LIFECYCLE_STEPS.length}`}
+                      : `Current Status: Stage ${currentStepIdx + 1} of ${ORDER_LIFECYCLE_STEPS.length} (${ORDER_LIFECYCLE_STEPS[currentStepIdx]?.label ?? "In Progress"})`}
                   </p>
                 </div>
                 {isCancelled && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
                     <XCircle className="h-3.5 w-3.5" /> Cancelled
+                  </span>
+                )}
+                {isRefunded && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                    <AlertCircle className="h-3.5 w-3.5" /> Refunded
                   </span>
                 )}
               </div>
@@ -276,7 +375,7 @@ function TrackingContent() {
               {!isCancelled && !isRefunded && (
                 <div className="relative">
                   {/* Desktop horizontal progression */}
-                  <div className="hidden grid-cols-7 gap-1 md:grid">
+                  <div className="hidden grid-cols-5 gap-2 md:grid">
                     {ORDER_LIFECYCLE_STEPS.map((step, idx) => {
                       const isCompleted = idx < currentStepIdx;
                       const isCurrent = idx === currentStepIdx;
@@ -298,7 +397,7 @@ function TrackingContent() {
                               isCompleted
                                 ? "bg-emerald-600 text-white shadow-sm"
                                 : isCurrent
-                                ? "bg-[#ff9900] text-zinc-900 ring-4 ring-[#ff9900]/25"
+                                ? "bg-[#ff9900] text-zinc-900 ring-4 ring-[#ff9900]/25 font-black"
                                 : "bg-zinc-100 text-zinc-400 ring-1 ring-zinc-200"
                             }`}
                           >
@@ -321,7 +420,7 @@ function TrackingContent() {
                           >
                             {step.label}
                           </p>
-                          <p className="mt-0.5 text-[10px] text-zinc-500 line-clamp-2 px-1">
+                          <p className="mt-0.5 text-[11px] text-zinc-500 line-clamp-2 px-1">
                             {step.sub}
                           </p>
                         </div>
@@ -370,30 +469,21 @@ function TrackingContent() {
               )}
             </div>
 
-            {/* Split Vendor Fulfillment by Store (Item #13) */}
+            {/* Participating Marketplace Stores */}
             {activeTracking.vendorOrders && activeTracking.vendorOrders.length > 0 && (
               <div className="rounded-2xl bg-white p-6 shadow-xs ring-1 ring-zinc-200">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Store className="h-5 w-5 text-[#ff9900]" />
-                    <h3 className="font-bold text-zinc-900">
-                      Store Fulfillment Status ({activeTracking.vendorOrders.length} {activeTracking.vendorOrders.length === 1 ? "merchant" : "merchants"})
-                    </h3>
-                  </div>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                    Independent Dispatch
-                  </span>
-                </div>
-
+                <h3 className="mb-4 font-bold text-zinc-900">
+                  Participating Marketplace Stores ({activeTracking.vendorOrders.length})
+                </h3>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {activeTracking.vendorOrders.map((vo) => (
                     <div
                       key={vo.id}
-                      className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50/50 p-4"
+                      className="flex items-center justify-between rounded-xl bg-zinc-50 p-3.5 ring-1 ring-zinc-200"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-zinc-200 font-bold text-zinc-700">
-                          {vo.vendorName.charAt(0)}
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-xs ring-1 ring-zinc-200">
+                          <Store className="h-5 w-5 text-zinc-700" />
                         </div>
                         <div>
                           <p className="text-sm font-bold text-zinc-900">{vo.vendorName}</p>
@@ -477,7 +567,7 @@ function TrackingContent() {
             </div>
 
             {/* Dispatch Support Help Card */}
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-emerald-50 p-5 ring-1 ring-emerald-200/80">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-emerald-50 p-5 ring-1 border border-emerald-200/80">
               <div className="space-y-1">
                 <p className="text-sm font-bold text-emerald-950">
                   Questions regarding your delivery?

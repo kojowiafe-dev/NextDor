@@ -44,7 +44,7 @@ function signAccessToken(userId: string, role: string, email?: string, vendorId?
   return jwt.sign(
     { sub: userId, role, ...(email ? { email } : {}), ...(vendorId ? { vendorId } : {}) },
     config.JWT_SECRET,
-    { expiresIn: config.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions["expiresIn"] }
+    { algorithm: "HS256", expiresIn: config.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions["expiresIn"] }
   );
 }
 
@@ -88,7 +88,7 @@ function makeLookupHash(rawToken: string): string {
 
 function verifyAccessToken(token: string): { sub: string; role: string; email?: string; vendorId?: string } {
   try {
-    return jwt.verify(token, config.JWT_SECRET) as { sub: string; role: string; email?: string; vendorId?: string };
+    return jwt.verify(token, config.JWT_SECRET, { algorithms: ["HS256"] }) as { sub: string; role: string; email?: string; vendorId?: string };
   } catch {
     throw new UnauthorizedError("Invalid or expired access token");
   }

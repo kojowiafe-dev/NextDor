@@ -29,6 +29,9 @@ import { orderRoutes, adminOrderRoutes, vendorOrderRoutes } from "./modules/orde
 import { adminRoutes } from "./modules/admin/admin.routes.js";
 import { redis } from "./lib/redis.js";
 import { ResilientRateLimitStore } from "./lib/rateLimitStore.js";
+import { isOriginAllowed } from "./lib/originPolicy.js";
+
+const isProduction = config.NODE_ENV === "production";
 
 export async function buildApp() {
   const app = Fastify({
@@ -87,48 +90,14 @@ export async function buildApp() {
     },
   });
 
-  // CORS — controls which origins can call this API
+  // CORS — controls which origins can call this API.
+  // credentials:true (httpOnly refresh cookie) means the origin list MUST be tight:
+  // wildcard preview hosts are disabled in production unless explicitly enabled.
   await app.register(import("@fastify/cors"), {
     origin: (origin, cb) => {
-      // Allow non-browser requests (e.g. mobile apps, curl, server-side fetch)
+      // Allow non-browser requests (mobile apps, curl, server-to-server webhooks)
       if (!origin) return cb(null, true);
-
-      // Check explicit config list
-      if (config.CORS_ORIGINS.includes(origin)) {
-        return cb(null, true);
-      }
-
-      // Allow Vercel production & preview deployments (*.vercel.app)
-      if (/^https:\/\/([a-z0-9-.]+)\.vercel\.app$/i.test(origin)) {
-        return cb(null, true);
-      }
-
-      // Allow Render production & preview deployments (*.onrender.com)
-      if (/^https:\/\/([a-z0-9-.]+)\.onrender\.com$/i.test(origin)) {
-        return cb(null, true);
-      }
-
-      // Allow Netlify deployments (*.netlify.app)
-      if (/^https:\/\/([a-z0-9-.]+)\.netlify\.app$/i.test(origin)) {
-        return cb(null, true);
-      }
-
-      // Allow Cloudflare Pages deployments (*.pages.dev)
-      if (/^https:\/\/([a-z0-9-.]+)\.pages\.dev$/i.test(origin)) {
-        return cb(null, true);
-      }
-
-      // Allow NextDor custom domain and all subdomains (*.nextdor.online)
-      if (/^https:\/\/([a-z0-9-.]+\.)?nextdor\.online$/i.test(origin)) {
-        return cb(null, true);
-      }
-
-      // Allow localhost in dev
-      if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
-        return cb(null, true);
-      }
-
-      return cb(null, false);
+      return cb(null, isOriginAllowed(origin));
     },
     credentials: true, // Required for httpOnly cookie (refresh token)
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -159,7 +128,10 @@ export async function buildApp() {
     }),
   } as any);
 
-  // OpenAPI / Swagger — auto-generates API docs from route schemas
+  // OpenAPI / Swagger — auto-generates API docs from route schemas.
+  // The spec is registered always (cheap, powers tests); the interactive UI is
+  // only exposed outside production unless ENABLE_API_DOCS=true, because it
+  // publishes the full attack surface of the API.
   await app.register(import("@fastify/swagger"), {
     openapi: {
       info: { title: "NextDor API", version: "1.0.0" },
@@ -171,10 +143,12 @@ export async function buildApp() {
     },
   });
 
-  await app.register(import("@fastify/swagger-ui"), {
-    routePrefix: "/docs",
-    uiConfig: { deepLinking: true },
-  });
+  if (config.ENABLE_API_DOCS ?? !isProduction) {
+    await app.register(import("@fastify/swagger-ui"), {
+      routePrefix: "/docs",
+      uiConfig: { deepLinking: true },
+    });
+  }
 
   // ── Global error handler ─────────────────────────────────────────────────
   //

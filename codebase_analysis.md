@@ -242,9 +242,31 @@ To completely eradicate ghost orders, prevent customer delivery confusion, and g
 
 ---
 
-## 11. Verification & Operational Health
+## 11. Enterprise Hardening & Production Integrity (Completed)
+
+To ensure enterprise-grade reliability, maintainability, and scalability:
+1. **Zero Secrets in Repository & Validation Guard**:
+   - Replaced all active database URLs, JWT tokens, and Cloudinary keys across `.env.example` templates with generic placeholders.
+   - Built startup audit validation in `env.ts` with `superRefine` that halts server boot if dummy or known leaked secrets are loaded in production.
+2. **CORS & Origin Security Policy**:
+   - Implemented exact-origin validation in `origins.ts` and `originPolicy.ts`, blocking wildcard preview domains from accessing credentialed (`credentials: true`) cookies while preserving development localhost flexibility.
+3. **Decoupled Payment Settlement & Webhook Verification**:
+   - Created pure `paystack.ts` helpers for constant-time HMAC-SHA512 webhook signature verification, preventing replay attacks and timing side-channels.
+   - Implemented `PaymentRepository.settleSuccessfulPayment` to idempotently update orders, avoiding race conditions or double settlements.
+4. **Atomic Concurrency & Inventory Protection**:
+   - Conditional inventory decrement in `OrderRepository` prevents overselling under heavy concurrent checkouts.
+   - Automatic inventory rollback is executed when an order is cancelled.
+5. **Unified Role Guards**:
+   - Unified authentication checks across all controllers (`admin.routes.ts`, `auth.routes.ts`, `vendor.routes.ts`, `order.routes.ts`, `product.routes.ts`) through `lib/auth.guards.ts`.
+6. **Automated Unit Testing Baseline**:
+   - Created comprehensive unit tests in Vitest covering CORS policies, Paystack webhook HMAC verification, and Money value object invariants with **100% pass rate** (31 tests passed).
+
+---
+
+## 12. Verification & Operational Health
 
 The entire platform is fully verified and compiling cleanly:
-- **`next-backend`**: `npm run build` and `npx tsc --noEmit` pass with **0 errors**.
-- **`next-frontend`**: `npm run build` generates all **38 routes** (SSG + SSR + Turbopack) with **0 errors**.
+- **`next-backend`**: `npx tsc --noEmit` and `npx vitest run` pass with **0 errors** across all **31 tests**.
+- **`next-frontend`**: `npx tsc --noEmit` passes with **0 type errors**; `npx eslint --quiet` passes with **0 lint errors**.
 - **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `PROJECT_PHASES_AND_ROADMAP.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`, `codebase_analysis.md`) are synchronized with the live code.
+

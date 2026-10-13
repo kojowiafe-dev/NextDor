@@ -1031,6 +1031,15 @@ Development
 - [x] Mobile touch targets $\ge 48\text{px}$, tap delay elimination (`touch-action: manipulation`), zero horizontal overflow
 - [x] Complete test and compile validation across backend and frontend (0 errors)
 
+### Phase 7.5 — Enterprise Hardening, Idempotent Settlement & Concurrency ✅ (Completed)
+- [x] **Zero Secrets in Repository:** Sanitized all template `.env.example` files and instituted Zod `superRefine` startup validation rejecting known default/placeholder credentials.
+- [x] **Hardened Origin Policy:** Created `origins.ts` & `originPolicy.ts` enforcing strict exact-origin matching and blocking unauthorized wildcard origins when `credentials: true`.
+- [x] **Unified Authentication Guards:** Consolidated all controller authorization hooks into `lib/auth.guards.ts` (`requireAuth`, `requireAdmin`, `requireVendor`, `requireSuperAdmin`, `resolveVendorId`).
+- [x] **Decoupled Payment Settlement Layer:** Extracted payment verification and webhook processing into `PaymentService`, `PaymentRepository`, and pure `paystack.ts` helpers. Enforced HMAC-SHA512 constant-time signature verification, GHS currency check, and atomic status transitions.
+- [x] **Atomic Inventory Concurrency:** Enforced conditional row checks in `OrderRepository` to block overselling under concurrent load, with automatic inventory restoration on order cancellations.
+- [x] **Masked Public Tracking Projections:** Protected internal payment references and vendor metadata on public tracking routes (`findPublicTracking`).
+- [x] **Automated Unit Testing Baseline:** Built and executed 31 unit tests across origins, Paystack security, financial conservation, and SSRF URL safety (100% pass rate).
+
 ---
 
 ## 13. Technology Stack & Key Dependencies

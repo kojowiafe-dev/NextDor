@@ -16,10 +16,10 @@ import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { VendorRepository } from "./vendor.repository.js";
 import { VendorService } from "./vendor.service.js";
 import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
-import { AuthService } from "../auth/auth.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { SyncService } from "../sync/sync.service.js";
+import { requireAdmin, requireVendor, resolveVendorId } from "../../lib/auth.guards.js";
 
 // Extend FastifyRequest with vendor tenant context
 declare module "fastify" {
@@ -33,98 +33,41 @@ declare module "fastify" {
 
 /**
  * Pre-handler hook enforcing vendor tenant isolation.
- * Resolves the authenticated merchant's vendorId securely.
+ * Resolves the authenticated merchant's vendorId securely via shared guards.
  */
 async function requireVendorAuth(req: FastifyRequest, reply: FastifyReply) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return reply.status(401).send({
+  await requireVendor(req, reply);
+  if (reply.sent) return;
+
+  const authUser = req.authUser!;
+  const vendorId = await resolveVendorId(authUser);
+
+  if (!vendorId) {
+    return reply.status(403).send({
       success: false,
-      error: { code: "UNAUTHORIZED", message: "Authentication required" },
+      error: {
+        code: "NO_VENDOR_STORE",
+        message: "You are not associated with any active vendor store.",
+      },
     });
   }
 
-  try {
-    const token = authHeader.slice(7);
-    const payload = AuthService.verifyAccessToken(token);
-
-    if (
-      payload.role !== "VENDOR_OWNER" &&
-      payload.role !== "VENDOR_STAFF" &&
-      payload.role !== "ADMIN" &&
-      payload.role !== "SUPER_ADMIN"
-    ) {
-      return reply.status(403).send({
-        success: false,
-        error: { code: "FORBIDDEN", message: "Vendor portal access required." },
-      });
-    }
-
-    let vendorId = payload.vendorId;
-    let userEmail = payload.email;
-    if (!vendorId || !userEmail) {
-      const user = await prisma.user.findUnique({
-        where: { id: payload.sub },
-        select: { email: true, vendorId: true, ownedVendor: { select: { id: true } } },
-      });
-      vendorId = vendorId || user?.vendorId || user?.ownedVendor?.id;
-      userEmail = userEmail || user?.email;
-    }
-
-    if (!vendorId) {
-      return reply.status(403).send({
-        success: false,
-        error: {
-          code: "NO_VENDOR_STORE",
-          message: "You are not associated with any active vendor store.",
-        },
-      });
-    }
-
-    req.vendorId = vendorId;
-    req.userId = payload.sub;
-    req.userRole = payload.role;
-    req.userEmail = userEmail;
-  } catch (err: any) {
-    return reply.status(401).send({
-      success: false,
-      error: { code: "UNAUTHORIZED", message: err.message || "Invalid or expired token" },
-    });
-  }
+  req.vendorId = vendorId;
+  req.userId = authUser.userId;
+  req.userRole = authUser.role;
+  req.userEmail = authUser.email;
 }
 
 /**
- * Pre-handler hook enforcing platform administrator access.
+ * Pre-handler hook enforcing platform administrator access via shared guards.
  */
 async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return reply.status(401).send({
-      success: false,
-      error: { code: "UNAUTHORIZED", message: "Admin authorization required." },
-    });
-  }
+  await requireAdmin(req, reply);
+  if (reply.sent) return;
 
-  try {
-    const token = authHeader.slice(7);
-    const payload = AuthService.verifyAccessToken(token);
-
-    if (payload.role !== "ADMIN" && payload.role !== "SUPER_ADMIN") {
-      return reply.status(403).send({
-        success: false,
-        error: { code: "FORBIDDEN", message: "Platform administrator access required." },
-      });
-    }
-
-    req.userId = payload.sub;
-    req.userRole = payload.role;
-    req.userEmail = payload.email;
-  } catch (err: any) {
-    return reply.status(401).send({
-      success: false,
-      error: { code: "UNAUTHORIZED", message: err.message || "Invalid or expired token" },
-    });
-  }
+  req.userId = req.authUser!.userId;
+  req.userRole = req.authUser!.role;
+  req.userEmail = req.authUser!.email;
 }
 
 export const vendorRoutes: FastifyPluginAsync = async (app) => {

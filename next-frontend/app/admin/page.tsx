@@ -316,21 +316,26 @@ export default function AdminDashboardPage() {
   const platformFee = totalRevenue * 0.10; // 10% platform cut
   const escrowHold = totalRevenue * 0.90; // 90% escrow reserve held for merchants
 
+  const [currentTimestamp, setCurrentTimestamp] = useState<number>(0);
+  useEffect(() => {
+    setCurrentTimestamp(Date.now());
+  }, []);
+
   const weeklyRevenue = useMemo(() => {
     const buckets = [0, 0, 0, 0, 0, 0, 0];
-    const now = Date.now();
+    if (!currentTimestamp) return buckets;
     for (const order of orders) {
       const st = String(order.status || "").toLowerCase().trim();
       if (st !== "cancelled" && st !== "refunded") {
         const orderTime = new Date(order.date).getTime();
-        const diffDays = Math.floor((now - orderTime) / (24 * 60 * 60 * 1000));
+        const diffDays = Math.floor((currentTimestamp - orderTime) / (24 * 60 * 60 * 1000));
         if (diffDays >= 0 && diffDays < 7) {
           buckets[6 - diffDays] += (Number(order.total) || 0);
         }
       }
     }
     return buckets;
-  }, [orders]);
+  }, [orders, currentTimestamp]);
 
   return (
     <AdminLayout

@@ -35,12 +35,8 @@ type FormData = {
   region: string;
   delivery: DeliveryMethod;
   payment: PaymentMethod;
-  momoNumber: string;
-  momoNetwork: string;
-  cardNumber: string;
-  cardExpiry: string;
-  cardCvv: string;
-  cardName: string;
+  momoNumber?: string;
+  momoNetwork?: string;
 };
 
 const REGIONS = [
@@ -131,10 +127,6 @@ export default function CheckoutPage() {
     payment: "momo",
     momoNumber: "",
     momoNetwork: "MTN MoMo",
-    cardNumber: "",
-    cardExpiry: "",
-    cardCvv: "",
-    cardName: "",
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
@@ -150,6 +142,7 @@ export default function CheckoutPage() {
         lastName: user.name.split(" ").slice(1).join(" ") ?? f.lastName,
         email: user.email ?? f.email,
         phone: user.phone ?? f.phone,
+        momoNumber: f.momoNumber || user.phone || "",
       }));
     }
   }, [user]);
@@ -176,15 +169,6 @@ export default function CheckoutPage() {
     if (!form.city.trim()) errs.city = "Required";
     if (!form.region) errs.region = "Required";
 
-    if (form.payment === "momo" && !form.momoNumber.trim()) {
-      errs.momoNumber = "Enter your MoMo number";
-    }
-    if (form.payment === "card") {
-      if (!form.cardNumber.trim()) errs.cardNumber = "Required";
-      if (!form.cardExpiry.trim()) errs.cardExpiry = "Required";
-      if (!form.cardCvv.trim()) errs.cardCvv = "Required";
-      if (!form.cardName.trim()) errs.cardName = "Required";
-    }
     return errs;
   }
 
@@ -252,11 +236,12 @@ export default function CheckoutPage() {
 
         const payInit = await initializePayment(orderNumber, {
           email: form.email.trim(),
+          method: form.payment.toUpperCase(),
           callbackUrl,
           token: activeToken,
         });
 
-        // 1. If Paystack inline popup is available in window
+        // 1. Paystack inline popup setup
         if (typeof window !== "undefined" && (window as any).PaystackPop && payInit.publicKey) {
           const handler = (window as any).PaystackPop.setup({
             key: payInit.publicKey,
@@ -264,39 +249,53 @@ export default function CheckoutPage() {
             amount: Math.round(total * 100),
             currency: "GHS",
             ref: payInit.reference,
-            callback: async (response: { reference: string }) => {
-              try {
-                await verifyPayment(orderNumber, response.reference, activeToken);
-              } catch (verifyErr) {
-                console.warn("Payment verification status:", verifyErr);
-              }
+            callback: function (response: { reference: string }) {
+              const ref = response?.reference || payInit.reference;
+              // Trigger verification in background & navigate to success
+              verifyPayment(orderNumber, ref, activeToken).catch((err) => {
+                console.warn("Client payment verification status:", err);
+              });
               clearCart();
-              router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PAID`);
+              router.push(
+                `/checkout/success?order=${encodeURIComponent(orderNumber)}&total=${total}&currency=${currency}&status=PAID&reference=${encodeURIComponent(ref)}`
+              );
             },
-            onClose: () => {
-              clearCart();
-              router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PENDING`);
+            onClose: function () {
+              // User cancelled or closed the modal — DO NOT clear cart, DO NOT redirect!
+              setIsPlacing(false);
+              setSubmitError(
+                "Payment was not completed. Your items remain safely saved in your cart. You can retry payment when ready, or switch to Cash on Delivery."
+              );
             },
           });
           handler.openIframe();
           return;
         }
 
-        // 2. If Paystack returned a redirect authorization URL
-        if (payInit.authorizationUrl) {
+        // 2. If Paystack returned a hosted authorizationUrl, redirect to it
+        if (payInit.authorizationUrl && typeof window !== "undefined") {
           clearCart();
           window.location.href = payInit.authorizationUrl;
           return;
         }
 
-        // 3. Fallback / sandbox direct verification
-        await verifyPayment(orderNumber, payInit.reference, activeToken);
-        clearCart();
-        router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PAID`);
+        // 2. Dev / mock environment fallback
+        if (process.env.NODE_ENV !== "production" && payInit.reference) {
+          await verifyPayment(orderNumber, payInit.reference, activeToken);
+          clearCart();
+          router.push(
+            `/checkout/success?order=${encodeURIComponent(orderNumber)}&total=${total}&currency=${currency}&status=PAID&reference=${encodeURIComponent(payInit.reference)}`
+          );
+          return;
+        }
+
+        throw new Error("Paystack secure payment gateway is initializing. Please wait a moment and try again.");
       } catch (payErr: any) {
         console.warn("Payment gateway notice:", payErr);
-        clearCart();
-        router.push(`/checkout/success?order=${orderNumber}&total=${total}&currency=${currency}&status=PENDING`);
+        setIsPlacing(false);
+        setSubmitError(
+          payErr?.message || "Payment initialization failed. Your cart is safe. Please try again."
+        );
       }
     } catch (orderApiError: any) {
       console.error("Order placement failed:", orderApiError);
@@ -557,71 +556,42 @@ export default function CheckoutPage() {
                       {MOMO_NETWORKS.map((n) => <option key={n}>{n}</option>)}
                     </select>
                   </Field>
-                  <Field label="MoMo number" id="chk-momo-number" required>
+                  <Field label="MoMo prompt number (Optional)" id="chk-momo-number">
                     <input
                       id="chk-momo-number"
                       type="tel"
-                      value={form.momoNumber}
+                      value={form.momoNumber || ""}
                       onChange={(e) => set("momoNumber", e.target.value)}
-                      className={`${inputCls} ${errors.momoNumber ? "border-red-400" : ""}`}
-                      placeholder="024 000 0000"
+                      className={inputCls}
+                      placeholder={form.phone || "024 000 0000"}
                     />
-                    {errors.momoNumber && <p className="mt-1 text-xs text-red-600">{errors.momoNumber}</p>}
                   </Field>
-                  <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-                    You will receive a payment prompt on your phone after placing your order.
-                  </p>
+                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/70 p-3 text-xs text-amber-900">
+                    <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-[#ff9900]" />
+                    <p>
+                      An instant mobile authorization prompt will be sent to your phone via Paystack once you click Pay Now.
+                    </p>
+                  </div>
                 </div>
               )}
 
               {/* Card */}
               {form.payment === "card" && (
-                <div className="space-y-3">
-                  <Field label="Cardholder name" id="chk-card-name" required>
-                    <input
-                      id="chk-card-name"
-                      value={form.cardName}
-                      onChange={(e) => set("cardName", e.target.value)}
-                      className={`${inputCls} ${errors.cardName ? "border-red-400" : ""}`}
-                      placeholder="KOFI MENSAH"
-                    />
-                    {errors.cardName && <p className="mt-1 text-xs text-red-600">{errors.cardName}</p>}
-                  </Field>
-                  <Field label="Card number" id="chk-card-num" required>
-                    <input
-                      id="chk-card-num"
-                      value={form.cardNumber}
-                      onChange={(e) => set("cardNumber", e.target.value)}
-                      className={`${inputCls} ${errors.cardNumber ? "border-red-400" : ""}`}
-                      placeholder="1234 5678 9012 3456"
-                      maxLength={19}
-                    />
-                    {errors.cardNumber && <p className="mt-1 text-xs text-red-600">{errors.cardNumber}</p>}
-                  </Field>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Expiry" id="chk-expiry" required>
-                      <input
-                        id="chk-expiry"
-                        value={form.cardExpiry}
-                        onChange={(e) => set("cardExpiry", e.target.value)}
-                        className={`${inputCls} ${errors.cardExpiry ? "border-red-400" : ""}`}
-                        placeholder="MM / YY"
-                        maxLength={7}
-                      />
-                      {errors.cardExpiry && <p className="mt-1 text-xs text-red-600">{errors.cardExpiry}</p>}
-                    </Field>
-                    <Field label="CVV" id="chk-cvv" required>
-                      <input
-                        id="chk-cvv"
-                        type="password"
-                        value={form.cardCvv}
-                        onChange={(e) => set("cardCvv", e.target.value)}
-                        className={`${inputCls} ${errors.cardCvv ? "border-red-400" : ""}`}
-                        placeholder="•••"
-                        maxLength={4}
-                      />
-                      {errors.cardCvv && <p className="mt-1 text-xs text-red-600">{errors.cardCvv}</p>}
-                    </Field>
+                <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50/80 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                      <Lock className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-zinc-900">Bank-Grade 256-Bit Encrypted Card Checkout</p>
+                      <p className="text-xs text-zinc-600">
+                        Visa, Mastercard &amp; Verve accepted. You will securely enter your card details directly in the official Paystack popup.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 border-t border-zinc-200/80 pt-2.5 text-[11px] text-zinc-500">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>Your card details never touch our servers and are protected by 48-Hour Escrow.</span>
                   </div>
                 </div>
               )}

@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "../../lib/prisma.js";
+import { ConflictError, UnprocessableError } from "../../lib/errors.js";
 import type {
   Order,
   OrderItem,
@@ -60,38 +61,42 @@ export class OrderRepository {
   /**
    * Generates a human-readable order number: ND-XXXXX (zero-padded).
    *
-   * FIX #5 — Race condition solved:
-   * Uses PostgreSQL sequence `order_number_seq` executed atomically INSIDE the transaction.
-   * If sequence doesn't exist yet, it's auto-created, and has a safe random/entropy fallback.
+   * DESIGN DECISION: Non-transactional Sequence Generation
+   * ───────────────────────────────────────────────────────
+   * In PostgreSQL, any failed query inside a transaction block aborts the
+   * entire transaction (Error 25P02), ignoring subsequent try/catches.
+   * Because PostgreSQL sequences are natively atomic, concurrent-safe,
+   * and non-transactional, we evaluate or initialize the sequence using
+   * the root `prisma` client BEFORE entering `prisma.$transaction`.
    */
-  private async generateOrderNumber(tx: Prisma.TransactionClient): Promise<string> {
+  private async generateOrderNumber(): Promise<string> {
     try {
-      const rows = await tx.$queryRawUnsafe<Array<{ nextval: string | bigint | number }>>(
+      const rows = await prisma.$queryRawUnsafe<Array<{ nextval: string | bigint | number }>>(
         "SELECT nextval('order_number_seq') AS nextval"
       );
       if (rows && rows.length > 0 && rows[0].nextval != null) {
         return `ND-${String(rows[0].nextval).padStart(5, "0")}`;
       }
     } catch {
-      // Sequence might not exist yet — try creating it
+      // Sequence might not exist yet — create outside transaction and retry
       try {
-        await tx.$executeRawUnsafe("CREATE SEQUENCE IF NOT EXISTS order_number_seq START WITH 1");
-        const rows = await tx.$queryRawUnsafe<Array<{ nextval: string | bigint | number }>>(
+        await prisma.$executeRawUnsafe("CREATE SEQUENCE IF NOT EXISTS order_number_seq START WITH 1");
+        const rows = await prisma.$queryRawUnsafe<Array<{ nextval: string | bigint | number }>>(
           "SELECT nextval('order_number_seq') AS nextval"
         );
         if (rows && rows.length > 0 && rows[0].nextval != null) {
           return `ND-${String(rows[0].nextval).padStart(5, "0")}`;
         }
       } catch {
-        // Fall through to entropy-backed sequence
+        // Fall through to database count fallback
       }
     }
 
     // Fallback: strictly clean sequential order numbers (e.g. ND-00001, ND-00002)
-    const count = await tx.order.count();
+    const count = await prisma.order.count();
     let candidateSeq = count + 1;
     let candidate = `ND-${String(candidateSeq).padStart(5, "0")}`;
-    while (await tx.order.findUnique({ where: { number: candidate } })) {
+    while (await prisma.order.findUnique({ where: { number: candidate } })) {
       candidateSeq++;
       candidate = `ND-${String(candidateSeq).padStart(5, "0")}`;
     }
@@ -109,17 +114,39 @@ export class OrderRepository {
    * All steps run in a single Prisma transaction — any failure rolls back everything.
    */
   async placeOrder(input: PlaceOrderInput): Promise<Order> {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const orderNumber = await this.generateOrderNumber(tx);
-      // 1. Decrement stock for tracked products only (where stockQty is not null)
-      for (const item of input.items) {
-        await tx.product.updateMany({
+    // Generate order number BEFORE starting transaction so tx is never aborted by sequence checks
+    const orderNumber = await this.generateOrderNumber();
+
+    return prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        // 1. Decrement stock for tracked products (stockQty != null) with a hard guard.
+        //    The conditional updateMany is atomic: it only matches while enough units
+        //    remain. A zero row-count on a TRACKED product therefore means another
+        //    buyer won the race → abort & roll back the whole order (no overselling).
+        //    Untracked products (stockQty = null, e.g. WooCommerce-synced) never block.
+        for (const item of input.items) {
+        const result = await tx.product.updateMany({
           where: {
             id: item.productId,
             stockQty: { not: null, gte: item.quantity },
           },
           data: { stockQty: { decrement: item.quantity } },
         });
+
+        if (result.count === 0) {
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { name: true, stockQty: true },
+          });
+          if (product && product.stockQty !== null) {
+            throw new UnprocessableError(
+              product.stockQty > 0
+                ? `Only ${product.stockQty} unit(s) of "${product.name}" available`
+                : `"${product.name}" just sold out`,
+              { productId: item.productId, available: product.stockQty },
+            );
+          }
+        }
       }
 
       // 2. Create the master Order
@@ -172,6 +199,10 @@ export class OrderRepository {
       });
 
       return order;
+    },
+    {
+      maxWait: 10000,
+      timeout: 25000,
     });
   }
 
@@ -340,24 +371,57 @@ export class OrderRepository {
    * Updates the master Order status and appends an entry to the audit log.
    * Always call this instead of directly updating the status field —
    * it guarantees the status history is never out of sync.
+   *
+   * CONCURRENCY: when `expectedStatus` is supplied the write is a compare-and-set
+   * (`WHERE id = ? AND status = expected`). If another request changed the order in
+   * the meantime, a ConflictError is raised instead of silently overwriting it.
+   *
+   * INVENTORY: moving an order to CANCELLED returns its units to stock (tracked
+   * products only) and cancels its open vendor sub-orders, atomically.
    */
   async updateStatus(
     orderId: string,
     status: OrderStatus,
     note?: string,
     createdBy?: string,
+    expectedStatus?: OrderStatus,
   ): Promise<Order> {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const order = await tx.order.update({
-        where: { id: orderId },
+      const changed = await tx.order.updateMany({
+        where: { id: orderId, ...(expectedStatus ? { status: expectedStatus } : {}) },
         data: { status },
       });
+
+      if (changed.count === 0) {
+        throw new ConflictError("This order was modified by another request. Please reload and try again.");
+      }
+
+      if (status === "CANCELLED") {
+        const items = await tx.orderItem.findMany({
+          where: { orderId },
+          select: { productId: true, quantity: true },
+        });
+        for (const item of items) {
+          await tx.product.updateMany({
+            where: { id: item.productId, stockQty: { not: null } },
+            data: { stockQty: { increment: item.quantity } },
+          });
+        }
+        await tx.vendorOrder.updateMany({
+          where: { orderId, status: { notIn: ["DELIVERED", "CANCELLED"] } },
+          data: { status: "CANCELLED" },
+        });
+      }
 
       await tx.orderStatusHistory.create({
         data: { orderId, status, note, createdBy },
       });
 
-      return order;
+      return tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    },
+    {
+      maxWait: 10000,
+      timeout: 20000,
     });
   }
 
@@ -460,6 +524,47 @@ export class OrderRepository {
     return prisma.vendorOrder.findUnique({
       where: { id: vendorOrderId },
       include: { order: { select: { number: true, status: true } } },
+    });
+  }
+
+  /**
+   * Resolves the flagship "NextDor Direct" vendor that owns catalog items with no
+   * merchant (needed because VendorOrder.vendorId is a real UUID foreign key).
+   */
+  async findPlatformVendorId(): Promise<string | null> {
+    const vendor = await prisma.vendor.findUnique({
+      where: { slug: "nextdor" },
+      select: { id: true },
+    });
+    return vendor?.id ?? null;
+  }
+
+  /**
+   * Public tracking projection — deliberately excludes street address, phone, email and pricing.
+   */
+  async findPublicTracking(number: string) {
+    return prisma.order.findUnique({
+      where: { number },
+      select: {
+        number: true,
+        status: true,
+        paymentStatus: true,
+        deliveryMethod: true,
+        createdAt: true,
+        shippingAddress: true,
+        statusHistory: {
+          orderBy: { createdAt: "asc" },
+          select: { id: true, status: true, createdAt: true },
+        },
+        vendorOrders: {
+          select: {
+            id: true,
+            status: true,
+            vendor: { select: { name: true, slug: true, logoUrl: true } },
+          },
+        },
+        items: { select: { productName: true, productImage: true, quantity: true } },
+      },
     });
   }
 }

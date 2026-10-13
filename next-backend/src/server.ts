@@ -33,25 +33,44 @@ import { buildApp } from "./app.js";
 import { config } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
-import { redis } from "./lib/redis.js";
+import { redis, redisForQueue } from "./lib/redis.js";
+import { closeEmailQueue } from "./lib/email.queue.js";
 
 async function main() {
   const app = await buildApp();
 
+  let isShuttingDown = false;
+
   // Graceful shutdown handler
   async function shutdown(signal: string) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
     logger.info({ signal }, "Received shutdown signal — shutting down gracefully");
+
+    // Force exit timeout to avoid hung connections during deploys
+    const forceExitTimer = setTimeout(() => {
+      logger.error("Graceful shutdown timed out after 10s — forcing exit");
+      process.exit(1);
+    }, 10_000);
+    forceExitTimer.unref();
 
     try {
       // 1. Stop accepting new connections
       await app.close();
 
-      // 2. Close database pool
+      // 2. Close background job queues and workers
+      await closeEmailQueue();
+
+      // 3. Close database pool
       await prisma.$disconnect();
 
-      // 3. Disconnect Redis if connected
+      // 4. Disconnect Redis clients if connected
       if (redis.status !== "wait" && redis.status !== "end") {
         redis.disconnect();
+      }
+      if (redisForQueue.status !== "wait" && redisForQueue.status !== "end") {
+        redisForQueue.disconnect();
       }
 
       logger.info("Shutdown complete");
@@ -83,6 +102,14 @@ async function main() {
   try {
     await prisma.$connect();
     logger.info("⚡ Database connection pool established (Neon Serverless)");
+
+    // Ensure order_number_seq PostgreSQL sequence exists
+    try {
+      await prisma.$executeRawUnsafe("CREATE SEQUENCE IF NOT EXISTS order_number_seq START WITH 1;");
+      logger.info("⚡ Order sequence order_number_seq verified");
+    } catch (seqErr) {
+      logger.warn({ seqErr }, "Order sequence creation notice");
+    }
   } catch (err) {
     logger.warn({ err }, "Initial database pool warm-up deferred — will connect on demand");
   }

@@ -32,6 +32,11 @@ try {
   // In containers or CI/CD, env vars are passed directly into the environment
 }
 
+// Secrets that have been published in this repository's history. Never valid in production.
+const PUBLISHED_JWT_SECRETS = [
+  "4f7b2a9e8d1c6f3a5b0e7d9c2a4f6e8b1d3c5a7e9f0b2d4c6a8e1f3b5d7a9c2e0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+];
+
 const envSchema = z.object({
   // ── Runtime ─────────────────────────────────────────────────────────────
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -63,7 +68,10 @@ const envSchema = z.object({
   // ── Paystack ─────────────────────────────────────────────────────────────
   PAYSTACK_SECRET_KEY: z.string().min(10),
   PAYSTACK_PUBLIC_KEY: z.string().min(10),
-  PAYSTACK_WEBHOOK_SECRET: z.string().min(10),
+  // DEPRECATED + IGNORED: Paystack signs webhooks (x-paystack-signature) with the
+  // account SECRET KEY — there is no separate webhook secret. Kept optional so
+  // existing deployments that still define it keep booting.
+  PAYSTACK_WEBHOOK_SECRET: z.string().optional(),
 
   // ── Email ────────────────────────────────────────────────────────────────
   // Cloudflare Email Sending (Primary)
@@ -85,6 +93,19 @@ const envSchema = z.object({
   CORS_ORIGINS: z
     .string()
     .transform((s) => s.split(",").map((o) => o.trim()).filter(Boolean)),
+  // Allow *.vercel.app / *.onrender.com / *.netlify.app / *.pages.dev origins.
+  // Unset → true outside production, false in production (see lib/origins.ts).
+  CORS_ALLOW_PREVIEW_ORIGINS: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
+
+  // ── API docs ─────────────────────────────────────────────────────────────
+  // Swagger UI (/docs). Unset → enabled outside production, disabled in production.
+  ENABLE_API_DOCS: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
 
   // ── WooCommerce ──────────────────────────────────────────────────────────
   WOOCOMMERCE_STORE_URL: z.string().url(),
@@ -96,6 +117,30 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().min(1, "CLOUDINARY_API_KEY is required"),
   CLOUDINARY_API_SECRET: z.string().min(1, "CLOUDINARY_API_SECRET is required"),
   CLOUDINARY_URL: z.string().optional(),
+}).superRefine((env, ctx) => {
+  if (env.NODE_ENV !== "production") return;
+
+  // The JWT secret in the historical .env.example is public (it was committed to
+  // git). Anyone could forge admin tokens against a deployment that still uses it.
+  if (PUBLISHED_JWT_SECRETS.includes(env.JWT_SECRET) || /REPLACE_WITH|CHANGE_ME/i.test(env.JWT_SECRET)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["JWT_SECRET"],
+      message: "JWT_SECRET is a published/placeholder value — generate a unique secret for production",
+    });
+  }
+
+  // Without a provider, EmailService only logs messages locally: OTP codes and
+  // receipts would silently never reach customers.
+  const hasResend = Boolean(env.RESEND_API_KEY && !/placeholder|^re_dev_|CHANGE_ME/i.test(env.RESEND_API_KEY));
+  const hasCloudflare = Boolean(env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID);
+  if (!hasResend && !hasCloudflare) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["RESEND_API_KEY"],
+      message: "Production requires an email provider (RESEND_API_KEY or CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID)",
+    });
+  }
 });
 
 // Parsed, type-safe config object — import this everywhere, never process.env

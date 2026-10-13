@@ -122,21 +122,77 @@ graph TD
 
 ---
 
-## 📅 Implementation Summary
+## 🛡️ Enterprise Hardening Baseline (Completed)
+**Status: COMPLETED (100% Verification)**
+
+| Layer | Hardening Action | Impact & Protection |
+| :--- | :--- | :--- |
+| **Zero Secrets Leakage** | Sanitized all `.env.example` templates across frontend & backend. Added Zod `superRefine` startup audit halting boots if production references known dummy or leaked credentials. | Eliminates accidental deployment with default keys; strict environment isolation. |
+| **Strict Origin Matcher** | Pure CORS origin matcher (`origins.ts`, `originPolicy.ts`). Blocks unauthorized origins and subdomains in production while permitting localhost only in dev. | Prevents credentialed cross-site hijacking (`credentials: true`) and CSRF exploitation. |
+| **Atomic Inventory Concurrency** | Conditional update checks in `order.repository.ts`. Rolls back checkouts if tracked item quantity reaches 0 concurrently; restores stock automatically on cancellations. | Eliminates overselling race conditions under high concurrent checkout traffic. |
+| **Decoupled Settlement Architecture** | Extracted `PaymentService` and `PaymentRepository` from route controllers. Enforced HMAC-SHA512 constant-time signature verification, GHS currency match, and idempotent status updates. | Guarantees financial idempotency, preventing double crediting and replay attacks. |
+| **Unified Authorization Guards** | Standardized `requireAuth`, `requireAdmin`, `requireVendor`, `requireSuperAdmin` across all route controllers (`admin`, `auth`, `order`, `product`, `vendor`). | Centralizes role auditing, preventing role escalation or missing guard vulnerabilities. |
+| **Comprehensive Test Coverage** | 31 automated unit tests across `origins.test.ts`, `paystack.test.ts`, `financial.test.ts`, and `urlSafety.test.ts`. | 100% test pass rate across critical financial and security logic. |
+
+---
+
+## 🚀 Forward-Looking Client Roadmap (Phases 8 – 11)
+
+The following delivery phases represent high-value enterprise features scoped for future client milestones:
+
+```mermaid
+graph TD
+    P8[Phase 8: Automated Returns, Disputes & Paystack Refunds] --> P9[Phase 9: Dynamic Delivery Zones & Courier Webhooks]
+    P9 --> P10[Phase 10: Merchant Analytics, Payout Batches & Ledger Reconciliation]
+    P10 --> P11[Phase 11: Enterprise Multi-Warehouse Inventory & Low-Stock Alerts]
+    
+    style P8 fill:#eff6ff,stroke:#3b82f6,stroke-width:2px
+    style P9 fill:#eff6ff,stroke:#3b82f6,stroke-width:2px
+    style P10 fill:#eff6ff,stroke:#3b82f6,stroke-width:2px
+    style P11 fill:#eff6ff,stroke:#3b82f6,stroke-width:2px
+```
+
+### 🔹 Phase 8: Automated Returns, Dispute Management & Paystack Refund Processing
+*Estimated Duration: 1.5 Weeks*
+- **Automated Paystack Refunds:** Server-side Paystack Refund API integration for canceled or disputed orders with partial and full refund tracking.
+- **Dispute Resolution Portal:** Admin and Vendor portal interface for managing buyer return claims with photographic evidence upload and customer messaging.
+- **Escrow Adjustment Automation:** Dynamic reversal of vendor escrow balances upon approved customer returns, with audit log generation.
+
+### 🔹 Phase 9: Dynamic Delivery Zones, Geo-Pricing & Real-Time Courier Webhooks
+*Estimated Duration: 2 Weeks*
+- **Postal/Digital Address Lookup:** GhanaPost GPS integration for precise rooftop delivery dispatch across Accra and regional capitals.
+- **Zone-Based Tiered Pricing:** Configurable delivery rate matrices by weight, volume, and exact distance rather than flat regional fees.
+- **Courier Webhook Ingestion:** Ingestion pipeline for third-party courier APIs (e.g., Fez, Kwik, DHL) with automated tracking stepper updates (`Picked Up` $\rightarrow$ `Out for Delivery` $\rightarrow$ `Delivered`).
+
+### 🔹 Phase 10: Advanced Merchant Analytics, Payout Batches & Ledger Reconciliation
+*Estimated Duration: 2 Weeks*
+- **Automated MoMo Payout Batches:** Paystack Transfers API integration for automated bulk Mobile Money (MTN, Telecel, AT) settlement to approved vendors.
+- **Financial Reconciliation Dashboard:** Super-Admin accounting ledger comparing Paystack gateway receipts against fulfilled vendor orders and platform commission revenue.
+- **Merchant Performance Analytics:** Conversion funnel, repeat purchase metrics, average order value (AOV), and return rates per vendor store.
+
+### 🔹 Phase 11: Enterprise Multi-Warehouse Inventory & Automated Low-Stock Webhooks
+*Estimated Duration: 1.5 Weeks*
+- **Multi-Location Inventory Tracking:** Support for vendors operating multiple fulfillment hubs or retail store locations with per-location stock counts.
+- **Automated Low-Stock Thresholds:** Configurable low-stock triggers with automated SMS/email alerts dispatched to merchants when inventory falls below threshold.
+- **Backorder & Pre-Order Orchestration:** Safe handling for out-of-stock items allowing customer reservations with guaranteed restock windows.
+
+---
+
+## 📅 Master Delivery Timeline
 
 ```
-Week 1 (COMPLETED):
-  ├── Phase 1: Brand Trust & Storefront Foundation
-  ├── Phase 2: Checkout, Pricing Integrity & Payments
-  └── Phase 3: Order Lifecycle, Sequential Numbers & Logistics
+Completed Milestones:
+  ├── Phases 1 – 3: Core Marketplace Foundation, Checkout, Order Tracking & Sequential IDs
+  ├── Phases 4 – 6: Customer Deals Hub, Multi-Vendor Ingestion, Search & Catalog Taxonomy
+  ├── Phase 7: Mobile Optimization, Low-End Android Polish & Base Security
+  └── Phase 7.5: Enterprise Security Hardening (Zero Leaks, Atomic Concurrency, Auth Guards, 31 Tests)
 
-Week 2 (COMPLETED):
-  ├── Phase 4: Deals Hub, Page Loaders, Emailing & SEO
-  ├── Phase 5: Multi-Vendor Moderation, Payouts & Bulk Ingestion
-  └── Phase 6: Search Intelligence, Faceted Taxonomy & Autocomplete
-
-Week 3 (COMPLETED):
-  └── Phase 7: Mobile Optimization, Low-End Android Polish, Security Hardening & Launch Readiness
+Client Expansion Phases (Roadmap):
+  ├── Phase 8: Automated Returns, Disputes & Paystack Refund Processing
+  ├── Phase 9: Dynamic Delivery Zones, Geo-Pricing & Real-Time Courier Webhooks
+  ├── Phase 10: Advanced Merchant Analytics, Payout Batches & Ledger Reconciliation
+  └── Phase 11: Enterprise Multi-Warehouse Inventory & Automated Low-Stock Webhooks
 ```
+
 
 

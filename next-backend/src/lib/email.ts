@@ -43,47 +43,8 @@ export class EmailService {
       return true;
     }
 
-    // 1. Cloudflare Email Sending API (Primary)
-    if (config.CLOUDFLARE_API_TOKEN && config.CLOUDFLARE_ACCOUNT_ID) {
-      try {
-        const response = await fetch(
-          `https://api.cloudflare.com/client/v4/accounts/${config.CLOUDFLARE_ACCOUNT_ID}/email/sending/send`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${config.CLOUDFLARE_API_TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: config.EMAIL_FROM || "NextDor <nextdor@nextdor.online>",
-              to,
-              subject,
-              html,
-              text: text || subject,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const errorBody = await response.text();
-          logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Cloudflare Email Service");
-          if (isDev) {
-            logger.warn("Development mode active: continuing despite external email error.");
-            return true;
-          }
-          return false;
-        }
-
-        logger.info({ to, subject }, "Email dispatched successfully via Cloudflare");
-        return true;
-      } catch (err) {
-        logger.error({ err, to }, "Network error during Cloudflare email dispatch");
-        return isDev;
-      }
-    }
-
-    // 2. Resend API (Fallback if configured)
-    if (config.RESEND_API_KEY) {
+    // 1. Resend API (Primary transactional email provider)
+    if (config.RESEND_API_KEY && !config.RESEND_API_KEY.includes("placeholder")) {
       try {
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -103,17 +64,65 @@ export class EmailService {
         if (!response.ok) {
           const errorBody = await response.text();
           logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Resend");
+          // Fall through to Cloudflare fallback if available
+          if (!config.CLOUDFLARE_API_TOKEN) {
+            if (isDev) {
+              logger.warn("Development mode active: continuing despite external email error.");
+              return true;
+            }
+            return false;
+          }
+        } else {
+          logger.info({ to, subject }, "Email dispatched successfully via Resend");
+          return true;
+        }
+      } catch (err) {
+        logger.error({ err, to }, "Network error during Resend email dispatch");
+        if (!config.CLOUDFLARE_API_TOKEN) {
+          return isDev;
+        }
+      }
+    }
+
+    // 2. Cloudflare Email Sending API (Fallback)
+    if (config.CLOUDFLARE_API_TOKEN && config.CLOUDFLARE_ACCOUNT_ID) {
+      try {
+        const fromRaw = config.EMAIL_FROM || "nextdor@nextdor.online";
+        const emailMatch = fromRaw.match(/<([^>]+)>/);
+        const senderAddress = emailMatch ? emailMatch[1].trim() : fromRaw.trim();
+
+        const response = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${config.CLOUDFLARE_ACCOUNT_ID}/email/sending/send`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${config.CLOUDFLARE_API_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: senderAddress,
+              to,
+              subject,
+              html,
+              text: text || subject,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Cloudflare Email Service");
           if (isDev) {
             logger.warn("Development mode active: continuing despite external email error.");
             return true;
           }
           return false;
+        } else {
+          logger.info({ to, subject }, "Email dispatched successfully via Cloudflare");
+          return true;
         }
-
-        logger.info({ to, subject }, "Email dispatched successfully via Resend");
-        return true;
       } catch (err) {
-        logger.error({ err, to }, "Network error during Resend email dispatch");
+        logger.error({ err, to }, "Network error during Cloudflare email dispatch");
         return isDev;
       }
     }

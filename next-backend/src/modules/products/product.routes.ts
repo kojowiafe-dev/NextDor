@@ -15,7 +15,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ProductRepository } from "./product.repository.js";
 import { ProductService } from "./product.service.js";
-import { AuthService } from "../auth/auth.service.js";
+import { requireAdmin } from "../../lib/auth.guards.js";
 
 export const productRoutes: FastifyPluginAsync = async (app) => {
   // Instantiate Repository and inject into Service (Dependency Inversion)
@@ -246,6 +246,7 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/",
     {
+      preHandler: requireAdmin,
       schema: {
         description: "Create a new product (Admin only)",
         tags: ["Products"],
@@ -270,22 +271,6 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "Authentication required" },
-        });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
-        return reply.status(403).send({
-          success: false,
-          error: { code: "FORBIDDEN", message: "Admin privileges required" },
-        });
-      }
-
       const body = req.body as any;
       const product = await productService.createProduct(body);
 
@@ -303,6 +288,7 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/bulk",
     {
+      preHandler: requireAdmin,
       schema: {
         description: "Bulk create products (Admin only)",
         tags: ["Products"],
@@ -337,22 +323,6 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "Authentication required" },
-        });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
-        return reply.status(403).send({
-          success: false,
-          error: { code: "FORBIDDEN", message: "Admin privileges required" },
-        });
-      }
-
       const body = req.body as { items: any[]; vendorId?: string };
       const result = await productService.bulkCreateProducts(body.items, body.vendorId);
 
@@ -371,6 +341,7 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   app.delete(
     "/:id",
     {
+      preHandler: requireAdmin,
       schema: {
         description: "Soft-delete a product by ID (Admin only)",
         tags: ["Products"],
@@ -385,22 +356,6 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "Authentication required" },
-        });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
-        return reply.status(403).send({
-          success: false,
-          error: { code: "FORBIDDEN", message: "Admin privileges required" },
-        });
-      }
-
       const { id } = req.params as { id: string };
       await productService.deleteProduct(id);
 
@@ -419,6 +374,7 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
   app.patch(
     "/:id",
     {
+      preHandler: requireAdmin,
       schema: {
         description: "Update product details (Admin only)",
         tags: ["Products"],
@@ -447,22 +403,6 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "Authentication required" },
-        });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (!["ADMIN", "SUPER_ADMIN"].includes(payload.role)) {
-        return reply.status(403).send({
-          success: false,
-          error: { code: "FORBIDDEN", message: "Admin privileges required to update catalog products" },
-        });
-      }
-
       const { id } = req.params as { id: string };
       const body = req.body as any;
       const updated = await productService.updateProduct(id, body);

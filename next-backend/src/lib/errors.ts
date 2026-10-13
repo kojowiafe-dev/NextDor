@@ -91,6 +91,12 @@ export class ServiceUnavailableError extends AppError {
   }
 }
 
+export class BadGatewayError extends AppError {
+  constructor(message = "Upstream service returned an invalid response") {
+    super(502, "BAD_GATEWAY", message);
+  }
+}
+
 // ── Type guard ────────────────────────────────────────────────────────────
 
 export function isAppError(error: unknown): error is AppError {

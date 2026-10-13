@@ -4,39 +4,10 @@
  * Exposes administration endpoints for customer management and analytics.
  */
 
-import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { AuthService } from "../auth/auth.service.js";
+import type { FastifyPluginAsync } from "fastify";
 import { adminCustomerService } from "./admin.customer.service.js";
 import { adminAnalyticsService } from "./admin.analytics.service.js";
-
-async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return reply.status(401).send({
-      success: false,
-      error: { code: "UNAUTHORIZED", message: "Admin authorization required." },
-    });
-  }
-
-  try {
-    const token = authHeader.slice(7);
-    const payload = AuthService.verifyAccessToken(token);
-
-    if (payload.role !== "ADMIN" && payload.role !== "SUPER_ADMIN") {
-      return reply.status(403).send({
-        success: false,
-        error: { code: "FORBIDDEN", message: "Platform administrator access required." },
-      });
-    }
-
-    (req as any).adminUser = payload;
-  } catch (err: any) {
-    return reply.status(401).send({
-      success: false,
-      error: { code: "UNAUTHORIZED", message: err.message || "Invalid or expired token" },
-    });
-  }
-}
+import { requireAdmin } from "../../lib/auth.guards.js";
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   /**
@@ -46,7 +17,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/customers",
     {
-      preHandler: requireAdminAuth,
+      preHandler: requireAdmin,
       schema: {
         description: "List registered customers with order counts and spend",
         tags: ["Admin"],
@@ -78,7 +49,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/customers/:id",
     {
-      preHandler: requireAdminAuth,
+      preHandler: requireAdmin,
       schema: {
         description: "Get customer details and order history by ID or email",
         tags: ["Admin"],
@@ -109,7 +80,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/analytics/overview",
     {
-      preHandler: requireAdminAuth,
+      preHandler: requireAdmin,
       schema: {
         description: "Get platform analytics overview, charts, and metrics",
         tags: ["Admin"],

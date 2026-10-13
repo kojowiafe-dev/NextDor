@@ -206,7 +206,7 @@ export async function cancelOrder(
  */
 export async function initializePayment(
   orderNumber: string,
-  options?: { email?: string; callbackUrl?: string; token?: string | null },
+  options?: { email?: string; callbackUrl?: string; method?: string; token?: string | null },
 ): Promise<{
   authorizationUrl: string | null;
   accessCode: string | null;
@@ -218,6 +218,7 @@ export async function initializePayment(
     body: JSON.stringify({
       email: options?.email,
       callbackUrl: options?.callbackUrl,
+      method: options?.method,
     }),
   });
 

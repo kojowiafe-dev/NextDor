@@ -48,6 +48,7 @@ import {
 import { prisma } from "../../lib/prisma.js";
 import bcrypt from "bcryptjs";
 import { AuditService } from "../audit/audit.service.js";
+import { requireAuth, requireSuperAdmin } from "../../lib/auth.guards.js";
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 
@@ -394,6 +395,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/me",
     {
+      preHandler: requireAuth,
       schema: {
         description: "Get currently authenticated user details",
         tags: ["Auth"],
@@ -401,20 +403,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      // Temporary: decode token manually until auth plugin is wired up
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "Authentication required" },
-        });
-      }
-
-      const token = authHeader.slice(7);
-      const payload = AuthService.verifyAccessToken(token);
-
       const user = await prisma.user.findUnique({
-        where: { id: payload.sub },
+        where: { id: req.authUser!.userId },
         select: {
           id: true,
           email: true,
@@ -446,23 +436,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/admins",
     {
+      preHandler: requireSuperAdmin,
       schema: {
         description: "List all administrators (Super Admin only)",
         tags: ["Auth"],
         security: [{ bearerAuth: [] }],
       },
     },
-    async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (payload.role !== "SUPER_ADMIN") {
-        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
-      }
-
+    async (_req, reply) => {
       const admins = await prisma.user.findMany({
         where: {
           role: { in: ["SUPER_ADMIN", "ADMIN"] },
@@ -492,6 +473,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/admins",
     {
+      preHandler: requireSuperAdmin,
       schema: {
         description: "Create an Operations Admin account (Super Admin only)",
         tags: ["Auth"],
@@ -510,16 +492,6 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (payload.role !== "SUPER_ADMIN") {
-        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
-      }
-
       const body = req.body as { name: string; email: string; password: string; phone?: string; role?: string };
       const normalizedEmail = body.email.toLowerCase().trim();
 
@@ -551,8 +523,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       });
 
       await AuditService.log({
-        userId: payload.sub,
-        userEmail: payload.email,
+        userId: req.authUser!.userId,
+        userEmail: req.authUser!.email,
         action: "ADMIN_CREATED",
         entity: "User",
         entityId: newAdmin.id,
@@ -576,6 +548,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.patch(
     "/admins/:id/status",
     {
+      preHandler: requireSuperAdmin,
       schema: {
         description: "Update administrator status (Super Admin only)",
         tags: ["Auth"],
@@ -595,20 +568,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (payload.role !== "SUPER_ADMIN") {
-        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
-      }
-
       const { id } = req.params as { id: string };
       const body = req.body as { status: "ACTIVE" | "SUSPENDED" };
 
-      if (id === payload.sub) {
+      if (id === req.authUser!.userId) {
         return reply.status(400).send({ success: false, error: { message: "You cannot change your own account status" } });
       }
 
@@ -635,8 +598,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       });
 
       await AuditService.log({
-        userId: payload.sub,
-        userEmail: payload.email,
+        userId: req.authUser!.userId,
+        userEmail: req.authUser!.email,
         action: body.status === "SUSPENDED" ? "ADMIN_DEACTIVATED" : "ADMIN_REACTIVATED",
         entity: "User",
         entityId: id,
@@ -660,6 +623,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/audit-logs",
     {
+      preHandler: requireSuperAdmin,
       schema: {
         description: "List platform audit logs (Super Admin only)",
         tags: ["Auth"],
@@ -677,16 +641,6 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        return reply.status(401).send({ success: false, error: { message: "Authentication required" } });
-      }
-
-      const payload = AuthService.verifyAccessToken(authHeader.slice(7));
-      if (payload.role !== "SUPER_ADMIN") {
-        return reply.status(403).send({ success: false, error: { message: "Super Admin authorization required" } });
-      }
-
       const query = req.query as {
         action?: string;
         entity?: string;
