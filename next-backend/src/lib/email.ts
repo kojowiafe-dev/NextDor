@@ -111,19 +111,23 @@ export class EmailService {
 
         if (!response.ok) {
           const errorBody = await response.text();
-          logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Cloudflare Email Service");
           if (isDev) {
-            logger.warn("Development mode active: continuing despite external email error.");
+            logger.warn({ status: response.status, to }, "Cloudflare email authentication rejected in dev. Continuing without blocking.");
             return true;
           }
+          logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Cloudflare Email Service");
           return false;
         } else {
           logger.info({ to, subject }, "Email dispatched successfully via Cloudflare");
           return true;
         }
       } catch (err) {
+        if (isDev) {
+          logger.warn({ err, to }, "Network error during Cloudflare email dispatch in dev mode");
+          return true;
+        }
         logger.error({ err, to }, "Network error during Cloudflare email dispatch");
-        return isDev;
+        return false;
       }
     }
 

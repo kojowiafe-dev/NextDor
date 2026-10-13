@@ -130,6 +130,10 @@ export class PaymentService {
     }
 
     // Development convenience: let the sandbox flow continue with a local reference.
+    await this.repo.createPending({ orderId: order.id, reference, amount: order.total, method }).catch((err) => {
+      logger.warn({ err, reference }, "Could not record pending payment in dev fallback");
+    });
+
     return {
       authorizationUrl: null,
       accessCode: null,
