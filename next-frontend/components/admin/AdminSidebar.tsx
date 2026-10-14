@@ -58,38 +58,38 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
 
   return (
     <aside
-      className={`flex h-full flex-col justify-between bg-[#0d1117] transition-all ${
-        onClose ? "overflow-y-auto w-64 shadow-2xl" : "overflow-hidden " + (collapsed ? "w-16" : "w-60")
+      className={`flex h-full flex-col justify-between bg-[#0d1117] transition-all duration-200 ${
+        onClose ? "overflow-hidden w-64 shadow-2xl" : "overflow-hidden " + (collapsed ? "w-16" : "w-64")
       }`}
     >
       {/* Top Section: Logo + Navigation */}
-      <div className={`flex flex-col min-h-0 flex-1 ${onClose ? "" : "overflow-hidden"}`}>
+      <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
         {/* Logo Bar */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/5 px-4 py-2">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 px-4 py-2.5">
           <Link
             href="/admin"
             onClick={onClose}
-            className="flex items-center gap-2 overflow-hidden"
+            className="flex items-center gap-2.5 overflow-hidden"
           >
             {collapsed ? (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-sm font-bold text-zinc-900 shadow-sm">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-base font-black text-zinc-950 shadow-md">
                 N
               </div>
             ) : (
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-1">
                 <Image
                   src="/logo.png"
                   alt="NextDor Admin"
-                  width={125}
-                  height={30}
-                  className="h-6.5 w-auto object-contain"
+                  width={155}
+                  height={42}
+                  className="h-8.5 w-auto object-contain drop-shadow-xs"
                   priority
                 />
                 <span
-                  className={`w-fit rounded px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-wider ${
+                  className={`w-fit rounded px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider ${
                     user?.role === "super_admin"
-                      ? "bg-[#ff9900]/20 text-[#ff9900]"
-                      : "bg-blue-500/20 text-blue-400"
+                      ? "bg-[#ff9900]/20 text-[#ff9900] border border-[#ff9900]/30"
+                      : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                   }`}
                 >
                   {user?.role === "super_admin" ? "Super Admin" : "Operations"}
@@ -111,8 +111,8 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
           )}
         </div>
 
-        {/* Nav list */}
-        <nav className={`flex-1 px-2.5 py-2 ${onClose ? "" : "overflow-hidden"}`}>
+        {/* Nav list - scrollable on short screens so nothing is clipped */}
+        <nav className="flex-1 min-h-0 px-2.5 py-2 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
           {!collapsed && (
             <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
               Main Menu
@@ -129,12 +129,12 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
                     title={collapsed ? item.label : undefined}
                     className={`group flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all ${
                       active
-                        ? "bg-[#ff9900]/15 text-[#ff9900]"
+                        ? "bg-[#ff9900]/15 text-[#ff9900] shadow-xs"
                         : "text-zinc-300 hover:bg-white/5 hover:text-white"
                     } ${collapsed ? "justify-center" : ""}`}
                   >
                     <item.icon
-                      className={`h-4 w-4 shrink-0 ${active ? "text-[#ff9900]" : "text-zinc-400 group-hover:text-white"}`}
+                      className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${active ? "text-[#ff9900]" : "text-zinc-400 group-hover:text-white"}`}
                     />
                     {!collapsed && (
                       <>
@@ -150,46 +150,53 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
         </nav>
       </div>
 
-      {/* Bottom Section: User Profile + Actions with Full Text */}
-      <div className="shrink-0 border-t border-white/5 p-2.5">
-        {!collapsed && (
-          <div className="mb-1.5 flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 bg-white/[0.02]">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-xs font-bold text-[#ff9900]">
-              {user?.avatarInitials}
+      {/* Bottom Section: Compact User Profile + Action Icons */}
+      <div className="shrink-0 border-t border-white/5 p-2 bg-black/20">
+        <div
+          className={`flex items-center ${
+            collapsed ? "flex-col gap-2 justify-center py-1" : "justify-between gap-2 px-1.5 py-1"
+          }`}
+        >
+          {/* User Info */}
+          <div className="flex items-center gap-2 min-w-0" title={user?.name ?? undefined}>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-xs font-bold text-[#ff9900] ring-1 ring-[#ff9900]/30">
+              {user?.avatarInitials ?? "A"}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-white">{user?.name}</p>
-              <p className="truncate text-[9.5px] text-zinc-400">
-                {user?.role === "super_admin" ? "Platform Root (Super Admin)" : "Operations Administrator"}
-              </p>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-white leading-tight">{user?.name}</p>
+                <p className="truncate text-[9.5px] text-zinc-400 leading-tight">
+                  {user?.role === "super_admin" ? "Super Admin" : "Operations"}
+                </p>
+              </div>
+            )}
           </div>
-        )}
-        <Link
-          href="/"
-          onClick={onClose}
-          title={collapsed ? "Back to Storefront" : undefined}
-          className={`mb-1 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/5 hover:text-white ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          <ExternalLink className="h-4 w-4 shrink-0 text-[#ff9900]" />
-          {!collapsed && <span>Back to Storefront</span>}
-        </Link>
-        <button
-          type="button"
-          onClick={() => {
-            onClose?.();
-            logout();
-          }}
-          title={collapsed ? "Sign Out" : undefined}
-          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-red-500/10 hover:text-red-400 ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
+
+          {/* Action Icons: Back to Storefront & Sign Out */}
+          <div className={`flex items-center gap-1 shrink-0 ${collapsed ? "flex-col" : ""}`}>
+            <Link
+              href="/"
+              onClick={onClose}
+              title="Back to Storefront"
+              aria-label="Back to Storefront"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-[#ff9900] active:scale-95 transition"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                onClose?.();
+                logout();
+              }}
+              title="Sign Out"
+              aria-label="Sign Out"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-500/15 hover:text-red-400 active:scale-95 transition"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
   );
