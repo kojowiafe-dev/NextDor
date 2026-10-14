@@ -341,6 +341,7 @@ model Order {
   payments        Payment[]
   statusHistory   OrderStatusHistory[]
   coupon          Coupon?              @relation(fields: [couponId], references: [id])
+  returnRequests  ReturnRequest[]
 
   @@index([userId])
   @@index([number])
@@ -363,6 +364,7 @@ enum PaymentStatus {
   UNPAID
   PARTIAL
   PAID
+  PARTIALLY_REFUNDED
   REFUNDED
 }
 
@@ -512,6 +514,7 @@ model Payment {
 
   order       Order           @relation(fields: [orderId], references: [id])
   attempts    PaymentAttempt[]
+  refunds     Refund[]
 
   @@index([orderId])
   @@index([paystackRef])
@@ -638,4 +641,92 @@ model AuditLog {
   @@index([entity])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RETURNS, DISPUTES & REFUNDS (Phase 8)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Customer return or dispute claim against an order.
+/// DESIGN: Supports the 48-hour escrow protection model.
+/// Customers submit requests with reason and photo evidence.
+/// Merchants or admins review, and when approved, an automated
+/// Paystack refund settles the return while balancing vendor earnings.
+model ReturnRequest {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId         String        @db.Uuid
+  userId          String?       @db.Uuid
+  vendorId        String?       @db.Uuid
+  reason          ReturnReason
+  details         String?
+  evidenceUrls    String[]      @default([])
+  status          ReturnStatus  @default(REQUESTED)
+  /// If disputed by vendor/customer, escalated to super-admin
+  isDisputed      Boolean       @default(false)
+  disputeNotes    String?
+  items           Json          // Array of { orderItemId, productId, productName, quantity, refundAmount }
+  refundAmount    Decimal       @db.Decimal(12, 2)
+  adminNote       String?
+  reviewedBy      String?       @db.Uuid
+  reviewedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  refunds         Refund[]
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("return_requests")
+}
+
+enum ReturnReason {
+  DAMAGED_ITEM
+  DEFECTIVE_PRODUCT
+  WRONG_ITEM_SENT
+  NOT_AS_DESCRIBED
+  MISSING_PARTS
+  OTHER
+}
+
+enum ReturnStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+/// Ledger of processed Paystack refunds.
+/// DESIGN: Tracks gateway refund ID, transaction reference,
+/// amount, and settlement status for financial reconciliation.
+model Refund {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId         String       @db.Uuid
+  returnRequestId   String?      @db.Uuid
+  paystackRefundId  String?      @unique
+  paystackRef       String
+  amount            Decimal      @db.Decimal(12, 2)
+  currency          String       @default("GHS")
+  status            RefundStatus @default(PENDING)
+  reason            String?
+  gatewayResponse   Json?
+  processedAt       DateTime?
+  createdAt         DateTime     @default(now())
+
+  payment           Payment        @relation(fields: [paymentId], references: [id])
+  returnRequest     ReturnRequest? @relation(fields: [returnRequestId], references: [id])
+
+  @@index([paymentId])
+  @@index([returnRequestId])
+  @@index([paystackRef])
+  @@map("refunds")
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
 }

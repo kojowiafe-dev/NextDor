@@ -152,11 +152,12 @@ graph TD
     style P11 fill:#eff6ff,stroke:#3b82f6,stroke-width:2px
 ```
 
-### 🔹 Phase 8: Automated Returns, Dispute Management & Paystack Refund Processing
-*Estimated Duration: 1.5 Weeks*
-- **Automated Paystack Refunds:** Server-side Paystack Refund API integration for canceled or disputed orders with partial and full refund tracking.
-- **Dispute Resolution Portal:** Admin and Vendor portal interface for managing buyer return claims with photographic evidence upload and customer messaging.
-- **Escrow Adjustment Automation:** Dynamic reversal of vendor escrow balances upon approved customer returns, with audit log generation.
+### 🟢 Phase 8: Automated Returns, Dispute Management & Paystack Refund Processing
+**Status: COMPLETED (100%)**
+- **Automated Paystack Refunds:** Server-side Paystack Refund API (`POST /refund`) integrated with atomic idempotent transactions and integer pesewas conversion.
+- **Dispute Resolution Portal:** Presentation & service layer supporting customer claims (`POST /orders/:number/returns`), merchant reviews (`POST /vendors/returns/:id/review`), and admin arbitration (`POST /admin/returns/:id/review`).
+- **Escrow Adjustment Automation:** Reversal and proportional deductions of vendor escrow balances (`vendorEarnings` and commission conservation) upon approved returns.
+- **Unit Testing Baseline:** Vitest suite verifying monetary conservation, partial vs. full refund status transitions, and integer arithmetic.
 
 ### 🔹 Phase 9: Dynamic Delivery Zones, Geo-Pricing & Real-Time Courier Webhooks
 *Estimated Duration: 2 Weeks*

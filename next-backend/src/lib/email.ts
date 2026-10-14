@@ -111,11 +111,15 @@ export class EmailService {
 
         if (!response.ok) {
           const errorBody = await response.text();
+          const hint =
+            response.status === 401 || response.status === 403
+              ? "Token is missing the 'Email Sending: Edit' permission or the sender domain is not onboarded. Run `npm run email:check`."
+              : undefined;
           if (isDev) {
-            logger.warn({ status: response.status, to }, "Cloudflare email authentication rejected in dev. Continuing without blocking.");
+            logger.warn({ status: response.status, to, hint }, "Cloudflare email rejected in dev. Continuing without blocking.");
             return true;
           }
-          logger.error({ status: response.status, body: errorBody, to }, "Failed to send email via Cloudflare Email Service");
+          logger.error({ status: response.status, body: errorBody, to, hint }, "Failed to send email via Cloudflare Email Service");
           return false;
         } else {
           logger.info({ to, subject }, "Email dispatched successfully via Cloudflare");

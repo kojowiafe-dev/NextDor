@@ -261,12 +261,17 @@ To ensure enterprise-grade reliability, maintainability, and scalability:
 6. **Automated Unit Testing Baseline**:
    - Created comprehensive unit tests in Vitest covering CORS policies, Paystack webhook HMAC verification, and Money value object invariants with **100% pass rate** (31 tests passed).
 
+7. **Phase 8: Automated Returns, Disputes & Paystack Refunds**:
+   - Added `ReturnRequest` and `Refund` data models and generated standalone migration `20261014000000_phase8_returns_refunds`.
+   - Built complete clean-architecture module in `src/modules/returns/` (`ReturnRepository`, `ReturnService`, `return.routes.ts`) providing customer filing within the 48-hour escrow window, merchant reviews, dispute escalation, and automated Paystack refund settlement.
+   - Enforced proportional mathematical conservation on vendor order balance and platform commission deductions.
+
 ---
 
 ## 12. Verification & Operational Health
 
 The entire platform is fully verified and compiling cleanly:
-- **`next-backend`**: `npx tsc --noEmit` and `npx vitest run` pass with **0 errors** across all **31 tests**.
+- **`next-backend`**: `npx tsc --noEmit` and `npx vitest run` pass with **0 errors** across all **35 tests** (100% pass rate).
 - **`next-frontend`**: `npx tsc --noEmit` passes with **0 type errors**; `npx eslint --quiet` passes with **0 lint errors**.
 - **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `PROJECT_PHASES_AND_ROADMAP.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`, `codebase_analysis.md`) are synchronized with the live code.
 

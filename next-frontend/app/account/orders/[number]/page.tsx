@@ -314,16 +314,26 @@ export default function OrderDetailPage({
               </div>
             </div>
 
-            {/* Cancel button */}
-            {canCancel && (
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                className="mt-4 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/30 disabled:opacity-50"
+            {/* Action buttons */}
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              <Link
+                href={`/track?order=${encodeURIComponent(order.number)}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#ff9900] px-3.5 py-1.5 text-xs font-bold text-zinc-950 transition hover:bg-[#e68a00]"
               >
-                {cancelling ? "Cancelling…" : "Cancel Order"}
-              </button>
-            )}
+                <Truck className="h-3.5 w-3.5" />
+                Live Storefront Tracker
+              </Link>
+
+              {canCancel && (
+                <button
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  className="rounded-lg bg-red-500/20 px-3.5 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  {cancelling ? "Cancelling…" : "Cancel Order"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Two-col layout on desktop */}

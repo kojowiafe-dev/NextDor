@@ -1040,6 +1040,14 @@ Development
 - [x] **Masked Public Tracking Projections:** Protected internal payment references and vendor metadata on public tracking routes (`findPublicTracking`).
 - [x] **Automated Unit Testing Baseline:** Built and executed 31 unit tests across origins, Paystack security, financial conservation, and SSRF URL safety (100% pass rate).
 
+### Phase 8 — Returns, Disputes & Automated Paystack Refunds ✅ (Completed)
+- [x] **Schema & Migration:** Created `ReturnRequest`, `Refund` models and `ReturnReason`, `ReturnStatus`, `RefundStatus` enums with `PARTIALLY_REFUNDED` status support and generated standalone migration `20261014000000_phase8_returns_refunds`.
+- [x] **Customer Return Filing:** Endpoint `POST /api/v1/orders/:number/returns` validates items, limits claims to the 48-hour escrow protection window, and calculates exact refund amounts.
+- [x] **Merchant & Admin Review Workflows:** `POST /api/v1/vendors/returns/:id/review` and `POST /api/v1/admin/returns/:id/review` allow approval, rejection, and dispute handling (`/api/v1/returns/:id/dispute`).
+- [x] **Automated Paystack Refund Integration:** `POST https://api.paystack.co/refund` calls with minor pesewas conversion (`toPesewas`), test sandbox mock fallback, and atomic database state updates.
+- [x] **Escrow Balance Invariant:** Settle transactions proportionately debit `VendorOrder.vendorEarnings` and `commissionAmount` while preserving total balance conservation without rounding leaks.
+- [x] **Automated Unit Tests:** 35 passed unit tests (100% pass rate) verifying financial conservation and status progression.
+
 ---
 
 ## 13. Technology Stack & Key Dependencies

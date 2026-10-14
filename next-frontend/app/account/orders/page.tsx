@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package, ChevronRight, RefreshCw } from "lucide-react";
+import { Package, ChevronRight, RefreshCw, Truck } from "lucide-react";
 import Link from "next/link";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { useAuth } from "@/context/AuthContext";
@@ -43,19 +43,22 @@ function OrderRow({ order }: { order: Order }) {
   const extra = itemCount > 1 ? ` +${itemCount - 1} more` : "";
 
   return (
-    <Link
-      href={`/account/orders/${order.number}`}
-      className="group flex items-center gap-4 rounded-xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:border-[#ff9900] hover:shadow-md"
-    >
+    <div className="group flex items-center gap-4 rounded-xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:border-[#ff9900] hover:shadow-md">
       {/* Icon */}
-      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#fff3e0]">
+      <Link
+        href={`/account/orders/${order.number}`}
+        className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#fff3e0] transition hover:scale-105"
+      >
         <Package className="h-6 w-6 text-[#ff9900]" />
-      </div>
+      </Link>
 
       {/* Details */}
-      <div className="min-w-0 flex-1">
+      <Link
+        href={`/account/orders/${order.number}`}
+        className="min-w-0 flex-1 block"
+      >
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-zinc-900">{order.number}</span>
+          <span className="font-semibold text-zinc-900 group-hover:text-[#ff9900] transition-colors">{order.number}</span>
           <StatusBadge status={order.status} />
         </div>
         <p className="mt-0.5 truncate text-sm text-zinc-500">
@@ -68,16 +71,31 @@ function OrderRow({ order }: { order: Order }) {
             year: "numeric",
           })}
         </p>
-      </div>
+      </Link>
 
-      {/* Total + arrow */}
-      <div className="flex flex-shrink-0 flex-col items-end gap-1">
+      {/* Total + actions */}
+      <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
         <span className="font-bold text-zinc-900">
           GH₵ {Number(order.total).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
         </span>
-        <ChevronRight className="h-4 w-4 text-zinc-300 transition-colors group-hover:text-[#ff9900]" />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/track?order=${encodeURIComponent(order.number)}`}
+            className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-xs font-semibold text-[#c7511f] hover:bg-amber-100 transition"
+          >
+            <Truck className="h-3 w-3" />
+            Track
+          </Link>
+          <Link
+            href={`/account/orders/${order.number}`}
+            aria-label={`View order ${order.number}`}
+            className="p-1 text-zinc-300 transition-colors hover:text-[#ff9900]"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

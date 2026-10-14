@@ -12,6 +12,7 @@
     "db:migrate:prod": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "email:check": "tsx src/scripts/check-email.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
