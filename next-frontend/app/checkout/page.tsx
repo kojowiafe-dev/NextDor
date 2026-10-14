@@ -18,7 +18,13 @@ import {
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatPrice } from "@/lib/utils";
-import { placeOrder, ordersCache, initializePayment, verifyPayment } from "@/lib/orders/api";
+import {
+  placeOrder,
+  ordersCache,
+  initializePayment,
+  verifyPayment,
+  fetchDeliveryQuote,
+} from "@/lib/orders/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +39,7 @@ type FormData = {
   address: string;
   city: string;
   region: string;
+  digitalAddress?: string;
   delivery: DeliveryMethod;
   payment: PaymentMethod;
   momoNumber?: string;
@@ -133,6 +140,9 @@ export default function CheckoutPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPlacing, setIsPlacing] = useState(false);
 
+  const [deliveryOptions, setDeliveryOptions] = useState(DELIVERY_OPTIONS);
+  const [isQuoting, setIsQuoting] = useState(false);
+
   // Pre-fill from auth when it hydrates
   useEffect(() => {
     if (user) {
@@ -147,13 +157,62 @@ export default function CheckoutPage() {
     }
   }, [user]);
 
+  // Dynamic Geo-Delivery Quote Fetching (Phase 9)
+  useEffect(() => {
+    if (!form.region) return;
+
+    let cancelled = false;
+    async function loadQuote() {
+      setIsQuoting(true);
+      try {
+        const quotes = await fetchDeliveryQuote({
+          region: form.region,
+          district: form.city || undefined,
+          digitalAddress: form.digitalAddress || undefined,
+        });
+
+        if (!cancelled && quotes.length > 0) {
+          setDeliveryOptions((prev) =>
+            prev.map((opt) => {
+              const matched = quotes.find((q) => q.method.toLowerCase() === opt.id);
+              if (matched) {
+                const subText =
+                  matched.method === "STANDARD"
+                    ? `${matched.minDays}–${matched.maxDays} business days (${matched.zoneName})`
+                    : matched.method === "EXPRESS"
+                    ? `Expedited delivery within ${matched.maxDays} day(s)`
+                    : opt.sub;
+                return {
+                  ...opt,
+                  price: matched.totalFee,
+                  sub: subText,
+                };
+              }
+              return opt;
+            })
+          );
+        }
+      } catch (err) {
+        console.warn("Delivery quote update fallback:", err);
+      } finally {
+        if (!cancelled) setIsQuoting(false);
+      }
+    }
+
+    const timer = setTimeout(loadQuote, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [form.region, form.city, form.digitalAddress]);
+
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
   }
 
   const deliveryFee =
-    DELIVERY_OPTIONS.find((d) => d.id === form.delivery)?.price ?? 20;
+    deliveryOptions.find((d) => d.id === form.delivery)?.price ?? 25;
   const total = subtotal + deliveryFee;
 
   function validate() {
@@ -203,6 +262,7 @@ export default function CheckoutPage() {
             street: form.address.trim(),
             city: form.city.trim(),
             region: form.region.trim(),
+            digitalAddress: form.digitalAddress?.trim() || undefined,
             recipientName: `${form.firstName} ${form.lastName}`.trim(),
             recipientPhone: form.phone.trim(),
           },
@@ -477,13 +537,25 @@ export default function CheckoutPage() {
                     {errors.region && <p className="mt-1 text-xs text-red-600">{errors.region}</p>}
                   </Field>
                 </div>
+                <Field label="GhanaPost GPS / Digital Address (Optional)" id="chk-gps">
+                  <input
+                    id="chk-gps"
+                    value={form.digitalAddress ?? ""}
+                    onChange={(e) => set("digitalAddress", e.target.value.toUpperCase())}
+                    className={inputCls}
+                    placeholder="e.g. GA-183-9281 or AK-039-4491"
+                  />
+                  <p className="text-[11px] text-zinc-500">
+                    Provides our dispatch couriers with rooftop coordinates for faster delivery.
+                  </p>
+                </Field>
               </div>
             </Section>
 
             {/* 3. Delivery method */}
             <Section number="3" title="Delivery Method">
               <div className="space-y-3">
-                {DELIVERY_OPTIONS.map((opt) => (
+                {deliveryOptions.map((opt) => (
                   <label
                     key={opt.id}
                     className={`flex cursor-pointer items-center gap-4 rounded-xl border p-4 transition-colors ${

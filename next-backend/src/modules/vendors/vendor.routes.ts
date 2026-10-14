@@ -19,7 +19,10 @@ import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { SyncService } from "../sync/sync.service.js";
+import { MerchantAnalyticsService } from "./merchant.analytics.service.js";
 import { requireAdmin, requireVendor, resolveVendorId } from "../../lib/auth.guards.js";
+
+const merchantAnalyticsService = new MerchantAnalyticsService();
 
 // Extend FastifyRequest with vendor tenant context
 declare module "fastify" {
@@ -681,6 +684,40 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({
         success: true,
         data,
+      });
+    }
+  );
+
+  /**
+   * GET /vendors/portal/analytics
+   * Deep merchant performance analytics, AOV, repeat customers, and return rates.
+   */
+  app.get(
+    "/portal/analytics",
+    {
+      preHandler: [requireVendorAuth],
+      schema: {
+        description: "Get detailed merchant performance analytics, AOV, and return rates",
+        tags: ["Vendor Portal"],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: "object",
+          properties: {
+            timeRange: { type: "string", enum: ["7d", "30d", "90d", "all"], default: "30d" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { timeRange = "30d" } = req.query as { timeRange?: string };
+      const analytics = await merchantAnalyticsService.getVendorMetrics(
+        req.vendorId!,
+        timeRange
+      );
+
+      return reply.send({
+        success: true,
+        data: analytics,
       });
     }
   );

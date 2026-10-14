@@ -16,6 +16,7 @@ import {
   Store,
   ShieldCheck,
   FileText,
+  Wallet,
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -26,6 +27,7 @@ const coreNavItems = [
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Customers", href: "/admin/customers", icon: Users },
   { label: "Merchants", href: "/admin/merchants", icon: Store },
+  { label: "Payouts & Ledger", href: "/admin/payouts", icon: Wallet },
   { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
 ];
 

@@ -96,6 +96,7 @@ model Vendor {
   bankAccountNumber      String?
   bankAccountName        String?
   paystackSubaccountCode String?
+  paystackRecipientCode  String?            // Paystack Transfer recipient code (e.g. RCP_xxxxxx)
   // Store integration (WooCommerce / External Sync)
   wcStoreUrl             String?
   wcConsumerKey          String?
@@ -342,6 +343,7 @@ model Order {
   statusHistory   OrderStatusHistory[]
   coupon          Coupon?              @relation(fields: [couponId], references: [id])
   returnRequests  ReturnRequest[]
+  shipments       Shipment[]
 
   @@index([userId])
   @@index([number])
@@ -465,21 +467,54 @@ enum VendorOrderStatus {
 model VendorPayout {
   id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   vendorId            String       @db.Uuid
+  batchId             String?      @db.Uuid
   amount              Decimal      @db.Decimal(12, 2)
   currency            String       @default("GHS")
   status              PayoutStatus @default(PENDING)
   paystackTransferRef String?      @unique
+  recipientCode       String?      // Paystack recipient code used for this transfer
+  failureReason       String?
   gatewayResponse     Json?
   paidAt              DateTime?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
   vendor              Vendor       @relation(fields: [vendorId], references: [id])
+  batch               PayoutBatch? @relation(fields: [batchId], references: [id])
   vendorOrders        VendorOrder[]
 
   @@index([vendorId])
+  @@index([batchId])
   @@index([status])
   @@map("vendor_payouts")
+}
+
+/// An automated batch of disbursements executed together.
+model PayoutBatch {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchReference     String            @unique // e.g. "PB-20261014-ABC123"
+  totalAmount        Decimal           @db.Decimal(12, 2)
+  totalCount         Int
+  status             PayoutBatchStatus @default(PENDING)
+  paystackBatchCode  String?
+  notes              String?
+  createdBy          String?           @db.Uuid
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  payouts            VendorPayout[]
+
+  @@index([status])
+  @@index([batchReference])
+  @@map("payout_batches")
+}
+
+enum PayoutBatchStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  PARTIAL
+  FAILED
 }
 
 enum PayoutStatus {
@@ -730,3 +765,105 @@ enum RefundStatus {
   PROCESSED
   FAILED
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// DYNAMIC DELIVERY ZONES, GEO-PRICING & COURIERS (Phase 9)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Geographic delivery zones across Ghana regions and postal districts.
+/// DESIGN: Supports tiered pricing by region (e.g. Greater Accra, Ashanti, Western)
+/// and districts with digital address / GhanaPost GPS prefix matching.
+model DeliveryZone {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String         // e.g. "Greater Accra Metropolitan", "Kumasi Central", "Western Regional"
+  code             String         @unique // e.g. "ACCRA_METRO", "KUMASI_URBAN", "REGIONAL_NORTH"
+  region           String         // e.g. "Greater Accra", "Ashanti", "Western"
+  districts        String[]       @default([]) // e.g. ["Accra", "Tema", "Ga East", "Adenta"]
+  postCodePrefixes String[]       @default([]) // e.g. ["GA", "GW", "GE", "AK"] (GhanaPost GPS prefixes)
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  rates            DeliveryRate[]
+
+  @@index([region])
+  @@index([code])
+  @@map("delivery_zones")
+}
+
+/// Dynamic pricing rate matrix per delivery zone, method, and weight bands.
+/// DESIGN: Replaces flat rate fees with tiered rates based on service speed and package weight.
+model DeliveryRate {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  zoneId          String         @db.Uuid
+  deliveryMethod  DeliveryMethod @default(STANDARD) // STANDARD, EXPRESS, PICKUP
+  baseFee         Decimal        @db.Decimal(12, 2) // Base shipping fee in GHS
+  perKgFee        Decimal        @default(0) @db.Decimal(12, 2) // Extra fee per kg above min weight
+  minDays         Int            @default(1) // e.g. 1
+  maxDays         Int            @default(3) // e.g. 3
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  zone            DeliveryZone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, deliveryMethod])
+  @@index([zoneId])
+  @@map("delivery_rates")
+}
+
+/// A courier dispatch shipment linked to an order.
+/// DESIGN: Connects regional logistics partners (e.g., Fez, Kwik, DHL)
+/// with real-time tracking numbers and automated webhook milestone updates.
+model Shipment {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId            String           @db.Uuid
+  carrier            String           // e.g. "FEZ", "KWIK", "DHL", "INTERNAL_COURIER"
+  trackingNumber     String           @unique
+  trackingUrl        String?
+  status             ShipmentStatus   @default(LABEL_CREATED)
+  estimatedDelivery  DateTime?
+  actualDelivery     DateTime?
+  dispatchNotes      String?
+  courierPhone       String?
+  courierName        String?
+  metadata           Json?            // Raw courier payload
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  order              Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events             ShipmentEvent[]
+
+  @@index([orderId])
+  @@index([trackingNumber])
+  @@index([status])
+  @@map("shipments")
+}
+
+enum ShipmentStatus {
+  LABEL_CREATED
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED_ATTEMPT
+  RETURNED
+}
+
+/// Individual immutable tracking milestone event logged from couriers.
+model ShipmentEvent {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shipmentId  String         @db.Uuid
+  status      ShipmentStatus
+  location    String?        // e.g. "Accra Central Sort Facility", "Spintex Hub"
+  description String?        // e.g. "Package received at logistics depot"
+  rawPayload  Json?          // Third-party webhook data snapshot
+  occurredAt  DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+
+  shipment    Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@map("shipment_events")
+}
+

@@ -69,6 +69,8 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
                 street: { type: "string", minLength: 1, maxLength: 300 },
                 city: { type: "string", minLength: 1, maxLength: 100 },
                 region: { type: "string", minLength: 1, maxLength: 100 },
+                digitalAddress: { type: "string", maxLength: 50 },
+                postcode: { type: "string", maxLength: 20 },
                 recipientName: { type: "string", maxLength: 150 },
                 recipientPhone: { type: "string", maxLength: 30 },
               },

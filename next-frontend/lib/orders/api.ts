@@ -88,6 +88,8 @@ export type CheckoutPayload = {
     city: string;
     region: string;
     label?: string;
+    digitalAddress?: string;
+    postcode?: string;
     recipientName?: string;
     recipientPhone?: string;
   };
@@ -288,4 +290,41 @@ export async function fetchPublicOrderTracking(
     throw new Error(data?.error?.message ?? "Order tracking details not found");
   }
   return data.data;
+}
+
+/**
+ * Dynamic Logistics & Delivery Quote API (Phase 9)
+ */
+export type DeliveryQuoteOption = {
+  method: "STANDARD" | "EXPRESS" | "PICKUP";
+  baseFee: number;
+  weightFee: number;
+  totalFee: number;
+  minDays: number;
+  maxDays: number;
+  zoneCode: string;
+  zoneName: string;
+};
+
+export async function fetchDeliveryQuote(params: {
+  region: string;
+  district?: string;
+  postcode?: string;
+  digitalAddress?: string;
+  weightKg?: number;
+}): Promise<DeliveryQuoteOption[]> {
+  try {
+    const res = await fetch(`${API_BASE}/logistics/quote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    if (res.ok && data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (err) {
+    console.warn("Logistics quote API fallback:", err);
+  }
+  return [];
 }

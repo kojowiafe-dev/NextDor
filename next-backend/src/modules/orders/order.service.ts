@@ -24,6 +24,8 @@ import { logger } from "../../lib/logger.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { SmsService } from "../../lib/sms.js";
+import { LogisticsService } from "../logistics/logistics.service.js";
+import { LogisticsRepository } from "../logistics/logistics.repository.js";
 import {
   NotFoundError,
   BadRequestError,
@@ -54,6 +56,8 @@ export type CheckoutInput = {
     street: string;
     city: string;
     region: string;
+    digitalAddress?: string;
+    postcode?: string;
     recipientName?: string;
     recipientPhone?: string;
   };
@@ -94,7 +98,14 @@ export const ALLOWED_VENDOR_TRANSITIONS: Partial<Record<VendorOrderStatus, Vendo
 // ─── Order Service ────────────────────────────────────────────────────────────
 
 export class OrderService {
-  constructor(private readonly repo: OrderRepository) {}
+  private readonly logisticsService: LogisticsService;
+
+  constructor(
+    private readonly repo: OrderRepository,
+    logisticsService?: LogisticsService,
+  ) {
+    this.logisticsService = logisticsService ?? new LogisticsService(new LogisticsRepository());
+  }
 
   /**
    * Checkout — validates cart, snapshots prices, splits by vendor, persists.
@@ -193,7 +204,21 @@ export class OrderService {
       Money.zero(),
     );
 
-    const deliveryFee = Money.fromMajor(DELIVERY_FEES[deliveryMethod]);
+    // Dynamic Geo-Delivery Pricing (Phase 9) with fallback to default fee schedule
+    let deliveryFee = Money.fromMajor(DELIVERY_FEES[deliveryMethod]);
+    try {
+      if (input.shippingAddress?.region) {
+        deliveryFee = await this.logisticsService.resolveCheckoutDeliveryFee({
+          region: input.shippingAddress.region,
+          district: input.shippingAddress.city,
+          postalCode: input.shippingAddress.digitalAddress || input.shippingAddress.postcode,
+          method: deliveryMethod,
+        });
+      }
+    } catch {
+      // Graceful fallback to static DELIVERY_FEES[deliveryMethod]
+    }
+
     const discount = Money.zero(); // Phase 2: apply coupon discount here
     const total = itemsSubtotal.add(deliveryFee).subtract(discount);
 

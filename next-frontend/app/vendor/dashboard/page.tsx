@@ -44,12 +44,18 @@ import {
   Search,
   FileSpreadsheet,
   UploadCloud,
+  RotateCcw,
+  Award,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { BulkUploadModal } from "@/components/vendor/BulkUploadModal";
 import { StoreSyncModal } from "@/components/vendor/StoreSyncModal";
+import {
+  VendorAnalyticsResponse,
+  getVendorPortalAnalytics,
+} from "@/lib/admin/payouts";
 
-type DashboardTab = "inventory" | "orders" | "payouts" | "settings";
+type DashboardTab = "inventory" | "orders" | "payouts" | "analytics" | "settings";
 
 interface VendorInfo {
   id: string;
@@ -242,6 +248,11 @@ export default function VendorDashboardPage() {
   const [settingLogo, setSettingLogo] = useState("");
   const [settingBanner, setSettingBanner] = useState("");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Analytics State
+  const [analyticsData, setAnalyticsData] = useState<VendorAnalyticsResponse | null>(null);
+  const [analyticsRange, setAnalyticsRange] = useState<string>("30d");
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
   // Token storage helper: checks AuthContext, then localStorage
   function getValidToken(): string | null {
@@ -438,6 +449,20 @@ export default function VendorDashboardPage() {
     }
     loadVendorData();
   }, [authLoading, isAuthenticated, authToken, user]);
+
+  useEffect(() => {
+    if (activeTab === "analytics") {
+      const token = getValidToken();
+      if (!token) return;
+      setIsLoadingAnalytics(true);
+      getVendorPortalAnalytics(token, analyticsRange)
+        .then((data) => {
+          if (data) setAnalyticsData(data);
+        })
+        .catch((err) => console.error("Failed to load vendor analytics:", err))
+        .finally(() => setIsLoadingAnalytics(false));
+    }
+  }, [activeTab, analyticsRange]);
 
   // Product Inline Edit with OCC
   function startEditing(product: VendorProduct) {
@@ -912,6 +937,19 @@ export default function VendorDashboardPage() {
                   {formatPrice(escrowSummary.inEscrowAmount, "GHS")}
                 </span>
               ) : null}
+            </button>
+
+            <button
+              onClick={() => setActiveTab("analytics")}
+              className={`flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs font-semibold whitespace-nowrap transition ${
+                activeTab === "analytics"
+                  ? "border-purple-600 text-purple-700"
+                  : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+              }`}
+            >
+              <TrendingUp className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Analytics</span>
+              <span className="hidden sm:inline">Analytics &amp; KPIs</span>
             </button>
 
             <button
@@ -1996,7 +2034,225 @@ export default function VendorDashboardPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* TAB 4: STORE PROFILE & SETTINGS                                    */}
+        {/* TAB 4: MERCHANT PERFORMANCE ANALYTICS & KPIS                       */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === "analytics" && (
+          <div className="space-y-6">
+            {/* Header with Time Range selector */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                  <h2 className="text-base font-bold text-zinc-900">Store Performance &amp; Analytics</h2>
+                </div>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Real-time metrics on Average Order Value, Customer Retention, Return Rates, and Order Fulfillment Velocities.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 rounded-xl bg-zinc-100 p-1 text-xs font-semibold">
+                {[
+                  { label: "7 Days", value: "7d" },
+                  { label: "30 Days", value: "30d" },
+                  { label: "90 Days", value: "90d" },
+                  { label: "All Time", value: "all" },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setAnalyticsRange(item.value)}
+                    className={`rounded-lg px-3 py-1.5 transition ${
+                      analyticsRange === item.value
+                        ? "bg-white text-purple-700 shadow-xs font-bold"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 4 Primary KPI Quadrants */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* 1. Average Order Value (AOV) */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between text-zinc-500 text-xs font-bold uppercase tracking-wider">
+                  <span>Avg Order Value (AOV)</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+                    <DollarSign className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="mt-3 text-2xl font-black text-zinc-900">
+                  {formatPrice(analyticsData?.kpis.averageOrderValue || 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Across {analyticsData?.kpis.deliveredOrdersCount || 0} delivered orders
+                </p>
+              </div>
+
+              {/* 2. Repeat Customer Rate */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between text-zinc-500 text-xs font-bold uppercase tracking-wider">
+                  <span>Repeat Customer Rate</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <User className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="mt-3 text-2xl font-black text-zinc-900">
+                  {analyticsData?.kpis.repeatCustomerRatePercent || 0}%
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Shoppers with &gt; 1 completed purchase
+                </p>
+              </div>
+
+              {/* 3. Return Rate */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between text-zinc-500 text-xs font-bold uppercase tracking-wider">
+                  <span>Return Rate</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                    <RotateCcw className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="mt-3 text-2xl font-black text-zinc-900">
+                  {analyticsData?.kpis.returnRatePercent || 0}%
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {analyticsData?.kpis.returnCount || 0} refunds / returns processed
+                </p>
+              </div>
+
+              {/* 4. Average Fulfillment Speed */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between text-zinc-500 text-xs font-bold uppercase tracking-wider">
+                  <span>Fulfillment Speed</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="mt-3 text-2xl font-black text-zinc-900">
+                  {analyticsData?.kpis.avgFulfillmentHours || 24}h
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Order placement to delivery turnaround
+                </p>
+              </div>
+            </div>
+
+            {/* Financial Highlights */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-purple-50/50 via-white to-purple-50/30 p-5 shadow-sm">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-700">
+                  Gross Merchandise Value (GMV)
+                </span>
+                <p className="mt-2 text-2xl font-black text-zinc-900">
+                  {formatPrice(analyticsData?.kpis.grossMerchandiseValue || 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Total store revenue generated before commission deductions
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/30 p-5 shadow-sm">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                  Net Merchant Earnings
+                </span>
+                <p className="mt-2 text-2xl font-black text-emerald-700">
+                  {formatPrice(analyticsData?.kpis.netMerchantEarnings || 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Net credited earnings cleared or ready for MoMo payout
+                </p>
+              </div>
+            </div>
+
+            {/* Top Products & Order Distribution Grid */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Top Products */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-2 border-b border-zinc-100 pb-4 mb-4">
+                  <Award className="h-4 w-4 text-purple-600" />
+                  <h3 className="font-bold text-zinc-900 text-sm">Top Selling Products</h3>
+                </div>
+
+                {analyticsData?.topProducts && analyticsData.topProducts.length > 0 ? (
+                  <ol className="divide-y divide-zinc-100 space-y-3">
+                    {analyticsData.topProducts.map((p, idx) => (
+                      <li key={p.productId} className="flex items-center justify-between pt-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-zinc-900 text-xs truncate">{p.name}</p>
+                            <p className="text-[11px] text-zinc-500">{p.totalQuantitySold} units sold</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-zinc-900 shrink-0">
+                          {formatPrice(p.totalRevenue, "GHS")}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="py-12 text-center text-xs text-zinc-400">
+                    No product sales registered in this time period.
+                  </p>
+                )}
+              </div>
+
+              {/* Order Status Breakdown */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-2 border-b border-zinc-100 pb-4 mb-4">
+                  <ShoppingBag className="h-4 w-4 text-purple-600" />
+                  <h3 className="font-bold text-zinc-900 text-sm">Order Status Distribution</h3>
+                </div>
+
+                {analyticsData?.statusDistribution ? (
+                  <div className="space-y-4">
+                    {[
+                      { label: "Delivered", count: analyticsData.statusDistribution.delivered, color: "bg-emerald-500" },
+                      { label: "Shipped", count: analyticsData.statusDistribution.shipped, color: "bg-blue-500" },
+                      { label: "Processing", count: analyticsData.statusDistribution.processing, color: "bg-purple-500" },
+                      { label: "Pending", count: analyticsData.statusDistribution.pending, color: "bg-amber-500" },
+                      { label: "Cancelled", count: analyticsData.statusDistribution.cancelled, color: "bg-rose-500" },
+                    ].map((st) => {
+                      const total =
+                        (analyticsData.statusDistribution.delivered || 0) +
+                        (analyticsData.statusDistribution.shipped || 0) +
+                        (analyticsData.statusDistribution.processing || 0) +
+                        (analyticsData.statusDistribution.pending || 0) +
+                        (analyticsData.statusDistribution.cancelled || 0) || 1;
+                      const pct = Math.round((st.count / total) * 100);
+
+                      return (
+                        <div key={st.label}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-zinc-600 font-medium">{st.label}</span>
+                            <span className="font-bold text-zinc-900">
+                              {st.count} ({pct}%)
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-zinc-100 overflow-hidden">
+                            <div className={`h-full rounded-full ${st.color}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="py-12 text-center text-xs text-zinc-400">
+                    No order status data available.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* TAB 5: STORE PROFILE & SETTINGS                                    */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {activeTab === "settings" && (
           <div className="max-w-4xl space-y-6">

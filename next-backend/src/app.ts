@@ -27,6 +27,8 @@ import { productRoutes } from "./modules/products/product.routes.js";
 import { vendorRoutes } from "./modules/vendors/vendor.routes.js";
 import { orderRoutes, adminOrderRoutes, vendorOrderRoutes } from "./modules/orders/order.routes.js";
 import { returnRoutes, vendorReturnRoutes, adminReturnRoutes } from "./modules/returns/return.routes.js";
+import { logisticsRoutes } from "./modules/logistics/logistics.routes.js";
+import { payoutRoutes } from "./modules/payouts/payout.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
 import { redis } from "./lib/redis.js";
 import { ResilientRateLimitStore } from "./lib/rateLimitStore.js";
@@ -246,6 +248,9 @@ export async function buildApp() {
   await app.register(vendorRoutes,      { prefix: "/api/v1/vendors" });
   await app.register(orderRoutes,       { prefix: "/api/v1/orders" });
   await app.register(returnRoutes,      { prefix: "/api/v1/returns" });
+  await app.register(logisticsRoutes,   { prefix: "/api/v1/logistics" });
+  await app.register(payoutRoutes,      { prefix: "/api/v1/admin/payouts" });
+  await app.register(payoutRoutes,      { prefix: "/api/v1/payouts" });
   await app.register(adminOrderRoutes,  { prefix: "/api/v1/admin/orders" });
   await app.register(adminReturnRoutes, { prefix: "/api/v1/admin/returns" });
   await app.register(adminRoutes,       { prefix: "/api/v1/admin" });
