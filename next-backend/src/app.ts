@@ -30,6 +30,7 @@ import { returnRoutes, vendorReturnRoutes, adminReturnRoutes } from "./modules/r
 import { logisticsRoutes } from "./modules/logistics/logistics.routes.js";
 import { payoutRoutes } from "./modules/payouts/payout.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
+import { inventoryRoutes } from "./modules/inventory/inventory.routes.js";
 import { redis } from "./lib/redis.js";
 import { ResilientRateLimitStore } from "./lib/rateLimitStore.js";
 import { isOriginAllowed } from "./lib/originPolicy.js";
@@ -249,6 +250,7 @@ export async function buildApp() {
   await app.register(orderRoutes,       { prefix: "/api/v1/orders" });
   await app.register(returnRoutes,      { prefix: "/api/v1/returns" });
   await app.register(logisticsRoutes,   { prefix: "/api/v1/logistics" });
+  await app.register(inventoryRoutes,   { prefix: "/api/v1/inventory" });
   await app.register(payoutRoutes,      { prefix: "/api/v1/admin/payouts" });
   await app.register(payoutRoutes,      { prefix: "/api/v1/payouts" });
   await app.register(adminOrderRoutes,  { prefix: "/api/v1/admin/orders" });

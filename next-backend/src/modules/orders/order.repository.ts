@@ -41,6 +41,8 @@ export type PlaceOrderInput = {
     unitPrice: Prisma.Decimal;
     quantity: number;
     subtotal: Prisma.Decimal;
+    warehouseId?: string | null;
+    isBackorder?: boolean;
   }[];
   /** Per-vendor breakdown for VendorOrder creation */
   vendorBreakdown: {
@@ -119,35 +121,42 @@ export class OrderRepository {
 
     return prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
-        // 1. Decrement stock for tracked products (stockQty != null) with a hard guard.
-        //    The conditional updateMany is atomic: it only matches while enough units
-        //    remain. A zero row-count on a TRACKED product therefore means another
-        //    buyer won the race → abort & roll back the whole order (no overselling).
-        //    Untracked products (stockQty = null, e.g. WooCommerce-synced) never block.
+        // 1. Decrement stock for tracked products or handle backorders
         for (const item of input.items) {
-        const result = await tx.product.updateMany({
-          where: {
-            id: item.productId,
-            stockQty: { not: null, gte: item.quantity },
-          },
-          data: { stockQty: { decrement: item.quantity } },
-        });
+          if (item.isBackorder) {
+            // Backordered items reserve quota instead of blocking on zero physical on-shelf stock
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                backorderCount: { increment: item.quantity },
+                stockStatus: "BACKORDER",
+              },
+            });
+          } else {
+            const result = await tx.product.updateMany({
+              where: {
+                id: item.productId,
+                stockQty: { not: null, gte: item.quantity },
+              },
+              data: { stockQty: { decrement: item.quantity } },
+            });
 
-        if (result.count === 0) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-            select: { name: true, stockQty: true },
-          });
-          if (product && product.stockQty !== null) {
-            throw new UnprocessableError(
-              product.stockQty > 0
-                ? `Only ${product.stockQty} unit(s) of "${product.name}" available`
-                : `"${product.name}" just sold out`,
-              { productId: item.productId, available: product.stockQty },
-            );
+            if (result.count === 0) {
+              const product = await tx.product.findUnique({
+                where: { id: item.productId },
+                select: { name: true, stockQty: true },
+              });
+              if (product && product.stockQty !== null) {
+                throw new UnprocessableError(
+                  product.stockQty > 0
+                    ? `Only ${product.stockQty} unit(s) of "${product.name}" available`
+                    : `"${product.name}" just sold out`,
+                  { productId: item.productId, available: product.stockQty },
+                );
+              }
+            }
           }
         }
-      }
 
       // 2. Create the master Order
       const order = await tx.order.create({
@@ -176,6 +185,8 @@ export class OrderRepository {
               unitPrice: item.unitPrice,
               quantity: item.quantity,
               subtotal: item.subtotal,
+              warehouseId: item.warehouseId ?? null,
+              isBackorder: item.isBackorder ?? false,
             })),
           },
           // 4. Create one VendorOrder per vendor (financial sub-orders)
@@ -399,13 +410,20 @@ export class OrderRepository {
       if (status === "CANCELLED") {
         const items = await tx.orderItem.findMany({
           where: { orderId },
-          select: { productId: true, quantity: true },
+          select: { productId: true, quantity: true, isBackorder: true },
         });
         for (const item of items) {
-          await tx.product.updateMany({
-            where: { id: item.productId, stockQty: { not: null } },
-            data: { stockQty: { increment: item.quantity } },
-          });
+          if (item.isBackorder) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { backorderCount: { decrement: item.quantity } },
+            });
+          } else {
+            await tx.product.updateMany({
+              where: { id: item.productId, stockQty: { not: null } },
+              data: { stockQty: { increment: item.quantity } },
+            });
+          }
         }
         await tx.vendorOrder.updateMany({
           where: { orderId, status: { notIn: ["DELIVERED", "CANCELLED"] } },

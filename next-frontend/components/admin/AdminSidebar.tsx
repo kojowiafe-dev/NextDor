@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   FileText,
   Wallet,
+  Warehouse,
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -25,6 +26,7 @@ const coreNavItems = [
   { label: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Products", href: "/admin/products", icon: Package },
+  { label: "Inventory & Hubs", href: "/admin/inventory", icon: Warehouse },
   { label: "Customers", href: "/admin/customers", icon: Users },
   { label: "Merchants", href: "/admin/merchants", icon: Store },
   { label: "Payouts & Ledger", href: "/admin/payouts", icon: Wallet },

@@ -103,6 +103,9 @@ model Vendor {
   wcConsumerSecret       String?
   wcLastSyncAt           DateTime?
   wcSyncStatus           String?            @default("IDLE")
+  lowStockAlertEmail     String?
+  lowStockAlertPhone     String?
+  enableLowStockAlerts   Boolean            @default(true)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   deletedAt              DateTime?
@@ -114,6 +117,8 @@ model Vendor {
   vendorOrders           VendorOrder[]
   orderItems             OrderItem[]
   payouts                VendorPayout[]
+  warehouses             Warehouse[]
+  stockAlerts            StockAlert[]
 
   @@index([slug])
   @@index([status])
@@ -261,17 +266,27 @@ model Product {
   reviewCount   Int           @default(0)
   sortOrder     Int           @default(0)
   /// Optimistic Concurrency Control (OCC) version counter
-  version       Int           @default(1)
-  vendorId      String?       @db.Uuid
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  deletedAt     DateTime?
+  version             Int            @default(1)
+  vendorId            String?        @db.Uuid
+  // Phase 11: Multi-Warehouse & Backorders
+  allowBackorder      Boolean        @default(false)
+  backorderLimit      Int?           // null = unlimited backorders allowed
+  backorderCount      Int            @default(0) // active backordered reservations
+  expectedRestockDate DateTime?      // date restocking is promised
+  isPreOrder          Boolean        @default(false)
+  preOrderReleaseDate DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deletedAt           DateTime?
 
-  vendor        Vendor?       @relation(fields: [vendorId], references: [id])
-  categories    Category[]    @relation("ProductCategories")
-  images        ProductImage[]
-  orderItems    OrderItem[]
-  reviews       Review[]
+  vendor              Vendor?        @relation(fields: [vendorId], references: [id])
+  categories          Category[]     @relation("ProductCategories")
+  images              ProductImage[]
+  orderItems          OrderItem[]
+  reviews             Review[]
+  warehouseStocks     WarehouseStock[]
+  stockMovements      StockMovement[]
+  stockAlerts         StockAlert[]
 
   @@index([slug])
   @@index([vendorId])
@@ -284,6 +299,8 @@ enum StockStatus {
   IN_STOCK
   OUT_OF_STOCK
   LOW_STOCK
+  BACKORDER
+  PRE_ORDER
 }
 
 model ProductImage {
@@ -408,17 +425,21 @@ model OrderItem {
   /// Snapshot fields — immutable after insert
   productName  String
   productImage String?
-  unitPrice    Decimal  @db.Decimal(12, 2)
+  unitPrice    Decimal    @db.Decimal(12, 2)
   quantity     Int
-  subtotal     Decimal  @db.Decimal(12, 2)  // unitPrice * quantity at time of order
+  subtotal     Decimal    @db.Decimal(12, 2)  // unitPrice * quantity at time of order
+  warehouseId  String?    @db.Uuid
+  isBackorder  Boolean    @default(false)
 
-  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product      Product  @relation(fields: [productId], references: [id])
-  vendor       Vendor?  @relation(fields: [vendorId], references: [id])
+  order        Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id])
+  vendor       Vendor?    @relation(fields: [vendorId], references: [id])
+  warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
 
   @@index([orderId])
   @@index([productId])
   @@index([vendorId])
+  @@index([warehouseId])
   @@map("order_items")
 }
 
@@ -866,4 +887,139 @@ model ShipmentEvent {
   @@index([shipmentId])
   @@map("shipment_events")
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// ENTERPRISE MULTI-WAREHOUSE INVENTORY & AUDIT LEDGER (Phase 11)
+// ═══════════════════════════════════════════════════════════════════
+
+/// A physical or regional fulfillment warehouse / depot / retail location.
+model Warehouse {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId     String?          @db.Uuid // null = Platform Flagship / Central Hub
+  name         String           // e.g. "Accra Central Fulfillment Hub", "Kumasi Depot", "Osu Showroom"
+  code         String           @unique // e.g. "WH-ACC-01", "WH-KSI-01"
+  address      String
+  city         String           // e.g. "Accra", "Kumasi"
+  region       String           // e.g. "Greater Accra", "Ashanti"
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  isDefault    Boolean          @default(false)
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  deletedAt    DateTime?
+
+  vendor       Vendor?          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  stocks       WarehouseStock[]
+  movements    StockMovement[]
+  alerts       StockAlert[]
+  orderItems   OrderItem[]
+
+  @@index([vendorId])
+  @@index([city])
+  @@index([region])
+  @@index([code])
+  @@map("warehouses")
+}
+
+/// Stock levels partitioned per warehouse location and SKU.
+model WarehouseStock {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouseId       String    @db.Uuid
+  productId         String    @db.Uuid
+  quantity          Int       @default(0) // Physical available on-shelf stock
+  reservedQuantity  Int       @default(0) // Locked in unfulfilled/processing orders
+  lowStockThreshold Int       @default(5)
+  reorderPoint      Int?
+  reorderQuantity   Int?
+  binLocation       String?   // Aisle/shelf location e.g. "Aisle 3, Shelf B"
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  warehouse         Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([productId])
+  @@map("warehouse_stocks")
+}
+
+/// Immutable stock movement ledger for complete inventory auditability.
+model StockMovement {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouseId    String            @db.Uuid
+  productId      String            @db.Uuid
+  type           StockMovementType
+  quantityDelta  Int               // Signed: positive for additions, negative for deductions
+  quantityBefore Int
+  quantityAfter  Int
+  referenceId    String?           // Order number, PO number, transfer batch reference
+  notes          String?
+  performedBy    String?           @db.Uuid
+  createdAt      DateTime          @default(now())
+
+  warehouse      Warehouse         @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+enum StockMovementType {
+  RECEIVE
+  ORDER_RESERVED
+  ORDER_FULFILLED
+  ORDER_CANCELLED
+  RESTOCK
+  RETURN_RESTOCK
+  TRANSFER_IN
+  TRANSFER_OUT
+  MANUAL_ADJUSTMENT
+}
+
+/// Automated low-stock and out-of-stock alert notification records.
+model StockAlert {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouseId  String           @db.Uuid
+  productId    String           @db.Uuid
+  vendorId     String?          @db.Uuid
+  alertType    StockAlertType   @default(LOW_STOCK)
+  threshold    Int
+  currentStock Int
+  status       StockAlertStatus @default(ACTIVE)
+  channel      String           @default("EMAIL_AND_SMS")
+  notifiedAt   DateTime         @default(now())
+  resolvedAt   DateTime?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  warehouse    Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product      Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendor       Vendor?          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("stock_alerts")
+}
+
+enum StockAlertType {
+  LOW_STOCK
+  OUT_OF_STOCK
+  BACKORDER_THRESHOLD
+}
+
+enum StockAlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 

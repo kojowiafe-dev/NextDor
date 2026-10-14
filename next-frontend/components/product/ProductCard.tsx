@@ -27,10 +27,13 @@ export function ProductCard({ product }: ProductCardProps) {
     product.shortDescription || product.description || "",
   ).slice(0, 80);
 
+  const isBackorder = product.stockStatus === "BACKORDER" || (!product.inStock && Boolean(product.allowBackorder));
+  const canAddToCart = product.inStock || isBackorder;
+
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!product.inStock) return;
+    if (!canAddToCart) return;
 
     addItem({
       productId: product.id,
@@ -63,6 +66,10 @@ export function ProductCard({ product }: ProductCardProps) {
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200/80">
               <CheckCircle2 className="h-3 w-3 text-emerald-600" />
               In Stock
+            </span>
+          ) : isBackorder ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200/80">
+              📦 Backorder
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
@@ -137,12 +144,14 @@ export function ProductCard({ product }: ProductCardProps) {
         <button
           type="button"
           onClick={handleAddToCart}
-          disabled={!product.inStock}
+          disabled={!canAddToCart}
           className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-200 active:scale-95 shadow-xs ${
             justAdded
               ? "bg-emerald-600 text-white"
               : product.inStock
               ? "bg-[#ff9900] text-zinc-950 hover:bg-[#f08804] hover:shadow-[#ff9900]/25 cursor-pointer"
+              : isBackorder
+              ? "bg-amber-600 text-white hover:bg-amber-500 cursor-pointer shadow-sm"
               : "cursor-not-allowed bg-zinc-100 text-zinc-400"
           }`}
         >
@@ -157,6 +166,11 @@ export function ProductCard({ product }: ProductCardProps) {
               <span>
                 {inCartQty > 0 ? `Add Another (${inCartQty})` : "Add to Cart"}
               </span>
+            </>
+          ) : isBackorder ? (
+            <>
+              <ShoppingCart className="h-3.5 w-3.5" />
+              <span>Backorder Now</span>
             </>
           ) : (
             <span>Out of Stock</span>

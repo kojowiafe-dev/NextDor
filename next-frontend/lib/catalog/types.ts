@@ -23,6 +23,10 @@ export type Product = {
   rating: number;
   reviewCount: number;
   inStock: boolean;
+  stockStatus?: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | "BACKORDER" | "PRE_ORDER";
+  allowBackorder?: boolean;
+  expectedRestockDate?: string | null;
+  isPreOrder?: boolean;
   vendor?: {
     id?: string;
     name: string;

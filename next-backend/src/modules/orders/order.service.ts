@@ -158,18 +158,33 @@ export class OrderService {
         throw new NotFoundError(`Product ${cartItem.productId}`);
       }
 
-      if (product.stockStatus === "OUT_OF_STOCK") {
-        throw new UnprocessableError(
-          `"${product.name}" is out of stock`,
-          { productId: product.id },
-        );
-      }
+      let isBackorder = false;
+      const physicalAvailable = product.stockQty;
 
-      if (product.stockQty !== null && product.stockQty < cartItem.quantity) {
-        throw new UnprocessableError(
-          `Only ${product.stockQty} unit(s) of "${product.name}" available`,
-          { productId: product.id, available: product.stockQty },
-        );
+      if (product.stockStatus === "OUT_OF_STOCK" || (physicalAvailable !== null && physicalAvailable < cartItem.quantity)) {
+        if (!product.allowBackorder) {
+          if (product.stockStatus === "OUT_OF_STOCK" || physicalAvailable === 0) {
+            throw new UnprocessableError(
+              `"${product.name}" is out of stock`,
+              { productId: product.id },
+            );
+          }
+          throw new UnprocessableError(
+            `Only ${product.stockQty} unit(s) of "${product.name}" available`,
+            { productId: product.id, available: product.stockQty },
+          );
+        }
+
+        // Validate backorder limits
+        const requestedBackorder = Math.max(0, cartItem.quantity - (physicalAvailable ?? 0));
+        const currentBackorders = product.backorderCount ?? 0;
+        if (product.backorderLimit !== null && (currentBackorders + requestedBackorder > product.backorderLimit)) {
+          throw new UnprocessableError(
+            `Backorder capacity reached for "${product.name}". Remaining backorders allowed: ${Math.max(0, product.backorderLimit - currentBackorders)}`,
+            { productId: product.id, backorderLimit: product.backorderLimit, currentBackorders }
+          );
+        }
+        isBackorder = true;
       }
 
       if (product.vendor && product.vendor.status !== "ACTIVE") {
@@ -191,6 +206,7 @@ export class OrderService {
         unitPrice: unitPrice.toDecimal(),
         quantity: cartItem.quantity,
         subtotal: subtotal.toDecimal(),
+        isBackorder,
         // Keep Money instances for aggregation
         _unitPriceMoney: unitPrice,
         _subtotalMoney: subtotal,
