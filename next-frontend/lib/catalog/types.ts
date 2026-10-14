@@ -24,6 +24,8 @@ export type Product = {
   reviewCount: number;
   inStock: boolean;
   stockStatus?: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | "BACKORDER" | "PRE_ORDER";
+  stockQty?: number | null;
+  lowStockThreshold?: number;
   allowBackorder?: boolean;
   expectedRestockDate?: string | null;
   isPreOrder?: boolean;

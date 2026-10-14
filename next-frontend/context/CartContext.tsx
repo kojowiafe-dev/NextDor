@@ -18,6 +18,8 @@ export type CartItem = {
   price: number;
   currency: string;
   quantity: number;
+  maxQty?: number | null;
+  isBackorder?: boolean;
 };
 
 type CartContextValue = {
@@ -64,14 +66,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
         );
 
         if (existing) {
+          const requestedQty = existing.quantity + quantity;
+          const finalQty = !existing.isBackorder && existing.maxQty != null ? Math.min(requestedQty, existing.maxQty) : requestedQty;
           return current.map((entry) =>
             entry.productId === item.productId
-              ? { ...entry, quantity: entry.quantity + quantity }
+              ? {
+                  ...entry,
+                  quantity: finalQty,
+                  maxQty: item.maxQty !== undefined ? item.maxQty : entry.maxQty,
+                  isBackorder: item.isBackorder !== undefined ? item.isBackorder : entry.isBackorder,
+                }
               : entry,
           );
         }
 
-        return [...current, { ...item, quantity }];
+        const initialQty = !item.isBackorder && item.maxQty != null ? Math.min(quantity, item.maxQty) : quantity;
+        return [...current, { ...item, quantity: initialQty }];
       });
     },
     [],
@@ -92,9 +102,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     setItems((current) =>
-      current.map((entry) =>
-        entry.productId === productId ? { ...entry, quantity } : entry,
-      ),
+      current.map((entry) => {
+        if (entry.productId !== productId) return entry;
+        const finalQty = !entry.isBackorder && entry.maxQty != null ? Math.min(quantity, entry.maxQty) : quantity;
+        return { ...entry, quantity: finalQty };
+      }),
     );
   }, []);
 

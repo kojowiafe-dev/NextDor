@@ -82,12 +82,25 @@ export default function CartPage() {
                     <button
                       type="button"
                       onClick={() => updateQty(item.productId, item.quantity + 1)}
-                      className="p-1.5 hover:bg-zinc-50"
+                      disabled={!item.isBackorder && item.maxQty != null && item.quantity >= item.maxQty}
+                      className="p-1.5 hover:bg-zinc-50 disabled:opacity-30 disabled:cursor-not-allowed"
                       aria-label="Increase quantity"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>
+
+                  {!item.isBackorder && item.maxQty != null && item.quantity >= item.maxQty && (
+                    <span className="text-[11px] font-medium text-amber-700">
+                      Limit ({item.maxQty} available)
+                    </span>
+                  )}
+
+                  {item.isBackorder && (
+                    <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      📦 Backorder
+                    </span>
+                  )}
 
                   <button
                     type="button"

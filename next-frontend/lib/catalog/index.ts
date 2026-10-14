@@ -60,7 +60,16 @@ function mapBackendProduct(p: any): Product {
       : [],
     rating: Number(p.averageRating || 0),
     reviewCount: p.reviewCount || 0,
-    inStock: p.stockStatus === "IN_STOCK",
+    inStock:
+      p.stockStatus === "IN_STOCK" ||
+      p.stockStatus === "LOW_STOCK" ||
+      (p.stockQty !== null && p.stockQty !== undefined && Number(p.stockQty) > 0),
+    stockStatus: p.stockStatus || (p.stockQty !== null && p.stockQty !== undefined ? (Number(p.stockQty) <= 5 ? "LOW_STOCK" : "IN_STOCK") : "IN_STOCK"),
+    stockQty: p.stockQty !== null && p.stockQty !== undefined ? Number(p.stockQty) : null,
+    lowStockThreshold: p.lowStockThreshold ? Number(p.lowStockThreshold) : 5,
+    allowBackorder: Boolean(p.allowBackorder),
+    expectedRestockDate: p.expectedRestockDate ? String(p.expectedRestockDate) : null,
+    isPreOrder: Boolean(p.isPreOrder),
     vendor: p.vendor
       ? {
           id: p.vendor.id,

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Star } from "lucide-react";
+import { Star, CheckCircle2, AlertCircle, Clock, Flame } from "lucide-react";
 import {
   getProductBySlug,
   getRelatedProducts,
@@ -171,13 +171,35 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <PriceDisplay product={product} size="lg" />
           </div>
 
-          <p className="text-sm text-zinc-600">
-            {product.inStock ? (
-              <span className="font-medium text-green-700 whitespace-nowrap">In Stock</span>
+          {/* Dynamic 4-Tier Scarcity & Availability Status */}
+          <div className="py-0.5">
+            {product.stockQty !== null && product.stockQty !== undefined && product.stockQty > 0 && product.stockQty <= 5 ? (
+              <div className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 border border-amber-300 shadow-2xs">
+                <Flame className="h-4 w-4 text-amber-600 animate-pulse fill-amber-500" />
+                <span>Only {product.stockQty} left in stock — order soon!</span>
+              </div>
+            ) : product.inStock ? (
+              <div className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>In Stock</span>
+              </div>
+            ) : product.stockStatus === "BACKORDER" || product.allowBackorder ? (
+              <div className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50/90 px-3 py-1.5 text-xs font-semibold text-amber-900 border border-amber-200">
+                <Clock className="h-3.5 w-3.5 text-amber-600" />
+                <span>Available on Backorder</span>
+                {product.expectedRestockDate && (
+                  <span className="text-zinc-600 font-normal">
+                    — Estimated restock: {new Date(product.expectedRestockDate).toLocaleDateString("en-GB", { month: "short", day: "numeric" })}
+                  </span>
+                )}
+              </div>
             ) : (
-              <span className="font-medium text-red-600 whitespace-nowrap">Out of Stock</span>
+              <div className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600">
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                <span>Currently Out of Stock</span>
+              </div>
             )}
-          </p>
+          </div>
 
           <AddToCartButton product={product} />
 

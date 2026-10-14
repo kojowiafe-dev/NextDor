@@ -42,6 +42,8 @@ export function ProductCard({ product }: ProductCardProps) {
       image: image?.src || "/file.svg",
       price: product.price,
       currency: product.currency,
+      maxQty: !isBackorder && product.stockQty !== null && product.stockQty !== undefined ? product.stockQty : null,
+      isBackorder,
     });
 
     setJustAdded(true);
@@ -62,7 +64,12 @@ export function ProductCard({ product }: ProductCardProps) {
           <span />
         )}
         <div className="ml-auto">
-          {product.inStock ? (
+          {product.stockQty !== null && product.stockQty !== undefined && product.stockQty > 0 && product.stockQty <= 5 ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-800 border border-amber-300 shadow-2xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Only {product.stockQty} left!
+            </span>
+          ) : product.inStock ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200/80">
               <CheckCircle2 className="h-3 w-3 text-emerald-600" />
               In Stock
