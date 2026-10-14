@@ -194,7 +194,7 @@ export default function AdminPayoutsPage() {
       )}
 
       {/* Reconciliation Invariant Banner */}
-      {ledger && (
+      {ledger?.reconciliation && (
         <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/80">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start sm:items-center gap-3">
@@ -229,7 +229,7 @@ export default function AdminPayoutsPage() {
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {ledger.reconciliation.isReconciled
                     ? "Total customer payment inflows match platform equity, merchant escrow liabilities, and paid disbursements."
-                    : `Discrepancy of GHS ${ledger.reconciliation.varianceGhs.toFixed(2)} (${ledger.reconciliation.variancePesewas} pesewas) detected between ledger legs.`}
+                    : `Discrepancy of GHS ${(ledger.reconciliation.varianceGhs ?? 0).toFixed(2)} (${ledger.reconciliation.variancePesewas ?? 0} pesewas) detected between ledger legs.`}
                 </p>
               </div>
             </div>
@@ -238,7 +238,7 @@ export default function AdminPayoutsPage() {
               <div className="rounded-lg bg-zinc-50 px-3 py-1.5 border border-zinc-200">
                 <span className="text-zinc-500 block text-[10px] uppercase font-bold">As of Timestamp</span>
                 <span className="font-semibold text-zinc-800">
-                  {new Date(ledger.asOf).toLocaleTimeString()} · {new Date(ledger.asOf).toLocaleDateString()}
+                  {new Date(ledger.asOf || Date.now()).toLocaleTimeString()} · {new Date(ledger.asOf || Date.now()).toLocaleDateString()}
                 </span>
               </div>
             </div>
@@ -247,7 +247,7 @@ export default function AdminPayoutsPage() {
       )}
 
       {/* 4 Core Accounting Quadrants */}
-      {ledger ? (
+      {ledger?.inflow && ledger?.liabilities && ledger?.equity && ledger?.disbursements ? (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* 1. Customer Gateway Inflows */}
           <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/80">

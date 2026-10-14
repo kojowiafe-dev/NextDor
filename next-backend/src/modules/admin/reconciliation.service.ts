@@ -179,6 +179,54 @@ export class ReconciliationService {
     }
 
     return {
+      asOf: now.toISOString(),
+      inflow: {
+        totalCustomerPaymentsGhs: totalInflow,
+        totalCustomerPaymentsPesewas: Math.round(totalInflow * 100),
+        successfulPaymentsCount: customerPaymentsCount,
+      },
+      liabilities: {
+        vendorEscrowPendingGhs: totalInEscrow,
+        vendorEscrowPendingPesewas: Math.round(totalInEscrow * 100),
+        vendorEscrowOrdersCount: inEscrowAgg._count.id || 0,
+        vendorAvailablePayoutGhs: totalAvailable,
+        vendorAvailablePayoutPesewas: Math.round(totalAvailable * 100),
+        vendorAvailableOrdersCount: availableAgg._count.id || 0,
+        totalMerchantLiabilityGhs: totalMerchantLiabilities,
+        totalMerchantLiabilityPesewas: Math.round(totalMerchantLiabilities * 100),
+      },
+      equity: {
+        earnedPlatformCommissionGhs: totalCommissions,
+        earnedPlatformCommissionPesewas: Math.round(totalCommissions * 100),
+        potentialPlatformCommissionGhs: 0,
+        potentialPlatformCommissionPesewas: 0,
+        totalCommissionGhs: platformRevenue,
+        totalCommissionPesewas: Math.round(platformRevenue * 100),
+      },
+      disbursements: {
+        totalPaidOutGhs: totalDisbursed,
+        totalPaidOutPesewas: Math.round(totalDisbursed * 100),
+        paidOutBatchesCount: disbursedCount,
+        refundedGhs: totalRefunds,
+        refundedPesewas: Math.round(totalRefunds * 100),
+      },
+      reconciliation: {
+        expectedInflowGhs: totalAccounted,
+        expectedInflowPesewas: Math.round(totalAccounted * 100),
+        actualInflowGhs: totalInflow,
+        actualInflowPesewas: Math.round(totalInflow * 100),
+        varianceGhs: variance,
+        variancePesewas: Math.round(variance * 100),
+        isReconciled: isBalanced,
+      },
+      dailyBreakdown: dailyTrends.map((d) => ({
+        date: d.date,
+        customerPaymentsGhs: d.inflow,
+        vendorLiabilitiesGhs: 0,
+        earnedCommissionGhs: 0,
+        payoutDisbursementsGhs: d.outflow,
+      })),
+      // Summary & trends preserved for backward compatibility
       summary: {
         totalGatewayInflow: totalInflow,
         totalCustomerTransactions: customerPaymentsCount,

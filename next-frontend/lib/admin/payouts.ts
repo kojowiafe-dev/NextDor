@@ -159,7 +159,77 @@ export async function getFinancialLedger(token: string): Promise<FinancialLedger
   });
   if (!res.ok) return null;
   const json = await res.json();
-  return json.success ? json.data : null;
+  if (!json.success || !json.data) return null;
+
+  const d = json.data;
+  // If already in structured quadrant format
+  if (d.reconciliation && d.inflow && d.liabilities) {
+    return d as FinancialLedgerReport;
+  }
+
+  // If summary format, adapt seamlessly
+  const s = d.summary || {};
+  return {
+    asOf: d.asOf || new Date().toISOString(),
+    inflow: {
+      totalCustomerPaymentsGhs: s.totalGatewayInflow ?? 0,
+      totalCustomerPaymentsPesewas: Math.round((s.totalGatewayInflow ?? 0) * 100),
+      successfulPaymentsCount: s.totalCustomerTransactions ?? 0,
+    },
+    liabilities: {
+      vendorEscrowPendingGhs: s.activeEscrowLiabilities ?? 0,
+      vendorEscrowPendingPesewas: Math.round((s.activeEscrowLiabilities ?? 0) * 100),
+      vendorEscrowOrdersCount: s.activeEscrowOrdersCount ?? 0,
+      vendorAvailablePayoutGhs: s.unclaimedAvailableBalances ?? 0,
+      vendorAvailablePayoutPesewas: Math.round((s.unclaimedAvailableBalances ?? 0) * 100),
+      vendorAvailableOrdersCount: s.unclaimedAvailableOrdersCount ?? 0,
+      totalMerchantLiabilityGhs:
+        (s.disbursedToVendors ?? 0) +
+        (s.inFlightDisbursements ?? 0) +
+        (s.activeEscrowLiabilities ?? 0) +
+        (s.unclaimedAvailableBalances ?? 0),
+      totalMerchantLiabilityPesewas: Math.round(
+        ((s.disbursedToVendors ?? 0) +
+          (s.inFlightDisbursements ?? 0) +
+          (s.activeEscrowLiabilities ?? 0) +
+          (s.unclaimedAvailableBalances ?? 0)) *
+          100
+      ),
+    },
+    equity: {
+      earnedPlatformCommissionGhs: s.platformCommissionEarned ?? 0,
+      earnedPlatformCommissionPesewas: Math.round((s.platformCommissionEarned ?? 0) * 100),
+      potentialPlatformCommissionGhs: 0,
+      potentialPlatformCommissionPesewas: 0,
+      totalCommissionGhs: s.totalPlatformRevenue ?? 0,
+      totalCommissionPesewas: Math.round((s.totalPlatformRevenue ?? 0) * 100),
+    },
+    disbursements: {
+      totalPaidOutGhs: s.disbursedToVendors ?? 0,
+      totalPaidOutPesewas: Math.round((s.disbursedToVendors ?? 0) * 100),
+      paidOutBatchesCount: s.disbursedTransactionsCount ?? 0,
+      refundedGhs: s.customerRefundsSettled ?? 0,
+      refundedPesewas: Math.round((s.customerRefundsSettled ?? 0) * 100),
+    },
+    reconciliation: {
+      expectedInflowGhs: s.totalAccounted ?? 0,
+      expectedInflowPesewas: Math.round((s.totalAccounted ?? 0) * 100),
+      actualInflowGhs: s.totalGatewayInflow ?? 0,
+      actualInflowPesewas: Math.round((s.totalGatewayInflow ?? 0) * 100),
+      varianceGhs: s.variance ?? 0,
+      variancePesewas: Math.round((s.variance ?? 0) * 100),
+      isReconciled: s.isBalanced ?? true,
+    },
+    dailyBreakdown: Array.isArray(d.dailyTrends)
+      ? d.dailyTrends.map((t: any) => ({
+          date: t.date,
+          customerPaymentsGhs: t.inflow ?? 0,
+          vendorLiabilitiesGhs: 0,
+          earnedCommissionGhs: 0,
+          payoutDisbursementsGhs: t.outflow ?? 0,
+        }))
+      : [],
+  };
 }
 
 /**
