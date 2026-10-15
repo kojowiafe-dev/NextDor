@@ -65,15 +65,29 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
       {/* Top Section: Logo + Navigation */}
       <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
         {/* Logo Bar */}
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 px-4 py-2.5">
+        <div
+          className={`flex h-16 shrink-0 items-center border-b border-white/5 ${
+            collapsed ? "justify-center px-2 py-2.5" : "justify-between px-4 py-2.5"
+          }`}
+        >
           <Link
             href="/admin"
             onClick={onClose}
-            className="flex items-center gap-2.5 overflow-hidden"
+            className={`flex items-center gap-2.5 overflow-hidden ${
+              collapsed ? "justify-center" : ""
+            }`}
+            title="NextDor Admin Command"
           >
             {collapsed ? (
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#ff9900] text-base font-black text-zinc-950 shadow-md">
-                N
+              <div className="group/logo flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#1c2333] to-[#121824] ring-1 ring-[#ff9900]/40 shadow-md hover:ring-[#ff9900] transition-all duration-200">
+                <Image
+                  src="/arrow-loader.png"
+                  alt="NextDor Admin"
+                  width={28}
+                  height={28}
+                  className="h-6 w-6 object-contain drop-shadow-[0_2px_6px_rgba(255,153,0,0.45)] group-hover/logo:scale-110 transition-transform duration-200"
+                  priority
+                />
               </div>
             ) : (
               <div className="flex flex-col gap-1">

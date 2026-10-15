@@ -303,7 +303,7 @@ export class ReturnService {
           orderNumber: returnRequest.order.number,
           returnId: returnRequest.id,
           refundAmount: Number(returnRequest.refundAmount),
-          paymentChannel: successfulPayment.channel || "MOMO",
+          paymentChannel: successfulPayment.method || "MOMO",
           paystackRefundId: gatewayRefundData.id ? String(gatewayRefundData.id) : undefined,
         },
       }).catch((err) =>

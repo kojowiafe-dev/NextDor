@@ -11,6 +11,7 @@ export class ReturnRepository {
       include: {
         items: true,
         vendorOrders: true,
+        user: { select: { email: true, name: true } },
         payments: {
           where: { status: "SUCCESS" },
           orderBy: { createdAt: "desc" },

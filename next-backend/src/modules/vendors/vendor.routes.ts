@@ -73,11 +73,12 @@ async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
   req.userEmail = req.authUser!.email;
 }
 
+// Instantiate Repository and Domain Strategy, then inject into VendorService (DIP)
+export const vendorRepository = new VendorRepository();
+export const commissionCalculator = new CommissionCalculator();
+export const vendorService = new VendorService(vendorRepository, commissionCalculator);
+
 export const vendorRoutes: FastifyPluginAsync = async (app) => {
-  // Instantiate Repository and Domain Strategy, then inject into VendorService (DIP)
-  const vendorRepository = new VendorRepository();
-  const commissionCalculator = new CommissionCalculator();
-  const vendorService = new VendorService(vendorRepository, commissionCalculator);
 
   // ─── PUBLIC DIRECTORY & STOREFRONTS ──────────────────────────────────────
 

@@ -35,11 +35,13 @@ import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { redis, redisForQueue } from "./lib/redis.js";
 import { closeEmailQueue } from "./lib/email.queue.js";
+import { orderService } from "./modules/orders/order.service.js";
 
 async function main() {
   const app = await buildApp();
 
   let isShuttingDown = false;
+  let reclamationTimer: NodeJS.Timeout | null = null;
 
   // Graceful shutdown handler
   async function shutdown(signal: string) {
@@ -56,13 +58,18 @@ async function main() {
     forceExitTimer.unref();
 
     try {
-      // 1. Stop accepting new connections
+      // 1. Stop background workers
+      if (reclamationTimer) {
+        clearInterval(reclamationTimer);
+      }
+
+      // 2. Stop accepting new connections
       await app.close();
 
-      // 2. Close background job queues and workers
+      // 3. Close background job queues and workers
       await closeEmailQueue();
 
-      // 3. Close database pool
+      // 4. Close database pool
       await prisma.$disconnect();
 
       // 4. Disconnect Redis clients if connected
@@ -118,6 +125,18 @@ async function main() {
   try {
     const address = await app.listen({ port: config.PORT, host: config.HOST });
     logger.info({ address, env: config.NODE_ENV }, "🚀 NextDor API is running");
+
+    // ─── Automated Inventory Reclamation Worker (Loophole 2 Fix) ─────────────
+    // Runs every 10 minutes to release reserved stock from unpaid abandoned checkouts
+    const RECLAMATION_INTERVAL_MS = 10 * 60 * 1000;
+    reclamationTimer = setInterval(async () => {
+      try {
+        await orderService.reclaimAbandonedOrders(30);
+      } catch (err) {
+        logger.warn({ err }, "Periodic abandoned order reclamation encountered an error");
+      }
+    }, RECLAMATION_INTERVAL_MS);
+    reclamationTimer.unref();
   } catch (err) {
     logger.fatal({ err }, "Failed to start server");
     process.exit(1);

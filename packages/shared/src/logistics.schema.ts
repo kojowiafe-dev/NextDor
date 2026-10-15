@@ -65,6 +65,8 @@ export type UpdateDeliveryZoneInput = z.infer<typeof UpdateDeliveryZoneSchema>;
 // Courier Dispatch & Tracking Schemas
 export const CreateShipmentSchema = z.object({
   orderId: z.string().uuid("Invalid order ID"),
+  vendorOrderId: z.string().uuid("Invalid vendor order ID").optional(),
+  vendorId: z.string().uuid("Invalid vendor ID").optional(),
   carrier: z.string().trim().min(2, "Carrier name is required"),
   trackingNumber: z.string().trim().min(3, "Tracking number is required"),
   trackingUrl: z.string().url("Invalid tracking URL").optional().or(z.literal("")),
@@ -72,6 +74,7 @@ export const CreateShipmentSchema = z.object({
   courierPhone: z.string().trim().optional(),
   dispatchNotes: z.string().trim().optional(),
   estimatedDelivery: z.string().datetime().optional(),
+  metadata: z.record(z.any()).optional(),
 });
 export type CreateShipmentInput = z.infer<typeof CreateShipmentSchema>;
 

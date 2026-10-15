@@ -18,8 +18,9 @@ export const metadata: Metadata = {
   description:
     "Shop electronics, laptops, beauty, bakery and more at Nextdor. Quality products delivered across Ghana.",
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: "/arrow-loader.png",
+    shortcut: "/arrow-loader.png",
+    apple: "/arrow-loader.png",
   },
 };
 

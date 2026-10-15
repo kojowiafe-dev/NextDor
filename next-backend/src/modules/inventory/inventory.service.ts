@@ -461,7 +461,7 @@ export class InventoryService {
         params: {
           vendorEmail: notifyEmail,
           storeName: vendorName,
-          sku: params.sku,
+          sku: (params as any).sku || params.productId,
           productName: params.productName,
           currentStock: params.quantity,
           threshold: params.threshold,

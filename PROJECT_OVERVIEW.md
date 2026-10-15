@@ -276,6 +276,12 @@ All models are defined in [`next-backend/prisma/schema.prisma`](./next-backend/p
     - Previous price is displayed with a strikethrough (`line-through`).
     - Percentage discount badge is calculated and rendered: `Math.round(((regularPrice - price) / regularPrice) * 100)% OFF` (or `-X%`).
   - When `regularPrice` is null, undefined, or $\le$ `price`, strikethrough price and percentage badges are omitted.
+- **Automated 30-Minute Abandoned Cart Inventory Reclamation:**
+  - Unpaid checkouts in `PENDING` status for over 30 minutes without successful payment are automatically cancelled by a scheduled background worker (`OrderService.reclaimAbandonedOrders`), immediately returning reserved units to physical on-shelf inventory and decrementing backorder quotas.
+- **Universal 48-Hour Escrow Clearance & Delivery Cascade:**
+  - Delivery transitions (whether triggered by carrier webhooks, individual merchant fulfillment, or admin overrides) universally propagate to child `VendorOrder` rows and initialize the 48-hour buyer protection hold (`clearedAt = NOW() + 48h`), guaranteeing merchant funds are never trapped in uncleared limbo.
+- **Independent Multi-Vendor Courier Dispatch & Parcel Tracking:**
+  - Administrative order details view integrates a live **Courier Dispatch & Shipment Management** console allowing direct carrier assignment (Fez, Kwik, DHL, Internal Courier), random tracking number generation, driver name/phone capture, and automatic SMS/email customer notifications.
 
 ---
 

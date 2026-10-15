@@ -429,6 +429,21 @@ export class OrderRepository {
           where: { orderId, status: { notIn: ["DELIVERED", "CANCELLED"] } },
           data: { status: "CANCELLED" },
         });
+      } else if (status === "DELIVERED") {
+        const escrowClearance = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        // Cascade delivery to all non-cancelled sub-orders and initialize 48h escrow release timer
+        await tx.vendorOrder.updateMany({
+          where: { orderId, status: { not: "CANCELLED" } },
+          data: {
+            status: "DELIVERED",
+            clearedAt: escrowClearance,
+          },
+        });
+      } else if (status === "SHIPPED") {
+        await tx.vendorOrder.updateMany({
+          where: { orderId, status: { in: ["PENDING", "PROCESSING"] } },
+          data: { status: "SHIPPED" },
+        });
       }
 
       await tx.orderStatusHistory.create({

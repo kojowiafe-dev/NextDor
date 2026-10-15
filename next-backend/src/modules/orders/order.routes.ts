@@ -20,6 +20,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { orderService } from "./order.service.js";
 import { paymentService } from "../payments/payment.service.js";
+import { vendorService } from "../vendors/vendor.routes.js";
 import { optionalAuth, requireAdmin, requireAuth, requireVendor, resolveVendorId } from "../../lib/auth.guards.js";
 import type { OrderStatus, VendorOrderStatus } from "@prisma/client";
 
@@ -371,6 +372,29 @@ export const adminOrderRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ success: true, data: { orderId: order.id, status: order.status } });
     },
   );
+
+  app.post(
+    "/reclaim-abandoned",
+    {
+      preHandler: requireAdmin,
+      schema: {
+        description: "Admin: reclaim inventory from unpaid abandoned orders",
+        tags: ["Admin", "Orders"],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          properties: {
+            olderThanMinutes: { type: "integer", minimum: 5, default: 30 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { olderThanMinutes = 30 } = (req.body as { olderThanMinutes?: number }) || {};
+      const result = await orderService.reclaimAbandonedOrders(olderThanMinutes);
+      return reply.send({ success: true, data: result });
+    },
+  );
 };
 
 // ─── Vendor Order Routes ──────────────────────────────────────────────────────
@@ -381,7 +405,7 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
     {
       preHandler: requireVendor,
       schema: {
-        description: "Vendor: list my vendor sub-orders",
+        description: "Vendor: list my vendor sub-orders (Harmonized with Vendor Portal)",
         tags: ["Vendors", "Orders"],
         security: [{ bearerAuth: [] }],
         querystring: {
@@ -389,15 +413,14 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
           properties: {
             page: { type: "integer", minimum: 1, default: 1 },
             limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+            status: { type: "string" },
           },
         },
       },
     },
     async (req, reply) => {
-      const { page, limit } = req.query as { page: number; limit: number };
+      const { page = 1, limit = 20, status } = req.query as { page?: number; limit?: number; status?: string };
 
-      // Tenant isolation: the vendor scope ALWAYS comes from the verified identity,
-      // never from client input (and never falls back to a user id).
       const vendorId = await resolveVendorId(req.authUser!);
       if (!vendorId) {
         return reply.status(403).send({
@@ -406,12 +429,12 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const result = await orderService.getVendorOrders(vendorId, page, limit);
+      const result = await vendorService.listVendorOrders(vendorId, Number(page), Number(limit), status);
 
       return reply.send({
         success: true,
-        data: result.vendorOrders,
-        meta: { total: result.total, page, limit, pages: Math.ceil(result.total / limit) },
+        data: result.orders,
+        meta: { total: result.total, page: result.page, limit: result.limit, pages: result.totalPages },
       });
     },
   );
@@ -421,7 +444,7 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
     {
       preHandler: requireVendor,
       schema: {
-        description: "Vendor: update fulfillment status of a sub-order",
+        description: "Vendor: update fulfillment status of a sub-order with audit log & customer alert",
         tags: ["Vendors", "Orders"],
         security: [{ bearerAuth: [] }],
         params: { type: "object", properties: { vendorOrderId: { type: "string", format: "uuid" } } },
@@ -430,13 +453,14 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
           required: ["status"],
           properties: {
             status: { type: "string", enum: ["PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"] },
+            notes: { type: "string" },
           },
         },
       },
     },
     async (req, reply) => {
       const { vendorOrderId } = req.params as { vendorOrderId: string };
-      const { status } = req.body as { status: VendorOrderStatus };
+      const { status, notes } = req.body as { status: VendorOrderStatus; notes?: string };
 
       const vendorId = await resolveVendorId(req.authUser!);
       if (!vendorId) {
@@ -446,11 +470,22 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const vendorOrder = await orderService.updateVendorOrderStatus(vendorOrderId, status, vendorId);
+      const updated = await vendorService.updateVendorOrderStatus(
+        vendorId,
+        vendorOrderId,
+        status,
+        notes,
+        {
+          userId: req.authUser!.userId,
+          userEmail: req.authUser!.email,
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+        },
+      );
 
       return reply.send({
         success: true,
-        data: { vendorOrderId: vendorOrder.id, status: vendorOrder.status },
+        data: { vendorOrder: updated },
       });
     },
   );

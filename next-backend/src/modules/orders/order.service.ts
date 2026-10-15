@@ -670,6 +670,70 @@ export class OrderService {
       logger.error({ err, orderNumber }, "Failed to dispatch status update email");
     }
   }
+
+  /**
+   * Automatically reclaims stock from abandoned orders (Loophole 2 Fix).
+   * Finds orders where:
+   *  - status: "PENDING"
+   *  - paymentStatus: "UNPAID"
+   *  - createdAt < Date.now() - olderThanMinutes
+   *  - has no successful payment
+   * Cancels them and restocks physical quantities and backorder reservations.
+   */
+  async reclaimAbandonedOrders(olderThanMinutes = 30): Promise<{ reclaimedCount: number; orderNumbers: string[] }> {
+    const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+
+    const abandoned = await prisma.order.findMany({
+      where: {
+        status: "PENDING",
+        paymentStatus: "UNPAID",
+        createdAt: { lte: cutoff },
+        payments: {
+          none: {
+            status: "SUCCESS",
+          },
+        },
+      },
+      select: {
+        id: true,
+        number: true,
+        createdAt: true,
+      },
+    });
+
+    if (abandoned.length === 0) {
+      return { reclaimedCount: 0, orderNumbers: [] };
+    }
+
+    const reclaimedNumbers: string[] = [];
+
+    for (const ord of abandoned) {
+      try {
+        await this.repo.updateStatus(
+          ord.id,
+          "CANCELLED",
+          `Automated: Order cancelled due to checkout inactivity (${olderThanMinutes} min timeout). Inventory returned to stock.`,
+          undefined, // createdBy system
+          "PENDING",
+        );
+        reclaimedNumbers.push(ord.number);
+      } catch (err) {
+        logger.warn({ err, orderId: ord.id, orderNumber: ord.number }, "Failed to reclaim abandoned order");
+      }
+    }
+
+    if (reclaimedNumbers.length > 0) {
+      logger.info(
+        { count: reclaimedNumbers.length, orderNumbers: reclaimedNumbers },
+        "Automated stock reclamation: cancelled abandoned unpaid orders and restored inventory",
+      );
+    }
+
+    return {
+      reclaimedCount: reclaimedNumbers.length,
+      orderNumbers: reclaimedNumbers,
+    };
+  }
 }
 
 // ─── Singleton ────────────────────────────────────────────────────────────────

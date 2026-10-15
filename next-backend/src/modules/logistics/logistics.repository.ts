@@ -183,6 +183,11 @@ export class LogisticsRepository {
    */
   async createShipment(input: CreateShipmentInput) {
     return prisma.$transaction(async (tx) => {
+      const rawInput = input as any;
+      const metadata: Record<string, any> = { ...(rawInput.metadata || {}) };
+      if (rawInput.vendorOrderId) metadata.vendorOrderId = rawInput.vendorOrderId;
+      if (rawInput.vendorId) metadata.vendorId = rawInput.vendorId;
+
       const shipment = await tx.shipment.create({
         data: {
           orderId: input.orderId,
@@ -194,6 +199,7 @@ export class LogisticsRepository {
           dispatchNotes: input.dispatchNotes || null,
           estimatedDelivery: input.estimatedDelivery ? new Date(input.estimatedDelivery) : null,
           status: "LABEL_CREATED",
+          metadata: Object.keys(metadata).length > 0 ? (metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
           events: {
             create: {
               status: "LABEL_CREATED",
@@ -204,6 +210,39 @@ export class LogisticsRepository {
         },
         include: { events: true },
       });
+
+      // Automatically advance Order status to SHIPPED if currently PENDING, CONFIRMED, or PROCESSING
+      const order = await tx.order.findUnique({
+        where: { id: input.orderId },
+        select: { status: true },
+      });
+
+      if (order && (order.status === "CONFIRMED" || order.status === "PROCESSING" || order.status === "PENDING")) {
+        await tx.order.update({
+          where: { id: input.orderId },
+          data: { status: "SHIPPED" },
+        });
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: input.orderId,
+            status: "SHIPPED",
+            note: `Dispatched via courier ${input.carrier.toUpperCase()} (Tracking: ${input.trackingNumber.trim()})`,
+          },
+        });
+      }
+
+      // If specific vendorOrderId was provided, advance it to SHIPPED
+      if (rawInput.vendorOrderId) {
+        await tx.vendorOrder.updateMany({
+          where: { id: rawInput.vendorOrderId, status: { in: ["PENDING", "PROCESSING"] } },
+          data: { status: "SHIPPED" },
+        });
+      } else {
+        await tx.vendorOrder.updateMany({
+          where: { orderId: input.orderId, status: { in: ["PENDING", "PROCESSING"] } },
+          data: { status: "SHIPPED" },
+        });
+      }
 
       return shipment;
     });
@@ -291,34 +330,67 @@ export class LogisticsRepository {
         },
       });
 
-      // 2. Propagate to Order status if applicable
-      if (params.status === "DELIVERED" && existing.order.status !== "DELIVERED") {
-        await tx.order.update({
-          where: { id: existing.orderId },
-          data: { status: "DELIVERED" },
-        });
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: existing.orderId,
-            status: "DELIVERED",
-            note: `Automated: Courier ${existing.carrier} marked package ${existing.trackingNumber} as DELIVERED`,
-          },
-        });
-      } else if (
-        (params.status === "OUT_FOR_DELIVERY" || params.status === "IN_TRANSIT") &&
-        (existing.order.status === "CONFIRMED" || existing.order.status === "PROCESSING")
-      ) {
-        await tx.order.update({
-          where: { id: existing.orderId },
-          data: { status: "SHIPPED" },
-        });
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: existing.orderId,
-            status: "SHIPPED",
-            note: `Automated: Courier ${existing.carrier} marked shipment ${existing.trackingNumber} as ${params.status}`,
-          },
-        });
+      // 2. Propagate to Order status and VendorOrder escrow clearance
+      if (params.status === "DELIVERED") {
+        if (existing.order.status !== "DELIVERED") {
+          await tx.order.update({
+            where: { id: existing.orderId },
+            data: { status: "DELIVERED" },
+          });
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: existing.orderId,
+              status: "DELIVERED",
+              note: `Automated: Courier ${existing.carrier} marked package ${existing.trackingNumber} as DELIVERED`,
+            },
+          });
+        }
+
+        const escrowClearance = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        const metadata = (existing.metadata as Record<string, any>) || {};
+        const targetVendorOrderId = metadata.vendorOrderId as string | undefined;
+
+        if (targetVendorOrderId) {
+          // Specific sub-order package delivered
+          await tx.vendorOrder.updateMany({
+            where: { id: targetVendorOrderId, status: { not: "CANCELLED" } },
+            data: { status: "DELIVERED", clearedAt: escrowClearance },
+          });
+        } else {
+          // Master delivery: cascade to all active sub-orders and initialize 48h escrow clearance
+          await tx.vendorOrder.updateMany({
+            where: { orderId: existing.orderId, status: { not: "CANCELLED" } },
+            data: { status: "DELIVERED", clearedAt: escrowClearance },
+          });
+        }
+      } else if (params.status === "OUT_FOR_DELIVERY" || params.status === "IN_TRANSIT") {
+        if (existing.order.status === "CONFIRMED" || existing.order.status === "PROCESSING" || existing.order.status === "PENDING") {
+          await tx.order.update({
+            where: { id: existing.orderId },
+            data: { status: "SHIPPED" },
+          });
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: existing.orderId,
+              status: "SHIPPED",
+              note: `Automated: Courier ${existing.carrier} marked shipment ${existing.trackingNumber} as ${params.status}`,
+            },
+          });
+        }
+
+        const metadata = (existing.metadata as Record<string, any>) || {};
+        const targetVendorOrderId = metadata.vendorOrderId as string | undefined;
+        if (targetVendorOrderId) {
+          await tx.vendorOrder.updateMany({
+            where: { id: targetVendorOrderId, status: { in: ["PENDING", "PROCESSING"] } },
+            data: { status: "SHIPPED" },
+          });
+        } else {
+          await tx.vendorOrder.updateMany({
+            where: { orderId: existing.orderId, status: { in: ["PENDING", "PROCESSING"] } },
+            data: { status: "SHIPPED" },
+          });
+        }
       }
 
       return updatedShipment;
