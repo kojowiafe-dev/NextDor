@@ -473,35 +473,43 @@ export class VendorService {
     if (customerEmail) {
       if (status === "SHIPPED") {
         // Customer Alert: Package is ready and out for delivery / hub pickup
-        EmailService.sendPackageReadyNotification({
-          email: customerEmail,
-          customerName,
-          orderNumber: orderObj.number,
-          destinationCity,
-          storeName,
-          isPickup,
+        dispatchEmailAsync({
+          type: "package_ready",
+          params: {
+            email: customerEmail,
+            customerName,
+            orderNumber: orderObj.number,
+            destinationCity,
+            storeName,
+            isPickup,
+          },
         }).catch((err) => {
-          logger.warn({ err, orderNumber: orderObj.number }, "Failed to send package ready email");
+          logger.warn({ err, orderNumber: orderObj.number }, "Failed to queue package ready email");
         });
       } else if (status === "PROCESSING") {
-        EmailService.sendOrderStatusUpdate({
-          email: customerEmail,
-          customerName,
-          orderNumber: orderObj.number,
-          status: "PREPARING & PACKAGING",
-          note: `Merchant "${storeName}" has accepted your items and is currently packaging your order for courier dispatch.`,
+        dispatchEmailAsync({
+          type: "order_status_update",
+          params: {
+            email: customerEmail,
+            customerName,
+            orderNumber: orderObj.number,
+            status: "PREPARING & PACKAGING",
+            note: `Merchant "${storeName}" has accepted your items and is currently packaging your order for courier dispatch.`,
+          },
         }).catch((err) => {
-          logger.warn({ err, orderNumber: orderObj.number }, "Failed to send processing update email");
+          logger.warn({ err, orderNumber: orderObj.number }, "Failed to queue processing update email");
         });
       } else if (status === "DELIVERED") {
-        EmailService.sendOrderStatusUpdate({
-          email: customerEmail,
-          customerName,
-          orderNumber: orderObj.number,
-          status: "DELIVERED",
-          note: `Your order from "${storeName}" has been successfully delivered. 48-Hour Escrow protection active.`,
+        dispatchEmailAsync({
+          type: "delivery_confirmation",
+          params: {
+            email: customerEmail,
+            customerName,
+            orderNumber: orderObj.number,
+            deliveryAddress: `${shipAddr.street || "Direct Delivery"}, ${destinationCity}`,
+          },
         }).catch((err) => {
-          logger.warn({ err, orderNumber: orderObj.number }, "Failed to send delivery update email");
+          logger.warn({ err, orderNumber: orderObj.number }, "Failed to queue delivery confirmation email");
         });
       }
     }

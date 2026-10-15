@@ -219,15 +219,14 @@ export class LogisticsService {
       }
       if (recipientEmail) {
         dispatchEmailAsync({
-          type: "order_status_update",
+          type: "delivery_confirmation",
           params: {
             email: recipientEmail,
             customerName: recipientName,
             orderNumber: shipment.order.number,
-            status: "DELIVERED",
-            note: "Your package has been successfully delivered. Thank you for shopping with NextDor!",
+            deliveryAddress: `${shippingAddr.street || "Direct Delivery"}, ${shippingAddr.city || "Accra"}`,
           },
-        });
+        }).catch((err) => logger.warn({ err }, "Failed to queue delivery confirmation email"));
       }
     }
 

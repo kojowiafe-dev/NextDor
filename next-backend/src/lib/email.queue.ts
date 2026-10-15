@@ -25,6 +25,7 @@ import { logger } from "./logger.js";
 export type EmailJobData =
   | { type: "verification"; email: string; name: string; code: string }
   | { type: "password_reset"; email: string; name: string; code: string }
+  | { type: "welcome_customer"; email: string; customerName: string }
   | {
       type: "order_confirmation";
       params: Parameters<typeof EmailService.sendOrderConfirmation>[0];
@@ -44,6 +45,26 @@ export type EmailJobData =
   | {
       type: "package_ready";
       params: Parameters<typeof EmailService.sendPackageReadyNotification>[0];
+    }
+  | {
+      type: "delivery_confirmation";
+      params: Parameters<typeof EmailService.sendDeliveryConfirmation>[0];
+    }
+  | {
+      type: "return_request_submitted";
+      params: Parameters<typeof EmailService.sendReturnRequestConfirmation>[0];
+    }
+  | {
+      type: "refund_processed";
+      params: Parameters<typeof EmailService.sendRefundProcessedNotification>[0];
+    }
+  | {
+      type: "return_disputed";
+      params: Parameters<typeof EmailService.sendReturnDisputedNotification>[0];
+    }
+  | {
+      type: "low_stock_alert";
+      params: Parameters<typeof EmailService.sendLowStockAlert>[0];
     };
 
 async function processEmailJob(data: EmailJobData): Promise<boolean> {
@@ -52,6 +73,8 @@ async function processEmailJob(data: EmailJobData): Promise<boolean> {
       return EmailService.sendVerificationCode(data.email, data.name, data.code);
     case "password_reset":
       return EmailService.sendPasswordResetCode(data.email, data.name, data.code);
+    case "welcome_customer":
+      return EmailService.sendWelcomeCustomer(data.email, data.customerName);
     case "order_confirmation":
       return EmailService.sendOrderConfirmation(data.params);
     case "vendor_new_order":
@@ -62,9 +85,75 @@ async function processEmailJob(data: EmailJobData): Promise<boolean> {
       return EmailService.sendOrderStatusUpdate(data.params);
     case "package_ready":
       return EmailService.sendPackageReadyNotification(data.params);
+    case "delivery_confirmation":
+      return EmailService.sendDeliveryConfirmation(data.params);
+    case "return_request_submitted":
+      return EmailService.sendReturnRequestConfirmation(data.params);
+    case "refund_processed":
+      return EmailService.sendRefundProcessedNotification(data.params);
+    case "return_disputed":
+      return EmailService.sendReturnDisputedNotification(data.params);
+    case "low_stock_alert":
+      return EmailService.sendLowStockAlert(data.params);
     default:
       logger.warn({ data }, "Unknown email job type received");
       return false;
+  }
+}
+
+// ── In-Memory Resilient Queue Fallback ──────────────────────────────────────────
+// Ensures high throughput, concurrency protection, and automatic retries even
+// when Redis is not available or undergoing maintenance.
+interface InMemoryJob {
+  id: string;
+  data: EmailJobData;
+  attempts: number;
+  maxAttempts: number;
+}
+
+const memoryQueue: InMemoryJob[] = [];
+let activeWorkers = 0;
+const MAX_CONCURRENT_MEM_WORKERS = 5;
+let processedCount = 0;
+let failedCount = 0;
+
+function pumpMemoryQueue() {
+  while (activeWorkers < MAX_CONCURRENT_MEM_WORKERS && memoryQueue.length > 0) {
+    const job = memoryQueue.shift()!;
+    activeWorkers++;
+
+    (async () => {
+      try {
+        const success = await processEmailJob(job.data);
+        if (success) {
+          processedCount++;
+        } else {
+          throw new Error("Email provider returned non-success status");
+        }
+      } catch (err: any) {
+        job.attempts++;
+        if (job.attempts < job.maxAttempts) {
+          const delayMs = Math.min(1000 * Math.pow(2, job.attempts), 10000);
+          logger.warn(
+            { jobId: job.id, type: job.data.type, attempt: job.attempts, delayMs },
+            "In-memory email dispatch failed; scheduling retry"
+          );
+          setTimeout(() => {
+            memoryQueue.push(job);
+            pumpMemoryQueue();
+          }, delayMs);
+        } else {
+          failedCount++;
+          logger.error(
+            { jobId: job.id, type: job.data.type, err: err?.message },
+            "DEAD LETTER: In-memory email job failed all retry attempts"
+          );
+        }
+      } finally {
+        activeWorkers--;
+        pumpMemoryQueue();
+      }
+    })();
   }
 }
 
@@ -106,18 +195,31 @@ export async function dispatchEmailAsync(data: EmailJobData): Promise<void> {
       await emailQueue.add(data.type, data);
       return;
     } catch (err) {
-      logger.warn({ err, type: data.type }, "BullMQ: queue add failed, falling back to direct background dispatch");
+      logger.warn({ err, type: data.type }, "BullMQ: queue add failed, falling back to resilient in-memory dispatch");
     }
   }
 
-  // Graceful fallback: non-blocking background dispatch
-  setImmediate(async () => {
-    try {
-      await processEmailJob(data);
-    } catch (err) {
-      logger.error({ err, type: data.type }, "Direct background email dispatch failed");
-    }
+  // Resilient throttled in-memory fallback
+  memoryQueue.push({
+    id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    data,
+    attempts: 0,
+    maxAttempts: 3,
   });
+  pumpMemoryQueue();
+}
+
+/**
+ * Exposes telemetry metrics on email queue health and throughput.
+ */
+export function getEmailQueueTelemetry() {
+  return {
+    bullmqConnected: Boolean(emailQueue),
+    memoryQueueLength: memoryQueue.length,
+    activeWorkers,
+    processedCount,
+    failedCount,
+  };
 }
 
 /**
@@ -135,4 +237,5 @@ export async function closeEmailQueue(): Promise<void> {
     logger.warn({ err }, "Error while closing email worker or queue");
   }
 }
+
 

@@ -208,6 +208,13 @@ export class AuthService {
     await this.userRepo.markAuthCodeUsed(authCode.id);
     const updatedUser = await this.userRepo.markEmailVerified(user.id);
 
+    // Dispatch welcome email asynchronously to newly verified shopper
+    dispatchEmailAsync({
+      type: "welcome_customer",
+      email: normalizedEmail,
+      customerName: updatedUser.name || "Valued Shopper",
+    }).catch((err) => logger.warn({ err }, "auth: failed to queue welcome email"));
+
     const tokens = await this._issueTokens(updatedUser.id);
     logger.info({ userId: updatedUser.id, email: normalizedEmail }, "auth: email verified successfully");
 

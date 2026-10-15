@@ -17,6 +17,7 @@ import type {
   ReviewReturnRequestInput,
   DisputeReturnRequestInput,
 } from "@nextdor/shared";
+import { dispatchEmailAsync } from "../../lib/email.queue.js";
 
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 const isProduction = config.NODE_ENV === "production";
@@ -110,6 +111,30 @@ export class ReturnService {
       "Return request created successfully"
     );
 
+    // Asynchronously dispatch confirmation email to customer
+    const customerEmail = order.user?.email || order.guestEmail;
+    if (customerEmail) {
+      const shipAddr = (order.shippingAddress as any) || {};
+      const customerName = shipAddr.recipientName || order.user?.name || "Valued Customer";
+      dispatchEmailAsync({
+        type: "return_request_submitted",
+        params: {
+          email: customerEmail,
+          customerName,
+          orderNumber,
+          returnId: returnRequest.id,
+          refundAmount: Number(totalRefundMinor / 100),
+          items: validatedItems.map((i: any) => ({
+            productName: i.productName,
+            quantity: i.quantity,
+          })),
+          reason: input.reason,
+        },
+      }).catch((err) =>
+        logger.warn({ err, returnId: returnRequest.id }, "Failed to queue return confirmation email")
+      );
+    }
+
     return returnRequest;
   }
 
@@ -158,7 +183,28 @@ export class ReturnService {
       throw new ForbiddenError("You can only dispute return requests for your store.");
     }
 
-    return this.repo.disputeReturnRequest(returnId, input.disputeNotes);
+    const disputed = await this.repo.disputeReturnRequest(returnId, input.disputeNotes);
+
+    // Asynchronously alert customer of dispute escalation
+    const customerEmail = returnRequest.order?.user?.email || returnRequest.order?.guestEmail;
+    if (customerEmail) {
+      const shipAddr = (returnRequest.order?.shippingAddress as any) || {};
+      const customerName = shipAddr.recipientName || returnRequest.order?.user?.name || "Valued Customer";
+      dispatchEmailAsync({
+        type: "return_disputed",
+        params: {
+          email: customerEmail,
+          customerName,
+          orderNumber: returnRequest.order.number,
+          returnId: returnRequest.id,
+          disputeNotes: input.disputeNotes,
+        },
+      }).catch((err) =>
+        logger.warn({ err, returnId }, "Failed to queue return dispute email")
+      );
+    }
+
+    return disputed;
   }
 
   /**
@@ -243,6 +289,27 @@ export class ReturnService {
       { returnId, refundId: settled.id, amount: returnRequest.refundAmount },
       "Refund processed and settled successfully"
     );
+
+    // Asynchronously dispatch refund settled email to customer
+    const customerEmail = returnRequest.order?.user?.email || returnRequest.order?.guestEmail;
+    if (customerEmail) {
+      const shipAddr = (returnRequest.order?.shippingAddress as any) || {};
+      const customerName = shipAddr.recipientName || returnRequest.order?.user?.name || "Valued Customer";
+      dispatchEmailAsync({
+        type: "refund_processed",
+        params: {
+          email: customerEmail,
+          customerName,
+          orderNumber: returnRequest.order.number,
+          returnId: returnRequest.id,
+          refundAmount: Number(returnRequest.refundAmount),
+          paymentChannel: successfulPayment.channel || "MOMO",
+          paystackRefundId: gatewayRefundData.id ? String(gatewayRefundData.id) : undefined,
+        },
+      }).catch((err) =>
+        logger.warn({ err, returnId }, "Failed to queue refund processed email")
+      );
+    }
 
     return settled;
   }

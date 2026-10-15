@@ -1,5 +1,6 @@
 import { InventoryRepository } from "./inventory.repository.js";
 import { EmailService } from "../../lib/email.js";
+import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { SmsService } from "../../lib/sms.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
@@ -455,13 +456,19 @@ export class InventoryService {
         </div>
       `;
 
-      await EmailService.sendEmail({
-        to: notifyEmail,
-        subject: alertSubject,
-        html,
-        text: `${alertSubject}. Current: ${params.quantity} units, Threshold: ${params.threshold}. Location: ${params.warehouseName}.`,
+      dispatchEmailAsync({
+        type: "low_stock_alert",
+        params: {
+          vendorEmail: notifyEmail,
+          storeName: vendorName,
+          sku: params.sku,
+          productName: params.productName,
+          currentStock: params.quantity,
+          threshold: params.threshold,
+          warehouseName: params.warehouseName,
+        },
       }).catch((err) => {
-        logger.warn({ err, notifyEmail }, "Failed to send low stock email");
+        logger.warn({ err, notifyEmail }, "Failed to queue low stock email");
       });
     }
   }

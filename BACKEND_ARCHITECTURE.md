@@ -1,7 +1,7 @@
 # NextDor Backend — Production Architecture
 
 > Living document. Updated as each phase is built.
-> Last updated: 2026-08-31
+> Last updated: October 2026
 
 ---
 
@@ -58,17 +58,18 @@ graph TB
     end
 
     subgraph Jobs["Background Jobs"]
-        BullMQ["BullMQ Workers"]
-        EmailQ["Email Queue (Resend)"]
+        BullMQ["BullMQ Workers (Redis + In-Memory Fallback)"]
+        EmailQ["Email Queue (Resend + Cloudflare)"]
         SMSQ["SMS Queue (Arkesel)"]
         WebhookQ["Webhook Retry Queue"]
         SyncQ["WooCommerce Sync Queue"]
     end
 
     subgraph External["External Services"]
-        Paystack["Paystack (Card + MoMo)"]
-        ResendSvc["Resend (Transactional Email)"]
-        Arkesel["Arkesel (Ghana SMS)"]
+        Paystack["Paystack (Card, MoMo & Automated Transfers)"]
+        ResendSvc["Resend / Cloudflare (Transactional Email)"]
+        Arkesel["Arkesel (Ghana SMS OTP & Telemetry)"]
+        Couriers["Couriers (Fez Delivery, Kwik, DHL Webhooks)"]
     end
 
     Browser --> Vercel
@@ -79,6 +80,7 @@ graph TB
     Fastify --> Redis
     Fastify --> BullMQ
     Fastify --> Paystack
+    Fastify <--> Couriers
     BullMQ --> EmailQ --> ResendSvc
     BullMQ --> SMSQ --> Arkesel
     BullMQ --> WebhookQ --> Paystack
@@ -92,52 +94,56 @@ graph TB
 
 ```
 NextDor/
-├── next-frontend/          # Next.js 15 App Router
-├── next-backend/           # Fastify API
+├── next-frontend/          # Next.js 16 App Router (React 19)
+├── next-backend/           # Fastify v5 API Server
 │   ├── src/
 │   │   ├── app.ts          # Fastify instance + plugin registration
 │   │   ├── server.ts       # Entry point (listen)
 │   │   ├── config/         # Environment config (zod-validated)
 │   │   ├── modules/        # Feature modules (vertical slices)
-│   │   │   ├── auth/       # JWT tokens, refresh family rotation, RBAC
+│   │   │   ├── auth/       # JWT tokens, refresh family rotation, RBAC guards
 │   │   │   ├── audit/      # Tamper-proof platform audit trail
 │   │   │   ├── users/      # Profile & addresses
-│   │   │   ├── products/   # Catalog, categories, OCC locking
-│   │   │   ├── vendors/    # Merchant onboarding, sub-orders, 48h escrow, payouts
-│   │   │   ├── orders/     # Checkout, master orders
-│   │   │   ├── payments/   # Paystack gateway & webhooks
+│   │   │   ├── products/   # Catalog, categories, OCC locking, autocomplete
+│   │   │   ├── vendors/    # Merchant onboarding, sub-orders, 48h escrow, payouts, analytics
+│   │   │   ├── orders/     # Checkout, sequential numbering, Paystack verification
+│   │   │   ├── payments/   # Paystack gateway, HMAC webhooks, atomic idempotency
+│   │   │   ├── returns/    # 48-Hour escrow return claims, merchant & admin disputes, Paystack refunds
+│   │   │   ├── logistics/  # GhanaPost GPS geo-pricing quotes & third-party courier webhooks
+│   │   │   ├── payouts/    # Bulk MoMo payout batches & reconciliation engine
+│   │   │   ├── inventory/  # Multi-warehouse tracking, stock transfers & low-stock alerts
 │   │   │   ├── reviews/    # Product ratings & moderation
 │   │   │   ├── sync/       # Asynchronous WooCommerce worker
-│   │   │   └── admin/      # Platform governance & merchant approvals
+│   │   │   └── admin/      # Platform governance, merchant approvals, accounting ledger
 │   │   ├── lib/
-│   │   │   ├── prisma.ts
-│   │   │   ├── redis.ts
-│   │   │   ├── queue.ts
-│   │   │   ├── logger.ts
-│   │   │   └── errors.ts
-│   │   ├── plugins/
-│   │   │   ├── auth.ts
-│   │   │   ├── cors.ts
-│   │   │   ├── rateLimit.ts
-│   │   │   └── swagger.ts
-│   │   └── workers/
-│   │       ├── email.worker.ts
-│   │       ├── sms.worker.ts
-│   │       ├── payment.worker.ts
-│   │       └── sync.worker.ts
+│   │   │   ├── prisma.ts   # Prisma client singleton with slow query telemetry
+│   │   │   ├── redis.ts    # Redis client with graceful fallback
+│   │   │   ├── email.ts    # Resend + Cloudflare transactional email rendering
+│   │   │   ├── email.queue.ts # BullMQ async queue + in-memory resilient worker fallback
+│   │   │   ├── sms.ts      # Arkesel Ghana SMS gateway
+│   │   │   ├── logger.ts   # Pino structured logging
+│   │   │   ├── errors.ts   # RFC 7807 problem details
+│   │   │   └── originPolicy.ts # Hardened CORS exact-origin matching
+│   │   ├── scripts/
+│   │   │   └── check-email.ts # Email service health, queue telemetry & live dispatch CLI
+│   │   └── __tests__/      # Automated test suites (unit + end-to-end)
+│   │       ├── e2e/        # Comprehensive end-to-end integration workflows (7 suites)
+│   │       └── *.test.ts   # Unit test suites across security, math & invariants
 │   ├── prisma/
-│   │   ├── schema.prisma
-│   │   └── migrations/
-│   ├── tests/
+│   │   ├── schema.prisma   # 20+ normalized models & relational indexes
+│   │   └── migrations/     # Versioned SQL migration history
+│   ├── vitest.config.ts    # Serialized test execution & connection pool stabilization
 │   └── package.json
 └── packages/
-    └── shared/             # Zod schemas + TS types shared by both apps
+    └── shared/             # Shared Zod schemas + TypeScript contracts
         ├── src/
-        │   ├── schemas/
-        │   │   ├── auth.ts
-        │   │   ├── order.ts
-        │   │   ├── product.ts
-        │   │   └── user.ts
+        │   ├── auth.schema.ts
+        │   ├── order.schema.ts
+        │   ├── product.schema.ts
+        │   ├── return.schema.ts
+        │   ├── logistics.schema.ts
+        │   ├── payout.schema.ts
+        │   ├── inventory.schema.ts
         │   └── index.ts
         └── package.json
 ```
@@ -165,10 +171,22 @@ erDiagram
     Order ||--|{ OrderItem : contains
     Order ||--o{ Payment : has
     Order ||--o{ OrderStatusHistory : tracks
+    Order ||--o{ VendorOrder : partitions
+    Order ||--o{ Shipment : dispatches
+    Order ||--o{ ReturnRequest : initiates
+    Shipment ||--o{ ShipmentEvent : records
+    ReturnRequest ||--o{ Refund : settles
+    Vendor ||--o{ VendorOrder : fulfills
+    Vendor ||--o{ PayoutBatchItem : receives
+    PayoutBatch ||--|{ PayoutBatchItem : aggregates
+    Warehouse ||--o{ WarehouseStock : stores
+    Warehouse ||--o{ StockMovement : audits
+    Warehouse ||--o{ StockAlert : triggers
     Product ||--o{ OrderItem : "appears in"
     Product ||--o{ Review : receives
     Product }o--o{ Category : "belongs to"
     Product ||--o{ ProductImage : has
+    Product ||--o{ WarehouseStock : stocked
     Payment ||--o{ PaymentAttempt : logs
     Coupon ||--o{ Order : "applied to"
 ```
@@ -1048,6 +1066,31 @@ Development
 - [x] **Escrow Balance Invariant:** Settle transactions proportionately debit `VendorOrder.vendorEarnings` and `commissionAmount` while preserving total balance conservation without rounding leaks.
 - [x] **Automated Unit Tests:** 35 passed unit tests (100% pass rate) verifying financial conservation and status progression.
 
+### Phase 9 — Dynamic Delivery Zones, Geo-Pricing & Real-Time Courier Webhooks ✅ (Completed)
+- [x] **GhanaPost GPS Digital Resolution:** Automatic prefix normalization (e.g., `GA`, `AK`, `GT`, `WR`) for rooftop coordinates dispatch and regional zone matching.
+- [x] **Zone-Based Tiered Geo-Pricing Engine:** Dynamic `DeliveryZone` and `DeliveryRate` engine with base and weight band calculations (`ceil(weightKg - 1) * perKgFee`) served via `POST /api/v1/logistics/quote`.
+- [x] **Real-Time Courier Webhook Pipeline:** Ingestion endpoint `POST /api/v1/logistics/webhooks/courier` for third-party couriers (Fez Delivery, Kwik, DHL) with automated shipment milestone persistence, customer SMS dispatch (`OUT_FOR_DELIVERY`, `DELIVERED`), and background email delivery confirmations.
+- [x] **Shipment Timeline Tracking:** `Shipment` and `ShipmentEvent` audit models tracking couriers, tracking numbers, driver phone, estimated/actual delivery, and proof-of-delivery notes.
+
+### Phase 10 — Advanced Merchant Analytics, Payout Batches & Ledger Reconciliation ✅ (Completed)
+- [x] **Automated MoMo Payout Batches:** Paystack Transfers API integration for automated bulk Mobile Money settlements (MTN MoMo, Telecel Cash, AT Money) to approved vendors for cleared escrow balances (`status = DELIVERED`, `clearedAt <= now`, `payoutId = null`).
+- [x] **Double-Entry Accounting Ledger:** Financial reconciliation balance sheet (`GET /api/v1/admin/reconciliation/ledger`) verifying Paystack gateway payment inflows against platform commission equity, pending vendor escrow liabilities, and disbursed payouts with invariant variance checking (`Inflows = Liabilities + Equity + Disbursements`).
+- [x] **Merchant Performance Analytics Engine:** Real-time KPI aggregation (`GET /api/v1/vendors/portal/analytics`) computing Average Order Value (AOV), Repeat Customer Rate (%), Return Rate (%), and Fulfillment Speed (hours).
+- [x] **Super-Admin Benchmark Leaderboard:** Comparative merchant ranking leaderboard (`GET /api/v1/admin/analytics/leaderboard`) ranking vendors by GMV, net merchant earnings, AOV, return rates, and top-selling product volume.
+
+### Phase 11 — Enterprise Multi-Warehouse Inventory & Automated Low-Stock Webhooks ✅ (Completed)
+- [x] **Relational Multi-Location Warehousing:** `Warehouse` and `WarehouseStock` data models supporting regional fulfillment hubs (Accra Central, Kumasi Depot, Western Port) with on-shelf quantity, reserved quantity, and bin locations.
+- [x] **Inter-Warehouse Stock Transfers & Conservation Invariant:** Atomic cross-hub transfers (`POST /api/v1/inventory/stock/transfer`) enforcing strict unit conservation (`Total Before === Total After`) with immutable `StockMovement` audit ledger logging (`TRANSFER_IN`, `TRANSFER_OUT`, `RESTOCK`, `MANUAL_ADJUSTMENT`).
+- [x] **Automated Low-Stock Thresholds & Webhooks:** Configurable per-SKU low-stock triggers with automated multi-channel SMS (Arkesel v2) & transactional Email dispatch to merchants upon threshold breach, plus on-demand audit sweep webhooks (`POST /api/v1/inventory/webhooks/trigger-audit`).
+- [x] **Backorder & Pre-Order Quotas:** Atomic backorder reservations during checkout allowing customers to reserve out-of-stock items within configurable quotas (`backorderLimit`, `expectedRestockDate`), with automatic status tagging (`isBackorder: true`).
+
+### Phase 12 — Resilient Asynchronous Email Dispatch & E2E Integration Test Suite ✅ (Completed)
+- [x] **Resilient Transactional Queue Architecture:** BullMQ Redis-backed worker queue (`src/lib/email.queue.ts`) with self-healing, in-memory concurrency-capped fallback (5 concurrent workers, exponential backoff retries, and dead-letter protection) preventing blocking of HTTP request threads.
+- [x] **Comprehensive Transactional Email Suite:** Customer welcome email, order confirmations, vendor new order alerts, Paystack payment receipts, delivery & 48-hour escrow inspection notices, return claim confirmations, admin dispute escalation alerts, refund settlement receipts, and merchant low-stock threshold triggers.
+- [x] **Email Diagnostics & Verification CLI:** Standalone diagnostic script `npm run email:check [recipient]` checking environment configuration, Resend API key, Cloudflare Email Sending API, queue telemetry, template compilation, and live test delivery.
+- [x] **Serialized Test Runner Configuration:** `vitest.config.ts` enforcing `fileParallelism: false` to prevent serverless cloud PostgreSQL connection saturation during high-volume testing.
+- [x] **100% Passing Automated Test Suite:** 89 automated tests passing across 15 test suites (7 comprehensive E2E workflow suites + 8 unit and security invariant test suites).
+
 ---
 
 ## 13. Technology Stack & Key Dependencies
@@ -1068,8 +1111,9 @@ Development
 | @fastify/helmet | ^12.0 | Content-Security-Policy & security headers |
 | @fastify/cors | ^10.0 | Multi-origin CORS support |
 | @fastify/swagger | ^9.2 | Interactive OpenAPI documentation (`/docs`) |
+| vitest | ^2.1 | Unit and end-to-end integration test runner |
 
 ---
 
-> **Status**: Core enterprise foundation, multi-vendor partitioning, financial math, tenant isolation, and Cloudinary media pipelines are fully implemented and verified production-ready.
+> **Status**: Enterprise multi-vendor foundation, dynamic logistics geo-pricing, automated returns & refunds, bulk MoMo payout batches, double-entry reconciliation ledger, multi-warehouse inventory, and resilient background email queues are 100% implemented, documented, and verified with 89 passing automated tests.
 
