@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingCart, Zap, Check, Plus, Minus, Clock } from "lucide-react";
+import { ShoppingCart, Zap, Check, Plus, Minus, Clock, Heart } from "lucide-react";
 import type { Product } from "@/lib/catalog/types";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 
 type AddToCartButtonProps = {
   product: Product;
@@ -13,8 +14,22 @@ type AddToCartButtonProps = {
 export function AddToCartButton({ product }: AddToCartButtonProps) {
   const router = useRouter();
   const { addItem } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
+
+  const liked = isInWishlist(product.id);
+
+  function handleToggleWishlist() {
+    toggleWishlist({
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      price: product.price,
+      currency: product.currency,
+      image: product.images[0]?.src ?? "",
+    });
+  }
 
   const isBackorder = product.stockStatus === "BACKORDER" || (!product.inStock && Boolean(product.allowBackorder));
   const canPurchase = product.inStock || isBackorder;
@@ -149,6 +164,25 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
           </button>
         )}
       </div>
+
+      {/* Wishlist / Like Button */}
+      <button
+        type="button"
+        onClick={handleToggleWishlist}
+        aria-label={liked ? "Remove from wishlist" : "Add to wishlist"}
+        className={`flex w-full items-center justify-center gap-2 rounded-xl border py-2.5 px-4 text-xs font-bold transition-all duration-200 cursor-pointer active:scale-[0.98] ${
+          liked
+            ? "border-rose-200 bg-rose-50/90 text-rose-700 hover:bg-rose-100/80 shadow-2xs"
+            : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50"
+        }`}
+      >
+        <Heart
+          className={`h-4 w-4 transition-transform duration-200 ${
+            liked ? "fill-rose-600 stroke-rose-600 scale-110" : "text-zinc-500"
+          }`}
+        />
+        <span>{liked ? "Saved in Your Wishlist" : "Add to Wishlist"}</span>
+      </button>
     </div>
   );
 }

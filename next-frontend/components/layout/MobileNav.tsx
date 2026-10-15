@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Category } from "@/lib/catalog/types";
 import { useAuth } from "@/context/AuthContext";
+import { useWishlist } from "@/context/WishlistContext";
 
 type MobileNavProps = {
   categories: Category[];
@@ -31,6 +32,7 @@ export function MobileNav({ categories }: MobileNavProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const { isAuthenticated, user, isAdmin, isVendor, logout } = useAuth();
+  const { wishlistCount } = useWishlist();
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -194,6 +196,11 @@ export function MobileNav({ categories }: MobileNavProps) {
                 <div className="flex items-center gap-2.5">
                   <Heart className="h-4 w-4 text-rose-400" />
                   <span>My Wishlist</span>
+                  {wishlistCount > 0 && (
+                    <span className="rounded-full bg-rose-600 px-1.5 py-0.2 text-[10px] font-bold text-white">
+                      {wishlistCount}
+                    </span>
+                  )}
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
               </Link>

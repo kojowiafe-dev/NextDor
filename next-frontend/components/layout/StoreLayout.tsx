@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { getCategories } from "@/lib/catalog";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { WishlistProvider } from "@/context/WishlistContext";
 import { StorefrontShell } from "@/components/layout/StorefrontShell";
 
 export default async function StoreLayout({
@@ -19,7 +20,9 @@ export default async function StoreLayout({
     // Providers still needed (AuthContext used by AdminGuard and Vendor Dashboard)
     return (
       <AuthProvider>
-        <CartProvider>{children}</CartProvider>
+        <CartProvider>
+          <WishlistProvider>{children}</WishlistProvider>
+        </CartProvider>
       </AuthProvider>
     );
   }
@@ -29,9 +32,11 @@ export default async function StoreLayout({
   return (
     <AuthProvider>
       <CartProvider>
-        <StorefrontShell categories={categories}>
-          {children}
-        </StorefrontShell>
+        <WishlistProvider>
+          <StorefrontShell categories={categories}>
+            {children}
+          </StorefrontShell>
+        </WishlistProvider>
       </CartProvider>
     </AuthProvider>
   );

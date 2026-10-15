@@ -4,9 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { MapPin, ShoppingCart, User, ChevronDown, LogOut, Package, Settings, ShieldCheck, Store } from "lucide-react";
+import { MapPin, ShoppingCart, User, ChevronDown, LogOut, Package, Settings, ShieldCheck, Store, Heart } from "lucide-react";
 import type { Category } from "@/lib/catalog/types";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { useAuth } from "@/context/AuthContext";
 import { MobileNav } from "./MobileNav";
 import { SearchBar } from "./SearchBar";
@@ -125,6 +126,7 @@ function AccountDropdown() {
           {[
             { label: "My Account", href: "/account", icon: User },
             { label: "My Orders", href: "/account/orders", icon: Package },
+            { label: "My Wishlist", href: "/account/wishlist", icon: Heart },
             { label: "My Profile", href: "/account/profile", icon: Settings },
           ].map(({ label, href, icon: Icon }) => (
             <Link
@@ -159,6 +161,7 @@ function AccountDropdown() {
 
 export function Header({ categories }: HeaderProps) {
   const { itemCount } = useCart();
+  const { wishlistCount } = useWishlist();
   const { isAdmin, isVendor } = useAuth();
 
   return (
@@ -212,6 +215,23 @@ export function Header({ categories }: HeaderProps) {
           )}
 
           <AccountDropdown />
+
+          {/* Wishlist Link with Live Counter */}
+          <Link
+            href="/account/wishlist"
+            className="relative hidden items-end gap-1 hover:text-[#ff9900] sm:flex"
+            title="My Wishlist"
+          >
+            <div className="relative">
+              <Heart className="h-6 w-6" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
+                  {wishlistCount > 99 ? "99+" : wishlistCount}
+                </span>
+              )}
+            </div>
+            <span className="hidden font-semibold lg:inline">Wishlist</span>
+          </Link>
 
           <Link
             href="/cart"

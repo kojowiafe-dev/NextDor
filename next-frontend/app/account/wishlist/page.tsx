@@ -3,43 +3,15 @@
 import { Heart, ShoppingCart, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { formatPrice } from "@/lib/utils";
-
-type WishlistItem = {
-  id: string;
-  slug: string;
-  name: string;
-  price: number;
-  currency: string;
-  image: string;
-};
-
-const STORAGE_KEY = "nextdor_wishlist";
+import { useWishlist } from "@/context/WishlistContext";
 
 export default function WishlistPage() {
-  const [items, setItems] = useState<WishlistItem[]>([]);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setItems(JSON.parse(stored));
-      }
-    } catch {
-      // Ignored
-    }
-  }, []);
+  const { items, removeFromWishlist } = useWishlist();
 
   function removeItem(id: string) {
-    const updated = items.filter((item) => item.id !== id);
-    setItems(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // Ignored
-    }
+    removeFromWishlist(id);
   }
 
   return (

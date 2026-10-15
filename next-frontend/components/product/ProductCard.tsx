@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Star, ShoppingCart, Check, CheckCircle2, AlertCircle } from "lucide-react";
+import { Star, ShoppingCart, Check, CheckCircle2, AlertCircle, Heart } from "lucide-react";
 import type { Product } from "@/lib/catalog/types";
 import { stripHtml } from "@/lib/utils";
 import { getDiscountPercent } from "@/lib/woocommerce/mappers";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { PriceDisplay } from "./PriceDisplay";
 
 type ProductCardProps = {
@@ -16,8 +17,10 @@ type ProductCardProps = {
 
 export function ProductCard({ product }: ProductCardProps) {
   const { addItem, items } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
   const [justAdded, setJustAdded] = useState(false);
 
+  const liked = isInWishlist(product.id);
   const cartItem = items.find((entry) => entry.productId === product.id);
   const inCartQty = cartItem ? cartItem.quantity : 0;
   const discount = getDiscountPercent(product);
@@ -50,6 +53,19 @@ export function ProductCard({ product }: ProductCardProps) {
     setTimeout(() => {
       setJustAdded(false);
     }, 1400);
+  }
+
+  function handleToggleWishlist(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleWishlist({
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      price: product.price,
+      currency: product.currency,
+      image: image?.src || "",
+    });
   }
 
   return (
@@ -87,25 +103,46 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
       </div>
 
-      {/* Product Image Clickable Link */}
-      <Link
-        href={`/product/${product.slug}`}
-        className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-zinc-50 transition-colors group-hover:bg-[#ff9900]/5 block"
-      >
-        {image && image.src ? (
-          <Image
-            src={image.src}
-            alt={image.alt || product.name}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-contain p-2.5 transition-transform duration-300 group-hover:scale-105"
+      {/* Product Image & Wishlist Button Container */}
+      <div className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-zinc-50 transition-colors group-hover:bg-[#ff9900]/5">
+        <Link
+          href={`/product/${product.slug}`}
+          className="block h-full w-full"
+        >
+          {image && image.src ? (
+            <Image
+              src={image.src}
+              alt={image.alt || product.name}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              className="object-contain p-2.5 transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs font-medium text-zinc-400">
+              No image
+            </div>
+          )}
+        </Link>
+
+        {/* Wishlist / Like Button */}
+        <button
+          type="button"
+          onClick={handleToggleWishlist}
+          aria-label={liked ? "Remove from wishlist" : "Add to wishlist"}
+          title={liked ? "Remove from wishlist" : "Add to wishlist"}
+          className={`absolute top-2 right-2 z-10 flex h-7.5 w-7.5 items-center justify-center rounded-full bg-white/95 backdrop-blur-xs shadow-xs ring-1 transition-all duration-200 hover:scale-110 active:scale-90 cursor-pointer ${
+            liked
+              ? "text-rose-600 ring-rose-200 bg-rose-50/90 shadow-rose-100"
+              : "text-zinc-400 ring-zinc-200/80 hover:text-rose-600 hover:bg-white"
+          }`}
+        >
+          <Heart
+            className={`h-4 w-4 transition-transform ${
+              liked ? "fill-rose-600 stroke-rose-600 scale-105" : "stroke-[2]"
+            }`}
           />
-        ) : (
-          <div className="flex h-full items-center justify-center text-xs font-medium text-zinc-400">
-            No image
-          </div>
-        )}
-      </Link>
+        </button>
+      </div>
 
       {/* Title & Description */}
       <div className="flex flex-1 flex-col">
