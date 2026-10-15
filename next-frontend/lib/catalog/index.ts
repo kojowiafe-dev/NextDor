@@ -13,6 +13,7 @@ import type {
   AutocompleteCategory,
 } from "./types";
 import { API_BASE } from "@/lib/api-config";
+import { createSWRCache } from "@/lib/cache/clientCache";
 
 export function getDiscountPercent(product: { price: number; regularPrice?: number | null }): number {
   if (!product.regularPrice || product.regularPrice <= product.price) return 0;
@@ -441,34 +442,51 @@ export function groupProductsByName(products: Product[]): ConsolidatedProduct[] 
   return Array.from(map.values());
 }
 
+export const searchAutocompleteCache = createSWRCache<AutocompleteResult>(
+  "nextdor_search_autocomplete",
+  3 * 60_000
+);
+
 /**
- * Client/Server function for real-time instant autocomplete search suggestions.
+ * Client/Server function for real-time instant autocomplete search suggestions with SWR caching.
  */
 export async function fetchAutocomplete(
   query: string,
   limit = 6
 ): Promise<AutocompleteResult> {
-  const trimmed = query.trim();
+  const trimmed = query.trim().toLowerCase();
   if (!trimmed) {
     return { products: [], categories: [] };
   }
 
+  const subKey = `${trimmed}_${limit}`;
+  const { data: cached, isStale, hasData } = searchAutocompleteCache.getEntry(subKey);
+
+  // Return immediately if cached and still fresh
+  if (hasData && !isStale) {
+    return cached!;
+  }
+
   try {
-    const res = await fetch(
-      `${API_BASE}/products/autocomplete?q=${encodeURIComponent(trimmed)}&limit=${limit}`,
-      { next: { revalidate: 30 } }
-    );
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success && json.data) {
-        return json.data;
+    const freshData = await searchAutocompleteCache.fetchDedupe(subKey, async () => {
+      const res = await fetch(
+        `${API_BASE}/products/autocomplete?q=${encodeURIComponent(trimmed)}&limit=${limit}`
+      );
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          return json.data;
+        }
       }
-    }
+      return null;
+    });
+
+    if (freshData) return freshData;
   } catch (err) {
     console.warn("Autocomplete fetch failed:", err);
   }
 
-  return { products: [], categories: [] };
+  return cached || { products: [], categories: [] };
 }
 
 export type {
