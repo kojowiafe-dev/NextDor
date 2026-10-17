@@ -394,6 +394,9 @@ export class LogisticsRepository {
       }
 
       return updatedShipment;
+    }, {
+      maxWait: 10000,
+      timeout: 25000,
     });
   }
 }

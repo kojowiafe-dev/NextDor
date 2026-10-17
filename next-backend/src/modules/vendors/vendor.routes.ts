@@ -21,6 +21,7 @@ import { prisma } from "../../lib/prisma.js";
 import { SyncService } from "../sync/sync.service.js";
 import { MerchantAnalyticsService } from "./merchant.analytics.service.js";
 import { requireAdmin, requireVendor, resolveVendorId } from "../../lib/auth.guards.js";
+import { dispatchEmailAsync } from "../../lib/email.queue.js";
 
 const merchantAnalyticsService = new MerchantAnalyticsService();
 
@@ -889,7 +890,21 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
       const updated = await prisma.vendor.update({
         where: { id },
         data: { status: "ACTIVE" },
+        include: { owner: true },
       });
+
+      const notifyEmail = updated.email || updated.owner?.email;
+      if (notifyEmail) {
+        dispatchEmailAsync({
+          type: "vendor_approved",
+          params: {
+            vendorEmail: notifyEmail,
+            storeName: updated.name,
+            ownerName: updated.owner?.name,
+            commissionRate: Number(updated.commissionRate),
+          },
+        }).catch((err) => req.log.warn({ err }, "Failed to queue vendor approval email"));
+      }
 
       await AuditService.log({
         userId: req.userId,
@@ -961,7 +976,35 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
       const updated = await prisma.vendor.update({
         where: { id },
         data: dataToUpdate,
+        include: { owner: true },
       });
+
+      if (body.status && body.status !== previous.status) {
+        const notifyEmail = updated.email || updated.owner?.email;
+        if (notifyEmail) {
+          if (body.status === "ACTIVE") {
+            dispatchEmailAsync({
+              type: "vendor_approved",
+              params: {
+                vendorEmail: notifyEmail,
+                storeName: updated.name,
+                ownerName: updated.owner?.name,
+                commissionRate: Number(updated.commissionRate),
+              },
+            }).catch((err) => req.log.warn({ err }, "Failed to queue vendor approval email"));
+          } else {
+            dispatchEmailAsync({
+              type: "vendor_status_update",
+              params: {
+                vendorEmail: notifyEmail,
+                storeName: updated.name,
+                status: body.status,
+                reason: (req.headers["x-reason"] as string) || undefined,
+              },
+            }).catch((err) => req.log.warn({ err }, "Failed to queue vendor status change email"));
+          }
+        }
+      }
 
       await AuditService.log({
         userId: req.userId,

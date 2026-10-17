@@ -151,6 +151,24 @@ export class PayoutService {
             logger.warn({ err: err?.message, vendorId: vendor.id }, "Payout SMS notice failed")
           );
         }
+
+        // Send confirmation email to merchant
+        if (vendor.email) {
+          dispatchEmailAsync({
+            type: "vendor_payout",
+            params: {
+              vendorEmail: vendor.email,
+              storeName: vendor.name,
+              amount: Number(payout.amount),
+              momoNumber: vendor.momoNumber,
+              momoNetwork: vendor.momoNetwork || "MoMo",
+              reference: transferRef,
+              batchReference: batch.batchReference,
+            },
+          }).catch((err) =>
+            logger.warn({ err: err?.message, vendorId: vendor.id }, "Payout email notice failed")
+          );
+        }
       } catch (itemErr: any) {
         failureCount++;
         logger.error(
@@ -226,6 +244,21 @@ export class PayoutService {
             2
           )} was successfully credited to your wallet.`
         ).catch(() => {});
+      }
+
+      if (payout.vendor.email) {
+        dispatchEmailAsync({
+          type: "vendor_payout",
+          params: {
+            vendorEmail: payout.vendor.email,
+            storeName: payout.vendor.name,
+            amount: Number(payout.amount),
+            momoNumber: payout.vendor.momoNumber || "Registered MoMo",
+            momoNetwork: payout.vendor.momoNetwork || "MoMo",
+            reference: data.reference,
+            batchReference: payout.batch?.batchReference,
+          },
+        }).catch(() => {});
       }
     } else if (event === "transfer.failed" || event === "transfer.reversed") {
       await this.repo.updatePayout(payout.id, {

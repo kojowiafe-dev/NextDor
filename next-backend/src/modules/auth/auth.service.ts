@@ -386,7 +386,12 @@ export class AuthService {
           type: "VERIFY_EMAIL",
           expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         });
-        await EmailService.sendVerificationCode(normalizedEmail, user.name, code);
+        await dispatchEmailAsync({
+          type: "verification",
+          email: normalizedEmail,
+          name: user.name,
+          code,
+        });
       } catch (err) {
         logger.warn({ err }, "Could not auto-dispatch verification code on unverified login attempt");
       }

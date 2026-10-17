@@ -1086,10 +1086,10 @@ Development
 
 ### Phase 12 — Resilient Asynchronous Email Dispatch & E2E Integration Test Suite ✅ (Completed)
 - [x] **Resilient Transactional Queue Architecture:** BullMQ Redis-backed worker queue (`src/lib/email.queue.ts`) with self-healing, in-memory concurrency-capped fallback (5 concurrent workers, exponential backoff retries, and dead-letter protection) preventing blocking of HTTP request threads.
-- [x] **Comprehensive Transactional Email Suite:** Customer welcome email, order confirmations, vendor new order alerts, Paystack payment receipts, delivery & 48-hour escrow inspection notices, return claim confirmations, admin dispute escalation alerts, refund settlement receipts, and merchant low-stock threshold triggers.
+- [x] **Comprehensive Transactional Email Suite (14 flows):** Customer 6-digit OTP verification, password reset recovery, customer welcome onboarding, order confirmations, vendor new order alerts, customer order status progress updates, package ready/pickup notices, Paystack payment receipts, delivery & 48-hour escrow inspection notices, return claim confirmations, admin dispute escalation alerts, refund settlement receipts, merchant low-stock threshold triggers, vendor onboarding approval notifications, vendor store status update notices, and vendor MoMo payout settlement confirmations.
 - [x] **Email Diagnostics & Verification CLI:** Standalone diagnostic script `npm run email:check [recipient]` checking environment configuration, Resend API key, Cloudflare Email Sending API, queue telemetry, template compilation, and live test delivery.
-- [x] **Serialized Test Runner Configuration:** `vitest.config.ts` enforcing `fileParallelism: false` to prevent serverless cloud PostgreSQL connection saturation during high-volume testing.
-- [x] **100% Passing Automated Test Suite:** 89 automated tests passing across 15 test suites (7 comprehensive E2E workflow suites + 8 unit and security invariant test suites).
+- [x] **Serialized Test Runner Configuration:** `vitest.config.ts` enforcing `fileParallelism: false` and extended transaction timeout (`timeout: 25000, maxWait: 10000`) preventing serverless cloud PostgreSQL connection saturation during high-volume testing.
+- [x] **100% Passing Automated Test Suite:** 94 automated tests passing across 15 test suites (7 comprehensive E2E workflow suites + 8 unit and security invariant test suites).
 
 ---
 

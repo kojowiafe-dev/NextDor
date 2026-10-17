@@ -850,12 +850,21 @@ export class EmailService {
    * Dispatches delivery confirmation and 48-hour escrow protection countdown to customer.
    */
   static async sendDeliveryConfirmation(params: {
-    email: string;
+    email?: string;
+    customerEmail?: string;
     customerName: string;
     orderNumber: string;
     deliveryAddress: string;
+    carrier?: string;
+    trackingNumber?: string;
+    deliveredAt?: Date | string;
   }): Promise<boolean> {
-    const { email, customerName, orderNumber, deliveryAddress } = params;
+    const email = params.email || params.customerEmail;
+    if (!email) {
+      logger.warn("sendDeliveryConfirmation: missing recipient email");
+      return false;
+    }
+    const { customerName, orderNumber, deliveryAddress } = params;
     const trackUrl = `https://nextdor.online/track?order=${encodeURIComponent(orderNumber)}`;
     const returnsUrl = `https://nextdor.online/returns?order=${encodeURIComponent(orderNumber)}`;
 
@@ -1136,15 +1145,24 @@ export class EmailService {
    * Dispatches automated inventory threshold warning to merchants when a product SKU is running low.
    */
   static async sendLowStockAlert(params: {
-    vendorEmail: string;
-    storeName: string;
-    sku: string;
+    vendorEmail?: string;
+    recipientEmail?: string;
+    storeName?: string;
+    recipientName?: string;
+    sku?: string;
     productName: string;
     currentStock: number;
     threshold: number;
     warehouseName?: string;
   }): Promise<boolean> {
-    const { vendorEmail, storeName, sku, productName, currentStock, threshold, warehouseName } = params;
+    const vendorEmail = params.vendorEmail || params.recipientEmail;
+    if (!vendorEmail) {
+      logger.warn("sendLowStockAlert: missing recipient email");
+      return false;
+    }
+    const storeName = params.storeName || params.recipientName || "NextDor Merchant";
+    const sku = params.sku || "SKU-N/A";
+    const { productName, currentStock, threshold, warehouseName } = params;
     const portalUrl = "https://nextdor.online/vendor/dashboard";
 
     const html = `
@@ -1203,6 +1221,232 @@ export class EmailService {
       subject: `Low Stock Alert: "${productName}" (${currentStock} remaining) — ${storeName}`,
       html,
       text: `Hello ${storeName}, your product "${productName}" (SKU: ${sku}) is low on stock (${currentStock} left, threshold: ${threshold}). Please restock at: ${portalUrl}`,
+    });
+  }
+
+  /**
+   * Alerts a merchant that their store application has been approved by NextDor administrators.
+   */
+  static async sendVendorApproved(params: {
+    vendorEmail: string;
+    storeName: string;
+    ownerName?: string;
+    commissionRate?: number | string;
+  }): Promise<boolean> {
+    const { vendorEmail, storeName, ownerName = "Merchant Partner", commissionRate = "10.00" } = params;
+    const portalUrl = "https://nextdor.online/vendor/dashboard";
+    const newProductUrl = "https://nextdor.online/vendor/dashboard/products/new";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e4e4e7; }
+            .header { background: #131921; padding: 28px 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .badge { display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-weight: 700; font-size: 13px; padding: 6px 16px; border-radius: 20px; margin-bottom: 16px; }
+            .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0; font-size: 13px; line-height: 1.6; color: #334155; }
+            .btn { display: inline-block; background: #ff9900; color: #131921 !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 28px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(255,153,0,0.3); }
+            .footer { padding: 24px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; background: #fafafa; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 26px; letter-spacing: 1px;">NEXTDOR MERCHANT</h1>
+              <p style="color: #cbd5e1; margin: 4px 0 0 0; font-size: 12px;">Merchant Partner Verification</p>
+            </div>
+            <div class="content">
+              <div class="badge">🎉 Store Application Approved</div>
+              <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 10px 0; color: #09090b;">Congratulations, ${ownerName}!</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+                Your merchant application for <strong style="color: #18181b;">${storeName}</strong> has been reviewed and officially approved by NextDor Operations.
+              </p>
+
+              <div class="card">
+                <strong>Store Name:</strong> ${storeName}<br />
+                <strong>Store Status:</strong> <span style="font-weight: 700; color: #059669;">ACTIVE</span><br />
+                <strong>Platform Commission:</strong> ${commissionRate}% per completed order<br />
+                <strong>Payout Method:</strong> Automated Mobile Money (MTN, Telecel, AT)
+              </div>
+
+              <h3 style="font-size: 15px; margin: 20px 0 8px 0; color: #09090b;">What happens next?</h3>
+              <ol style="color: #475569; font-size: 13px; line-height: 1.6; padding-left: 20px; margin: 0 0 24px 0;">
+                <li>Publish your catalog with high-resolution imagery and accurate stock quantities.</li>
+                <li>Receive instant email and SMS dispatch alerts when customers place orders.</li>
+                <li>Fulfill orders swiftly to build verified merchant ratings and trigger 48h escrow payouts.</li>
+              </ol>
+
+              <div style="text-align: center;">
+                <a href="${newProductUrl}" class="btn" style="margin-right: 12px;">Upload First Product &rarr;</a>
+                <a href="${portalUrl}" style="display: inline-block; padding: 14px 20px; font-weight: 700; font-size: 14px; color: #4b5563; text-decoration: none;">Open Merchant Portal</a>
+              </div>
+            </div>
+            <div class="footer">
+              <p style="margin: 0 0 6px 0;">Merchant Onboarding Support: WhatsApp <strong>+233 55 750 7693</strong> or email vendors@nextdor.online.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: vendorEmail,
+      subject: `🎉 Congratulations! Your Store "${storeName}" is Approved on NextDor Ghana`,
+      html,
+      text: `Congratulations ${ownerName}! Your store "${storeName}" is approved on NextDor. Start listing products at: ${portalUrl}`,
+    });
+  }
+
+  /**
+   * Alerts merchant when store status or commission is modified by administrators.
+   */
+  static async sendVendorStatusChange(params: {
+    vendorEmail: string;
+    storeName: string;
+    status: string;
+    reason?: string;
+  }): Promise<boolean> {
+    const { vendorEmail, storeName, status, reason } = params;
+    const portalUrl = "https://nextdor.online/vendor/dashboard";
+
+    const isSuspended = status === "SUSPENDED";
+    const badgeColor = isSuspended ? "#ef4444" : "#10b981";
+    const badgeBg = isSuspended ? "#fef2f2" : "#ecfdf5";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+            .header { background: #131921; padding: 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .badge { display: inline-block; background: ${badgeBg}; color: ${badgeColor}; font-weight: 700; font-size: 13px; padding: 6px 14px; border-radius: 20px; }
+            .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0; font-size: 13px; line-height: 1.6; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 24px;">NEXTDOR MERCHANT NOTIFICATION</h1>
+            </div>
+            <div class="content">
+              <div class="badge">Status Update: ${status}</div>
+              <h2 style="font-size: 20px; font-weight: 700; margin: 12px 0 8px 0;">Hello ${storeName},</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
+                Your store status on NextDor has been updated to: <strong style="color: ${badgeColor};">${status}</strong>.
+              </p>
+
+              ${
+                reason
+                  ? `<div class="card"><strong>Administrative Notes:</strong><br />${reason}</div>`
+                  : ""
+              }
+
+              <p style="color: #71717a; font-size: 13px; line-height: 1.5;">
+                ${
+                  isSuspended
+                    ? "While suspended, your products are temporarily hidden from the public catalog. Please contact merchant operations to resolve this."
+                    : "You may continue to manage your inventory and fulfillment in the merchant dashboard."
+                }
+              </p>
+            </div>
+            <div class="footer">
+              <p style="margin: 0;">NextDor Ghana Merchant Governance Team • support@nextdor.online</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: vendorEmail,
+      subject: `Store Update: "${storeName}" is now ${status} — NextDor`,
+      html,
+      text: `Hello ${storeName}, your store status on NextDor is now ${status}. Details: ${portalUrl}`,
+    });
+  }
+
+  /**
+   * Dispatches official payout disbursement notification to merchant when Mobile Money transfer is executed.
+   */
+  static async sendVendorPayoutDisbursed(params: {
+    vendorEmail: string;
+    storeName: string;
+    amount: number | string;
+    momoNumber: string;
+    momoNetwork: string;
+    reference: string;
+    batchReference?: string;
+  }): Promise<boolean> {
+    const { vendorEmail, storeName, amount, momoNumber, momoNetwork, reference, batchReference } = params;
+    const portalUrl = "https://nextdor.online/vendor/dashboard";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+            .header { background: #131921; padding: 24px; text-align: center; }
+            .content { padding: 32px 28px; }
+            .badge { display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-weight: 700; font-size: 13px; padding: 6px 16px; border-radius: 20px; }
+            .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0; font-size: 13px; line-height: 1.6; color: #334155; }
+            .btn { display: block; width: fit-content; margin: 24px auto 0 auto; background: #ff9900; color: #131921 !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 12px 28px; border-radius: 8px; text-align: center; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #f4f4f5; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #ff9900; margin: 0; font-size: 24px;">NEXTDOR PAYOUTS</h1>
+              <p style="color: #a1a1aa; margin: 4px 0 0 0; font-size: 11px;">Merchant MoMo Settlement</p>
+            </div>
+            <div class="content">
+              <div class="badge">💰 Payout Disbursed &amp; Credited</div>
+              <h2 style="font-size: 20px; font-weight: 700; margin: 12px 0 8px 0;">Funds Disbursed to ${storeName}</h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
+                Your cleared escrow balance of <strong style="font-size: 16px; color: #047857;">GH₵${Number(amount).toFixed(2)}</strong> has been disbursed to your ${momoNetwork} wallet.
+              </p>
+
+              <div class="card">
+                <strong>Disbursed Amount:</strong> <span style="font-size: 16px; font-weight: 800; color: #047857;">GH₵${Number(amount).toFixed(2)}</span><br />
+                <strong>Destination Wallet:</strong> ${momoNumber} (${momoNetwork})<br />
+                <strong>Paystack Transfer Ref:</strong> <span style="font-family: monospace;">${reference}</span><br />
+                ${batchReference ? `<strong>Batch Reference:</strong> ${batchReference}<br />` : ""}
+                <strong>Settlement Date:</strong> ${new Date().toLocaleDateString("en-GH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </div>
+
+              <p style="color: #71717a; font-size: 13px; line-height: 1.5;">
+                Funds are disbursed via Paystack Automated Transfers. Mobile money transactions reflect in your wallet within moments.
+              </p>
+
+              <a href="${portalUrl}" class="btn">View Payout History &rarr;</a>
+            </div>
+            <div class="footer">
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. Automated Financial Settlements.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: vendorEmail,
+      subject: `💰 Payout Sent: GH₵${Number(amount).toFixed(2)} credited to your ${momoNetwork} wallet — ${storeName}`,
+      html,
+      text: `Hello ${storeName}, a payout of GH₵${Number(amount).toFixed(2)} has been sent to your ${momoNetwork} wallet (${momoNumber}). Ref: ${reference}`,
     });
   }
 }

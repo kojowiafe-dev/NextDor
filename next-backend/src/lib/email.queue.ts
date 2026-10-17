@@ -65,6 +65,18 @@ export type EmailJobData =
   | {
       type: "low_stock_alert";
       params: Parameters<typeof EmailService.sendLowStockAlert>[0];
+    }
+  | {
+      type: "vendor_approved";
+      params: Parameters<typeof EmailService.sendVendorApproved>[0];
+    }
+  | {
+      type: "vendor_status_update";
+      params: Parameters<typeof EmailService.sendVendorStatusChange>[0];
+    }
+  | {
+      type: "vendor_payout";
+      params: Parameters<typeof EmailService.sendVendorPayoutDisbursed>[0];
     };
 
 async function processEmailJob(data: EmailJobData): Promise<boolean> {
@@ -95,6 +107,12 @@ async function processEmailJob(data: EmailJobData): Promise<boolean> {
       return EmailService.sendReturnDisputedNotification(data.params);
     case "low_stock_alert":
       return EmailService.sendLowStockAlert(data.params);
+    case "vendor_approved":
+      return EmailService.sendVendorApproved(data.params);
+    case "vendor_status_update":
+      return EmailService.sendVendorStatusChange(data.params);
+    case "vendor_payout":
+      return EmailService.sendVendorPayoutDisbursed(data.params);
     default:
       logger.warn({ data }, "Unknown email job type received");
       return false;

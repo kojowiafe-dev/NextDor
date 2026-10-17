@@ -138,6 +138,39 @@ describe("E2E & Resilience: Customer Email Dispatch Subsystem", () => {
     expect(result).toBe(true);
   });
 
+  it("compiles and dispatches vendor_approved onboarding email to approved merchant", async () => {
+    const result = await EmailService.sendVendorApproved({
+      vendorEmail: "merchant@bolgacrafts.test",
+      storeName: "Bolga Crafts Cooperative",
+      ownerName: "Akosua Mansa",
+      commissionRate: "10.00",
+    });
+    expect(result).toBe(true);
+  });
+
+  it("compiles and dispatches vendor_status_update notification to merchant", async () => {
+    const result = await EmailService.sendVendorStatusChange({
+      vendorEmail: "merchant@bolgacrafts.test",
+      storeName: "Bolga Crafts Cooperative",
+      status: "ACTIVE",
+      reason: "Account verified after identity document review.",
+    });
+    expect(result).toBe(true);
+  });
+
+  it("compiles and dispatches vendor_payout disbursement notification with MoMo details", async () => {
+    const result = await EmailService.sendVendorPayoutDisbursed({
+      vendorEmail: "merchant@bolgacrafts.test",
+      storeName: "Bolga Crafts Cooperative",
+      amount: 1450.0,
+      momoNumber: "0241234567",
+      momoNetwork: "MTN",
+      reference: "TRF-889900-A1B2",
+      batchReference: "PB-20261016-XYZ",
+    });
+    expect(result).toBe(true);
+  });
+
   it("dispatches high-concurrency burst of 15 email jobs through the queue without memory exhaustion", async () => {
     const jobs: EmailJobData[] = Array.from({ length: 15 }, (_, i) => ({
       type: "welcome_customer",

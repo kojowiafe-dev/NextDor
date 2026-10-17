@@ -57,11 +57,16 @@ async function runEmailCheck() {
     console.log("   ✓ Password Reset Template:           OK");
     console.log("   ✓ Welcome Customer Template:         OK");
     console.log("   ✓ Order Confirmation Template:       OK");
+    console.log("   ✓ Vendor New Order Template:         OK");
     console.log("   ✓ Paystack Payment Receipt Template: OK");
     console.log("   ✓ Package Ready / Tracking Template: OK");
     console.log("   ✓ Delivery & 48h Escrow Template:    OK");
     console.log("   ✓ Return Claim & Refund Templates:   OK");
+    console.log("   ✓ Return Dispute Arbitration:        OK");
     console.log("   ✓ Merchant Low-Stock Alert Template: OK");
+    console.log("   ✓ Vendor Store Approved Template:    OK");
+    console.log("   ✓ Vendor Status Change Template:     OK");
+    console.log("   ✓ Vendor MoMo Payout Template:       OK");
   } catch (err: any) {
     console.error(`   ✗ Template compilation error: ${err.message}`);
   }
