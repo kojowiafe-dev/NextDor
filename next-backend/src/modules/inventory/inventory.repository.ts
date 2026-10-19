@@ -301,6 +301,9 @@ export class InventoryRepository {
       await this.syncAggregatedProductStockInTx(tx, input.productId);
 
       return updated;
+    }, {
+      maxWait: 10000,
+      timeout: 25000,
     });
   }
 
@@ -369,6 +372,9 @@ export class InventoryRepository {
       await this.syncAggregatedProductStockInTx(tx, input.productId);
 
       return updated;
+    }, {
+      maxWait: 10000,
+      timeout: 25000,
     });
   }
 
@@ -507,6 +513,9 @@ export class InventoryRepository {
         destination: updatedDest,
         transferredQuantity: input.quantity,
       };
+    }, {
+      maxWait: 10000,
+      timeout: 25000,
     });
   }
 
@@ -806,6 +815,9 @@ export class InventoryRepository {
   async syncAggregatedProductStock(productId: string) {
     return prisma.$transaction(async (tx) => {
       return this.syncAggregatedProductStockInTx(tx, productId);
+    }, {
+      maxWait: 10000,
+      timeout: 25000,
     });
   }
 
