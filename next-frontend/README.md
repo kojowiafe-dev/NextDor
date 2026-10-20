@@ -56,7 +56,7 @@ The frontend will run at [http://localhost:3000](http://localhost:3000).
 
 ## 🗺️ Portal & Routing Structure
 
-The application features **38 active routes** organized into four distinct operational portals:
+The application features **41 active routes** organized into four distinct operational portals:
 
 ### 1. 🛍️ Storefront & Authentication (Public & Customers)
 | Route | Description |
@@ -68,8 +68,9 @@ The application features **38 active routes** organized into four distinct opera
 | `/category/[slug]` | Category showcase view with hero banner, sibling category pills, breadcrumbs, and live faceted filters |
 | `/search` | Global search results driven by `?q=` with faceted filters and empty-state recommendations |
 | `/cart` | Client-side cart with quantity adjustments and real-time subtotal calculation |
-| `/checkout` | Order checkout with delivery options (Standard, Express, Pickup) and Paystack initiation |
+| `/checkout` | Order checkout with delivery options (Standard, Express, Pickup) and Paystack, MoMo & Cash on Delivery (COD) initiation |
 | `/track-order` | Public order tracking lookup by order number (`ND-XXXXX`) or UUID |
+| `/returns` | Customer self-serve returns and claims tracking hub powered by `ReturnsLookupBar.tsx` |
 | `/login` | Customer login with checkout redirection preservation and unverified account detection |
 | `/register` | Customer sign-up automatically forwarding to 6-digit OTP verification |
 | `/verify-email` | 6-digit OTP verification screen with large letter-spaced input and resend countdown |
@@ -81,7 +82,7 @@ The application features **38 active routes** organized into four distinct opera
 | :--- | :--- |
 | `/account` | Account dashboard with recent orders and quick shortcuts |
 | `/account/orders` | Complete order history with status timeline and cancel action |
-| `/account/orders/[id]` | Granular order detail with line items and delivery tracking |
+| `/account/orders/[id]` | Granular order detail with line items, courier tracking, embedded return claim submission modal (`ReturnRequestModal.tsx`), and active claim progress banner (`ReturnClaimCard.tsx`) |
 | `/account/addresses` | Shipping address book (Home, Work, Other) with default address toggle |
 | `/account/wishlist` | Saved items for future purchase |
 | `/account/settings` | Profile information, email, and password security management |
@@ -93,6 +94,8 @@ The application features **38 active routes** organized into four distinct opera
 | `/vendor/dashboard` | 4-tab merchant console (Inventory, Orders & Dispatch, MoMo Escrow Payouts, Settings) with 3-tier catalog ingestion, responsive mobile cards, and inline OCC edit drawer |
 
 #### Key Vendor Components
+- **`components/vendor/CourierDispatchModal.tsx`**: Vendor fulfillment modal for carrier assignment (Fez, Kwik, DHL), tracking generation, and automated customer SMS/email alerts.
+- **`components/vendor/PackingSlipModal.tsx`**: Thermal label & A4 merchant packing slip with recipient details, item breakdown, and print action.
 - **`components/vendor/BulkUploadModal.tsx`**: High-speed RFC 4180 CSV/Excel bulk product upload modal with delimiter autodetection, downloadable template, and row validation.
 - **`components/vendor/StoreSyncModal.tsx`**: Per-vendor WooCommerce REST API live synchronization modal with credential storage and one-click manual sync trigger.
 - **`components/vendor/ProductForm.tsx`**: Full product authoring form with compare-at pricing (`regularPrice`), Cloudinary multi-image uploader, and category selector.
@@ -100,10 +103,12 @@ The application features **38 active routes** organized into four distinct opera
 ### 4. 🛡️ Admin Management Console (`/admin`)
 | Route | Description |
 | :--- | :--- |
-| `/admin` | Executive dashboard with platform KPIs, gross sales, vendor volume, live database metrics (`totalCustomers`, `totalProducts`), and recent audit logs (excludes cancelled/refunded orders from revenue) |
-| `/admin/orders` | Global marketplace order list with search and manual status overrides |
+| `/admin` | Executive dashboard with platform KPIs, gross sales, vendor volume, live database metrics (`totalCustomers`, `totalProducts`), and recent audit activity (excludes cancelled/refunded orders from revenue) |
+| `/admin/orders` | Global marketplace order list with search, courier dispatch console, and manual status overrides |
 | `/admin/products` | Platform product catalog directory, price auditing, and soft delete |
 | `/admin/products/new` | Admin product creation form with Cloudinary upload and flagship vendor assignment |
+| `/admin/inventory` | Multi-warehouse physical stock dashboard, cross-hub transfers with atomic unit conservation, and SKU low-stock threshold monitors |
+| `/admin/payouts` | Automated Paystack MoMo transfers, batch payout history, and double-entry reconciliation balance sheet ledger verifying gateway/COD receipts against liabilities and platform revenue |
 | `/admin/customers` | Customer directory with spend history and order counts |
 | `/admin/customers/[id]` | Individual customer profile, order breakdown, and address list |
 | `/admin/analytics` | 30-day revenue charts, daily orders, category sales, and vendor performance (strictly excluding cancelled/refunded orders) |

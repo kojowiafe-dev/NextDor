@@ -9,11 +9,11 @@
 | Document | Purpose |
 | :--- | :--- |
 | 🗺️ **[Master Project Overview & Navigation Map](./PROJECT_OVERVIEW.md)** | **Start here!** Full sitemap, "If I want this, where do I go?" cheat sheet, routing index, and environment setup. |
-| 🎯 **[Master Phased Implementation Roadmap](./PROJECT_PHASES_AND_ROADMAP.md)** | All 7 completed enterprise roadmap phases, verification criteria, and milestone tracking. |
-| 🔍 **[Codebase Analysis & System Architecture](./codebase_analysis.md)** | Full monorepo breakdown, tech stack, active routes, domain logic, and security verification. |
+| 🎯 **[Master Phased Implementation Roadmap](./PROJECT_PHASES_AND_ROADMAP.md)** | All 12 completed enterprise roadmap phases, system audit findings, and milestone tracking. |
+| 🔍 **[Codebase Analysis & System Architecture](./codebase_analysis.md)** | Full monorepo breakdown, tech stack, 41 active routes, domain logic, and security verification. |
 | 🏛️ **[Multi-Vendor OOD Architecture](./MULTI_VENDOR_OOD_ARCHITECTURE.md)** | Comprehensive function-by-function architectural breakdown, SOLID principles, Tenant Isolation, and Optimistic Concurrency Control (OCC). |
 | ⚡ **[Frontend Caching & Performance Architecture](./FRONTEND_CACHING_ARCHITECTURE.md)** | Client-side SWR caching engine, in-flight request deduplication, navigation latency elimination, and audit. |
-| ⚙️ **[Backend Architecture & Database Design](./BACKEND_ARCHITECTURE.md)** | Complete database ERD, 14 models, security specifications, Paystack/MoMo settlement, and RFC 7240 async sync mechanics. |
+| ⚙️ **[Backend Architecture & Database Design](./BACKEND_ARCHITECTURE.md)** | Complete database ERD, 20+ models, security specifications, Paystack/MoMo settlement, and RFC 7240 async sync mechanics. |
 | 💻 **[Frontend Application Guide](./next-frontend/README.md)** | Next.js 16 App Router setup, portals, component design system, and Cloudinary uploads. |
 | 🖥️ **[Backend API Server Guide](./next-backend/README.md)** | Fastify v5 setup, Prisma migrations, Clean Architecture modules, and API route index. |
 | 📖 **[Recommended Books & Architecture Pillars](./RECOMMENDED_BOOKS_AND_ARCHITECTURE_PILLARS.md)** | Curated reading list of industry-standard textbooks on DDD, Concurrency, Distributed Systems, Multi-Tenancy, and Marketplace Economics. |
@@ -26,7 +26,9 @@
 ```bash
 cd next-backend
 npm install
-npm run dev
+npm run dev           # API Server at http://127.0.0.1:4000
+npm test              # Run 15 automated test suites (92 tests)
+npm run verify:services # Live diagnostics (DB, Redis, Paystack, Cloudinary, Invariants)
 ```
 - API Server: `http://127.0.0.1:4000`
 - Interactive OpenAPI / Swagger Docs: `http://127.0.0.1:4000/docs`
@@ -39,6 +41,7 @@ npm run dev
 ```
 - Web Application: `http://localhost:3000`
 - Customer Storefront: `http://localhost:3000/`
+- Customer Returns Hub: `http://localhost:3000/returns`
 - Vendor Portal Dashboard: `http://localhost:3000/vendor/dashboard`
 - Admin Management Portal: `http://localhost:3000/admin`
 - Interactive Cloudinary Image Upload API: `http://localhost:3000/api/upload`
@@ -64,6 +67,10 @@ npm run dev
 12. **Brand Consistency**: Unified Amazon/NextDor orange theme (`#ff9900` / `#f08804`) and motto *"Shop More, Wait Less"*.
 13. **Verified Email Onboarding & Recovery**: 6-digit OTP code email verification before account activation (`/verify-email`), 60-second cooldown protection, and full password recovery (`/forgot-password` $\rightarrow$ `/reset-password`) that invalidates all active sessions across devices upon password reset.
 14. **Super Admin Operations Center**: Live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), real-time notification popover (`AdminNotificationsPopover.tsx`) with 1-click "Mark read" and "Clear all", zero-scrollbar non-scrollable desktop sidebar with auto-dismissing mobile drawer, and complete product CRUD (`POST /api/v1/products`).
+15. **Customer Returns & Dispute Resolution**: Self-serve customer returns within the 48-hour escrow window, merchant & admin review workflows, and automated Paystack/MoMo refund settlement with exact balance conservation.
+16. **Dynamic Logistics & Real-Time Couriers**: GhanaPost GPS geo-pricing quote engine, vendor courier dispatch modals (`CourierDispatchModal.tsx`), printable packing slips (`PackingSlipModal.tsx`), and automated webhook tracking for third-party couriers (Fez, Kwik, DHL).
+17. **Multi-Warehouse Physical Inventory**: Multi-location warehouse tracking (`Warehouse`, `WarehouseStock`), atomic cross-warehouse transfers, low-stock threshold alerts, and two-way stock synchronization on reservations and cancellation restocks.
+18. **Cash on Delivery (COD) Invariants & Reconciliation**: COD orders are exempted from the 30-minute abandonment reaper, automatically settle to `PAID` upon physical delivery confirmation, enforce strict payout gating (`order.paymentStatus === 'PAID'`), and balance through a dual-inflow double-entry ledger ($\text{Gateway Receipts} + \text{COD Collections} = \text{Liabilities} + \text{Revenue} + \text{Refunds}$).
 
 ---
 

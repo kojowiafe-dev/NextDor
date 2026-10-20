@@ -78,36 +78,42 @@ NextDor is a hybrid e-commerce ecosystem specifically tailored for the Ghanaian 
 NextDor/
 ├── next-backend/                     # Fastify REST API server
 │   ├── prisma/
-│   │   ├── schema.prisma             # Complete PostgreSQL database schema (14 models)
+│   │   ├── schema.prisma             # Complete PostgreSQL database schema (20+ normalized models)
 │   │   └── seed.ts                   # Seeds Super Admin, Flagship store, & demo vendor
 │   ├── src/
 │   │   ├── config/env.ts             # Zod environment variable validation (includes Cloudinary)
-│   │   ├── domain/                   # Domain Layer (Money & CommissionCalculator)
-│   │   ├── lib/                      # Prisma, Redis, Logger, Errors, Cloudinary
+│   │   ├── domain/                   # Domain Layer (Money Value Object & CommissionCalculator)
+│   │   ├── lib/                      # Prisma, Redis, Logger, Errors, Cloudinary, Email Queue, SMS
 │   │   ├── modules/                  # 3-Tier Modules (Routes, Services, Repositories)
-│   │   │   ├── admin/                # Platform customer management and 30-day analytics engine
+│   │   │   ├── admin/                # Platform governance, 30-day analytics, double-entry reconciliation
 │   │   │   ├── audit/                # Immutable platform administrative governance audit trail
 │   │   │   ├── auth/                 # Authentication, JWT, and Token Rotation
 │   │   │   ├── health/               # /health liveness and database ping check
-│   │   │   ├── orders/               # Master orders, multi-vendor sub-orders, checkout
+│   │   │   ├── inventory/            # Multi-warehouse tracking, stock transfers & low-stock alerts
+│   │   │   ├── logistics/            # GhanaPost GPS geo-pricing quotes & third-party courier webhooks
+│   │   │   ├── orders/               # Master orders, multi-vendor sub-orders, checkout, COD lifecycle
+│   │   │   ├── payouts/              # Bulk MoMo payout batches & Paystack transfer engine
 │   │   │   ├── products/             # Public catalog, categories, search, slug lookup, product updates
+│   │   │   ├── returns/              # 48-Hour escrow return claims, merchant & admin disputes, refunds
 │   │   │   ├── sync/                 # Background WooCommerce sync engine
 │   │   │   └── vendors/              # Multi-vendor portal, OCC inventory, orders, escrow
+│   │   ├── scripts/                  # Operational scripts (verify-services.ts, check-email.ts)
 │   │   ├── app.ts                    # Fastify application factory & plugin registry
 │   │   └── server.ts                 # Server entry point & graceful shutdown handlers
 │   └── tsconfig.json
 │
 ├── next-frontend/                    # Next.js 16 Web Application (App Router + Turbopack)
-│   ├── app/                          # Next.js App Router directory (38 routes)
+│   ├── app/                          # Next.js App Router directory (41 routes)
 │   │   ├── account/                  # Customer profile, orders, addresses, wishlists
-│   │   ├── admin/                    # Admin portal (products, merchants, orders, audit logs)
+│   │   ├── admin/                    # Admin portal (products, merchants, orders, inventory, payouts, audit)
 │   │   ├── api/upload/               # Serverless Cloudinary streaming upload handler
 │   │   ├── cart/                     # Shopping cart page
 │   │   ├── category/[slug]/          # Category browsing page
-│   │   ├── checkout/                 # Multi-vendor checkout flow with MoMo/Paystack mock
+│   │   ├── checkout/                 # Multi-vendor checkout flow with MoMo, Card & COD
 │   │   ├── deals/                    # Dedicated deals and promotions hub
 │   │   ├── login/ & register/        # Authentication pages
 │   │   ├── product/[slug]/           # Dynamic product detail page with resilient gallery
+│   │   ├── returns/                  # Customer self-serve returns hub & claim tracking
 │   │   ├── search/                   # Search results page
 │   │   ├── shop/                     # Master catalog browsing
 │   │   ├── store/[slug]/             # Public vendor storefront profile
@@ -115,11 +121,14 @@ NextDor/
 │   │   ├── layout.tsx & page.tsx     # Root layout and homepage
 │   │   └── globals.css               # Global theme tokens (brand orange #ff9900)
 │   ├── components/                   # Reusable UI components
+│   │   ├── account/                  # ReturnRequestModal.tsx, ReturnClaimCard.tsx
+│   │   ├── vendor/                   # CourierDispatchModal.tsx, PackingSlipModal.tsx, BulkUploadModal.tsx
+│   │   ├── returns/                  # ReturnsLookupBar.tsx
 │   │   ├── ui/ImageUpload.tsx        # Drag-and-drop Cloudinary image upload component
 │   │   ├── shop/                     # ShopFilters, ActiveFilterChips, MobileFilterDrawer
 │   │   ├── product/                  # Product cards, galleries, other sellers
-│   │   ├── layout/                   # Header, Footer ("Shop More, Wait Less"), SearchBar
-│   │   └── admin/                    # Admin forms and layouts
+│   │   ├── layout/                   # Header, Footer ("Shop More, Wait Less"), SearchBar, BottomNav
+│   │   └── admin/                    # Admin forms, sidebar, popovers, and tables
 │   ├── lib/
 │   │   ├── cache/clientCache.ts      # Multi-Tier SWR Cache Factory & Request Deduplication
 │   │   ├── catalog/index.ts          # Unified catalog fetching & fallbacks
@@ -130,7 +139,7 @@ NextDor/
 ├── packages/shared/                  # Shared TypeScript interfaces across front & back
 ├── FRONTEND_CACHING_ARCHITECTURE.md  # Client-side SWR caching & deduplication specification
 ├── MULTI_VENDOR_OOD_ARCHITECTURE.md  # Deep-dive code, SOLID, and tenant isolation explanation
-├── BACKEND_ARCHITECTURE.md           # Database ERD, 14 models, security, and sync mechanics
+├── BACKEND_ARCHITECTURE.md           # Database ERD, models, security, and sync mechanics
 ├── RECOMMENDED_BOOKS_AND_ARCHITECTURE_PILLARS.md # Industry-standard reading curriculum
 └── PROJECT_OVERVIEW.md               # This master document
 ```
@@ -166,7 +175,12 @@ NextDor/
 | **User Wishlist** | `next-frontend/app/account/wishlist/page.tsx` | `http://localhost:3000/account/wishlist` |
 | **User Order History List** | `next-frontend/app/account/orders/page.tsx` | `http://localhost:3000/account/orders` |
 | **Order Tracking & Timeline** | `next-frontend/app/account/orders/[number]/page.tsx` | `http://localhost:3000/account/orders/[number]` |
+| **Customer Order Return Request** | `next-frontend/components/account/ReturnRequestModal.tsx` | Embedded return claim submission modal on delivered items within 48h buyer escrow window |
+| **Customer Return Claim Banner** | `next-frontend/components/account/ReturnClaimCard.tsx` | Live claim status tracker (`REQUESTED`, `APPROVED`, `REFUNDED`) on `/account/orders/[number]` |
+| **Customer Returns Hub** | `next-frontend/app/returns/page.tsx` | `http://localhost:3000/returns` (Self-serve returns lookup via `ReturnsLookupBar.tsx` and claim status tracking) |
 | **Vendor Management Portal** | `next-frontend/app/vendor/dashboard/page.tsx` | `http://localhost:3000/vendor/dashboard`<br>(4 Tabs: Inventory & OCC, Store Orders & Dispatch, MoMo Payouts & 48h Escrow, Store Settings; responsive mobile cards on `< md`) |
+| **Vendor Courier Dispatch Modal** | `next-frontend/components/vendor/CourierDispatchModal.tsx` | Carrier assignment (Fez, Kwik, DHL), tracking generation, and automated customer SMS/email alerts |
+| **Printable Packing Slip Modal** | `next-frontend/components/vendor/PackingSlipModal.tsx` | Thermal label & A4 merchant packing slip with recipient details, item breakdown, and print action |
 | **Vendor Bulk Upload Modal** | `next-frontend/components/vendor/BulkUploadModal.tsx` | High-speed RFC 4180 CSV/Excel bulk product upload modal with delimiter autodetection, downloadable template, and row validation |
 | **Vendor Store Sync Modal** | `next-frontend/components/vendor/StoreSyncModal.tsx` | Per-vendor WooCommerce REST API connector modal for syncing external store catalogs with Redis locking |
 | **Cloudinary Image Uploader** | `next-frontend/components/ui/ImageUpload.tsx` | Embedded in Vendor Dashboard & Admin forms |
@@ -181,6 +195,8 @@ NextDor/
 | **Admin Customer Directory** | `next-frontend/app/admin/customers/page.tsx` | `http://localhost:3000/admin/customers` |
 | **Admin Customer Profile & Orders** | `next-frontend/app/admin/customers/[id]/page.tsx` | `http://localhost:3000/admin/customers/[id]` |
 | **Admin Platform Analytics** | `next-frontend/app/admin/analytics/page.tsx` | `http://localhost:3000/admin/analytics` |
+| **Admin Multi-Warehouse Inventory**| `next-frontend/app/admin/inventory/page.tsx` | `http://localhost:3000/admin/inventory` (Physical stock per hub, cross-hub transfers, and low-stock alerts) |
+| **Admin Payouts & Reconciliation** | `next-frontend/app/admin/payouts/page.tsx` | `http://localhost:3000/admin/payouts` (Automated Paystack MoMo transfers and double-entry balance sheet) |
 | **Admin Merchant Approvals** | `next-frontend/app/admin/merchants/page.tsx` | `http://localhost:3000/admin/merchants` |
 | **Admin Team Management** | `next-frontend/app/admin/admins/page.tsx` | `http://localhost:3000/admin/admins` |
 | **Platform Audit Trail Logs** | `next-frontend/app/admin/audit-logs/page.tsx` | `http://localhost:3000/admin/audit-logs` |
@@ -236,6 +252,18 @@ The backend runs on **`http://127.0.0.1:4000`**. All endpoints are prefixed with
 | **Vendor Product Soft-Deletion**| Vendor Service | `src/modules/vendors/vendor.service.ts` | `DELETE /api/v1/vendors/portal/products/:id` (Tenant-isolated soft-delete) |
 | **Vendor Orders & Dispatch** | Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/orders`<br>`PATCH /api/v1/vendors/portal/orders/:id/status` |
 | **Vendor MoMo Payouts & Escrow**| Vendor Service | `src/modules/vendors/vendor.service.ts` | `GET /api/v1/vendors/portal/payouts` |
+| **Customer Returns & Claims** | Returns Service | `src/modules/returns/return.service.ts` | `POST /api/v1/orders/:number/returns`<br>`GET /api/v1/returns`<br>`GET /api/v1/returns/:id` |
+| **Merchant Return Review** | Returns Service | `src/modules/returns/return.service.ts` | `POST /api/v1/vendors/returns/:id/review` (Approve/Reject) |
+| **Admin Returns Governance** | Returns Service | `src/modules/returns/return.service.ts` | `POST /api/v1/admin/returns/:id/review`<br>`POST /api/v1/returns/:id/dispute` |
+| **Logistics Quotes & Geo-Pricing**| Logistics Service | `src/modules/logistics/logistics.service.ts` | `POST /api/v1/logistics/quote` (GhanaPost GPS rate bands) |
+| **Courier Dispatch & Tracking** | Logistics Service | `src/modules/logistics/logistics.service.ts` | `POST /api/v1/logistics/shipments`<br>`GET /api/v1/logistics/shipments/:id/tracking` |
+| **Courier Webhooks Pipeline** | Logistics Service | `src/modules/logistics/logistics.service.ts` | `POST /api/v1/logistics/webhooks/courier` (Fez, Kwik, DHL events) |
+| **Multi-Warehouse Stock Control**| Inventory Service | `src/modules/inventory/inventory.service.ts` | `GET /api/v1/inventory/warehouses`<br>`GET /api/v1/inventory/stock`<br>`PATCH /api/v1/inventory/stock/adjust` |
+| **Inter-Warehouse Transfers** | Inventory Service | `src/modules/inventory/inventory.service.ts` | `POST /api/v1/inventory/stock/transfer` (Atomic unit conservation) |
+| **Low-Stock Triggers & Sweeps** | Inventory Service | `src/modules/inventory/inventory.service.ts` | `POST /api/v1/inventory/webhooks/trigger-audit` |
+| **Vendor Payout Batches** | Payout Service | `src/modules/payouts/payout.service.ts` | `GET /api/v1/payouts/batches`<br>`POST /api/v1/payouts/batches`<br>`POST /api/v1/payouts/batches/:id/process` |
+| **Double-Entry Balance Sheet** | Reconciliation Service| `src/modules/admin/admin.reconciliation.service.ts` | `GET /api/v1/admin/reconciliation/ledger` (Dual Inflow: Gateway + COD) |
+| **Live Diagnostics Suite** | CLI Verification | `src/scripts/verify-services.ts` | `npm run verify:services` (DB, Redis, Paystack, Cloudinary, Invariants) |
 | **Admin Merchant Governance** | Vendor Service | `src/modules/vendors/vendor.routes.ts` | `GET /api/v1/vendors/admin/list`<br>`PATCH /api/v1/vendors/admin/:id/approve`<br>`PATCH /api/v1/vendors/admin/:id/status` |
 | **Platform Audit Trail Logs** | Audit Service | `src/modules/audit/audit.routes.ts` | `GET /api/v1/audit/logs` |
 
@@ -255,6 +283,11 @@ All models are defined in [`next-backend/prisma/schema.prisma`](./next-backend/p
 - **`Order` & `OrderItem`**: Master customer checkout receipts snapshotting price, quantity, and vendor ID.
 - **`VendorOrder`**: Sub-order split allocating line-items to their specific merchant (`subtotal`, `commissionAmount`, `vendorEarnings`, `clearedAt`).
 - **`VendorPayout`**: 48h escrow holds and mobile money disbursement records.
+- **`PayoutBatch` & `PayoutBatchItem`**: Bulk merchant payout aggregations processed via Paystack Transfers API.
+- **`Warehouse` & `WarehouseStock`**: Multi-warehouse physical stock tracking, reservation quotas, and bin locations.
+- **`StockMovement`**: Immutable audit ledger tracking cross-warehouse transfers, restocks, and order reservations.
+- **`ReturnRequest` & `Refund`**: 48-hour buyer protection return claims, merchant dispute tracking, and refund transactions.
+- **`Shipment` & `ShipmentEvent`**: Courier parcel dispatch, tracking milestones, driver contacts, and delivery proofs.
 - **`Review`**: Customer ratings and moderation flags.
 
 ---
@@ -276,12 +309,28 @@ All models are defined in [`next-backend/prisma/schema.prisma`](./next-backend/p
     - Previous price is displayed with a strikethrough (`line-through`).
     - Percentage discount badge is calculated and rendered: `Math.round(((regularPrice - price) / regularPrice) * 100)% OFF` (or `-X%`).
   - When `regularPrice` is null, undefined, or $\le$ `price`, strikethrough price and percentage badges are omitted.
+- **Cash on Delivery (COD) Invariant & Abandonment Protection:**
+  - Checkouts with `paymentMethod === 'COD'` are explicitly exempted from the 30-minute unpaid abandonment reaper (`reclaimAbandonedOrders`).
+  - COD orders remain in `PENDING` payment status while transitioning through fulfillment (`CONFIRMED` $\rightarrow$ `PROCESSING` $\rightarrow$ `SHIPPED`).
+  - Upon physical delivery confirmation (`DELIVERED`), the system atomically updates `paymentStatus = 'PAID'`, snapshots the cash collection timestamp, cascades delivery to all merchant sub-orders, and initializes the 48-hour escrow countdown.
+- **Strict Payout Protection Invariant (`order.paymentStatus === 'PAID'`):**
+  - Vendor payout eligibility (`payout.service.ts` and `vendor.service.ts`) strictly requires both `status === 'DELIVERED'` AND `order.paymentStatus === 'PAID'`. Uncleared or unpaid orders (e.g. pending COD orders) can never disburse funds to merchants.
+- **Dual-Inflow Double-Entry Reconciliation Ledger:**
+  - Administrative reconciliation balance sheet (`admin.reconciliation.service.ts`) verifies total inflows against all platform commitments:
+    $$\text{Total Inflows} = \text{Gateway Receipts (Paystack)} + \text{Cash on Delivery Collections}$$
+    $$\text{Total Accounted} = \text{Merchant Liabilities} + \text{Platform Revenue} + \text{Customer Refunds}$$
+    $$\text{Ledger Variance} = \text{Total Inflows} - \text{Total Accounted} \approx 0$$
+- **Multi-Warehouse Two-Way Inventory Synchronization:**
+  - Line items record `OrderItem.warehouseId`. Checkout reservations decrement `WarehouseStock.quantity` while simultaneously synchronizing `Product.stockQty`.
+  - Order cancellations and returns restore physical units to both `WarehouseStock` and `Product.stockQty` atomically, recording an immutable `StockMovement` audit event.
+- **COD Return & Simulated Mobile Money Settlement:**
+  - Return claims for COD orders bypass external Paystack gateway refund calls (which lack online gateway references) and record simulated direct Mobile Money transfers with synthesized references (`COD-${orderNumber}-${timestamp}`), debiting vendor balances proportionally.
 - **Automated 30-Minute Abandoned Cart Inventory Reclamation:**
   - Unpaid checkouts in `PENDING` status for over 30 minutes without successful payment are automatically cancelled by a scheduled background worker (`OrderService.reclaimAbandonedOrders`), immediately returning reserved units to physical on-shelf inventory and decrementing backorder quotas.
 - **Universal 48-Hour Escrow Clearance & Delivery Cascade:**
   - Delivery transitions (whether triggered by carrier webhooks, individual merchant fulfillment, or admin overrides) universally propagate to child `VendorOrder` rows and initialize the 48-hour buyer protection hold (`clearedAt = NOW() + 48h`), guaranteeing merchant funds are never trapped in uncleared limbo.
 - **Independent Multi-Vendor Courier Dispatch & Parcel Tracking:**
-  - Administrative order details view integrates a live **Courier Dispatch & Shipment Management** console allowing direct carrier assignment (Fez, Kwik, DHL, Internal Courier), random tracking number generation, driver name/phone capture, and automatic SMS/email customer notifications.
+  - Administrative and vendor portal views integrate live **Courier Dispatch & Shipment Management** consoles allowing direct carrier assignment (Fez, Kwik, DHL, Internal Courier), random tracking number generation, driver name/phone capture, and automatic SMS/email customer notifications.
 
 ---
 
@@ -343,11 +392,20 @@ npx prisma studio     # Open interactive Web UI for the database
 npm run seed          # Re-run database seeding (Admin + Direct Store + Sample Vendor)
 ```
 
-### 3. Code Integrity Checks
+### 3. Code Integrity & Automated Testing Checks
 ```bash
-# Verify TypeScript compiles with 0 errors
+# Verify TypeScript compiles with 0 errors across backend and frontend
 cd next-backend && npx tsc --noEmit
 cd next-frontend && npm run build
+
+# Run Backend Automated Test Suite (15 suites, 92 tests)
+cd next-backend && npm test
+
+# Run Live Service Diagnostics & Invariant Suite
+cd next-backend && npm run verify:services
+
+# Verify Resilient Transactional Email Dispatch CLI
+cd next-backend && npm run email:check
 ```
 
 ---

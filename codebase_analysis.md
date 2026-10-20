@@ -38,19 +38,22 @@ The system is architected as a high-performance monorepo:
 ```
 NextDor/
 ├── next-frontend/                      # Next.js 16 App Router Client
-│   ├── app/                            # 38 active routes
-│   │   ├── (storefront)/               # Customer shopping routes (/, /shop, /deals, /product/[slug], /cart, /checkout)
+│   ├── app/                            # 41 active routes
+│   │   ├── (storefront)/               # Customer shopping routes (/, /shop, /deals, /product/[slug], /cart, /checkout, /returns)
 │   │   ├── (auth)/                     # /login, /register, /verify-email, /forgot-password, /reset-password
 │   │   ├── account/                    # Customer portal (/account, /account/orders, /account/addresses)
 │   │   ├── vendor/                     # Merchant portal (/vendor/dashboard, /vendor/register)
-│   │   ├── admin/                      # Super admin & staff console (/admin, /admin/customers, /admin/analytics)
+│   │   ├── admin/                      # Super admin console (/admin, /admin/customers, /admin/analytics, /admin/inventory, /admin/payouts)
 │   │   └── api/upload/                 # Cloudinary image upload serverless route handler
 │   ├── components/                     # Reusable UI component library
+│   │   ├── account/                    # ReturnRequestModal.tsx, ReturnClaimCard.tsx
+│   │   ├── vendor/                     # CourierDispatchModal.tsx, PackingSlipModal.tsx, BulkUploadModal.tsx
+│   │   ├── returns/                    # ReturnsLookupBar.tsx
 │   │   ├── layout/                     # StoreHeader, CategoryNav, MobileNav, BottomNav, Footer
 │   │   ├── shop/                       # ShopFilters, ActiveFilterChips, MobileFilterDrawer
 │   │   ├── home/                       # HeroCarousel, CategoryTiles, ProductRow, TrendingSection
 │   │   ├── product/                    # ProductCard, ProductGrid, PriceDisplay, AddToCartButton
-│   │   ├── admin/                      # AdminNavbar, StatusBadge, DataTables
+│   │   ├── admin/                      # AdminNavbar, AdminSidebar, AdminNotificationsPopover, DataTables
 │   │   └── ui/                         # Modal, ImageUpload, Pagination, Input
 │   ├── context/                        # Global state (CartContext, AuthContext, ToastContext)
 │   └── lib/                            # Business logic, caching, and API clients
@@ -64,21 +67,26 @@ NextDor/
 │   │   ├── server.ts                   # Startup entry point (port 4000)
 │   │   ├── config/                     # Environment validation with Zod
 │   │   ├── domain/                     # Martin Fowler Money Value Object & CommissionCalculator
-│   │   ├── lib/                        # EmailService (Resend + console fallback), Prisma, Logger
+│   │   ├── lib/                        # Email queue, SMS, Prisma, Logger, Origins
+│   │   ├── scripts/                    # verify-services.ts, check-email.ts
 │   │   └── modules/                    # Feature vertical slices (Clean Architecture)
 │   │       ├── auth/                   # Register, login, OTP verify, password recovery, refresh rotation
 │   │       ├── users/                  # Customer profile and address repository & service
 │   │       ├── products/               # Catalog, categories, autocomplete, faceted filtering, OCC locking
-│   │       ├── orders/                 # Checkout, multi-vendor sub-orders, polymorphic findByNumber
+│   │       ├── orders/                 # Checkout, multi-vendor sub-orders, COD state machine, stock reclamation
 │   │       ├── vendors/                # Merchant onboarding, tenant-isolated inventory & payouts
-│   │       ├── admin/                  # Admin customer directory, analytics overview, governance
+│   │       ├── returns/                # 48-Hour escrow return claims, merchant & admin reviews, refunds
+│   │       ├── logistics/              # GhanaPost GPS geo-pricing & courier dispatch webhooks
+│   │       ├── payouts/                # Bulk MoMo payout batches & Paystack Transfers API
+│   │       ├── inventory/              # Multi-warehouse tracking, stock transfers & low-stock alerts
+│   │       ├── admin/                  # Admin customer directory, analytics overview, double-entry ledger
 │   │       ├── audit/                  # Platform audit logging (immutable events)
 │   │       └── sync/                   # Asynchronous WooCommerce migration sync worker
 │   ├── prisma/                         # schema.prisma, migrations, seeds
 │   └── package.json
 │
 ├── packages/shared/                    # Monorepo shared schemas and types
-│   ├── src/schemas/                    # Zod validation schemas (auth, product, order, vendor)
+│   ├── src/schemas/                    # Zod validation schemas (auth, product, order, vendor, returns, logistics, payouts, inventory)
 │   └── src/index.ts
 └── documentation/                      # Architectural specifications
 ```
@@ -96,8 +104,9 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 - **`/product/[slug]`**: Rich product detail page with high-resolution image galleries, specifications sheet (`ProductSpecifications.tsx`), stock status, seller comparison ("Other Sellers"), and Add to Cart.
 - **`/category/[slug]`**: Category showcase page with hero banner, sibling category selector pills, breadcrumb trails, and live faceted filters.
 - **`/cart`**: Interactive shopping cart with quantity adjustment, price calculation, and subtotal updates.
-- **`/checkout`**: Multi-step checkout with delivery address selection, Ghana delivery options (Standard, Express, Pickup), and Paystack payment initiation.
+- **`/checkout`**: Multi-step checkout with delivery address selection, Ghana delivery options (Standard, Express, Pickup), and Paystack / MoMo / Cash on Delivery payment initiation.
 - **`/track-order`**: Public order status lookup accepting order numbers (e.g. `ND-00001`) or tracking UUIDs.
+- **`/returns`**: Customer self-serve returns and claims hub powered by `ReturnsLookupBar.tsx`, allowing buyers to check 48-hour return eligibility and track active claim statuses.
 - **`/login` & `/register`**: Seamless customer sign-in with auto-redirect back to checkout or original location.
 - **`/verify-email`**: Mobile-optimized 6-digit OTP entry screen with large numeric keypad spacing, resend cooldown timer, and auto-session start.
 - **`/forgot-password` & `/reset-password`**: Secure password recovery flow with time-limited OTP code verification and password strength enforcement.
@@ -105,6 +114,8 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 ### 👤 Customer Account Portal (`/account`)
 - **`/account`**: Central customer overview with recent orders, default shipping address, and quick shortcuts.
 - **`/account/orders` & `/account/orders/[id]`**: Complete order history, line item breakdown, tracking status timeline, and cancel order capability.
+  - Delivered orders display the **"Request Return"** action within the 48-hour escrow window, opening `ReturnRequestModal.tsx`.
+  - Active claims render the live `ReturnClaimCard.tsx` showing current inspection status (`REQUESTED`, `APPROVED`, `REJECTED`, `REFUNDED`).
 - **`/account/addresses`**: Multi-address management (Home, Work, Other) with default address toggling.
 - **`/account/wishlist`**: Saved items for future purchase.
 - **`/account/settings`**: Profile information and security management.
@@ -116,7 +127,7 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
      - **Single Product Entry**: Comprehensive modal with live Cloudinary drag-and-drop media upload and OCC locking.
      - **Bulk CSV/Excel Upload**: Powered by `BulkUploadModal.tsx`, featuring RFC 4180 parsing, delimiter autodetection, row-by-row error validation, and one-click sample template download.
      - **WooCommerce Store Sync**: Powered by `StoreSyncModal.tsx`, connecting to external stores via `/wp-json/wc/v3/products` with per-vendor Redis distributed locks (`lock:wc-sync:vendor:${id}`).
-  2. *Store Orders & Dispatch*: Partitioned sub-orders (`VendorOrder`), buyer address snapshots, line items, and 1-click dispatch progression (`PROCESSING` $\rightarrow$ `SHIPPED` $\rightarrow$ `DELIVERED`).
+  2. *Store Orders & Dispatch*: Partitioned sub-orders (`VendorOrder`), buyer address snapshots, line items, 1-click dispatch progression (`PROCESSING` $\rightarrow$ `SHIPPED` $\rightarrow$ `DELIVERED`), integrated **Courier Dispatch Modal** (`CourierDispatchModal.tsx`), and printable thermal/A4 **Packing Slip Modal** (`PackingSlipModal.tsx`).
   3. *MoMo Payouts & Escrow*: Lifetime earnings, funds in 48-hour customer verification escrow, available balances, and automated transfer ledger.
   4. *Store Profile & Settings*: Brand identity, store bio, logo, banner, and settlement phone numbers.
 
@@ -124,8 +135,10 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 - **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), and recent audit activity (strictly excludes `CANCELLED` and `REFUNDED` orders from revenue calculations).
 - **Admin Notifications Center**: Interactive header bell popover (`AdminNotificationsPopover.tsx`) with real-time unread badge, one-click "Mark read" (zeroes unread count), one-click "Clear all" (switches to empty state), and individual item dismissal with persistent storage.
 - **Admin Navigation**: Zero-scrollbar non-scrollable desktop sidebar (`AdminSidebar.tsx`) with large NextDor logo and full-text action buttons, paired with a touch-friendly auto-dismissing mobile drawer with close (`X`) control.
-- **`/admin/orders`**: Global order management across all marketplace transactions, search by customer or order number, and manual status override with audit logging.
+- **`/admin/orders`**: Global order management across all marketplace transactions, search by customer or order number, courier dispatch console, and manual status override with audit logging.
 - **`/admin/products`**: Global catalog directory, pricing audits, admin product creation (`POST /api/v1/products` via `AdminProductCreateForm`), admin bulk upload (`POST /api/v1/products/bulk`), and soft-delete controls.
+- **`/admin/inventory`**: Multi-warehouse physical stock dashboard, cross-hub transfers with atomic unit conservation, and SKU low-stock threshold monitors.
+- **`/admin/payouts`**: Automated Paystack MoMo transfers, batch payout history, and double-entry reconciliation balance sheet ledger verifying gateway/COD receipts against liabilities and platform revenue.
 - **`/admin/customers` & `/admin/customers/[id]`**: Customer directory with order counts, lifetime spend aggregates, and full customer detail history.
 - **`/admin/analytics`**: 30-day revenue trends, daily order distribution, top-selling categories, and vendor performance breakdowns (excluding cancelled/refunded orders).
 - **`/admin/merchants`**: Merchant application queue, KYC review, commission rate adjustment, and one-click approval/suspension.
@@ -266,12 +279,41 @@ To ensure enterprise-grade reliability, maintainability, and scalability:
    - Built complete clean-architecture module in `src/modules/returns/` (`ReturnRepository`, `ReturnService`, `return.routes.ts`) providing customer filing within the 48-hour escrow window, merchant reviews, dispute escalation, and automated Paystack refund settlement.
    - Enforced proportional mathematical conservation on vendor order balance and platform commission deductions.
 
+8. **Phase 9: Dynamic Delivery Zones, Geo-Pricing & Real-Time Courier Webhooks**:
+   - Implemented GhanaPost GPS digital address normalization and zone matching across Ghana regions.
+   - Dynamic weight-band geo-pricing engine (`POST /api/v1/logistics/quote`).
+   - Courier dispatch and webhook ingestion pipeline (`POST /api/v1/logistics/webhooks/courier`) for third-party couriers (Fez, Kwik, DHL) with automated customer SMS and email notifications.
+
+9. **Phase 10: Automated MoMo Payout Batches & Double-Entry Ledger Reconciliation**:
+   - Automated bulk Mobile Money transfers via Paystack Transfers API for cleared escrow balances (`status = DELIVERED`, `clearedAt <= now`, `payoutId = null`).
+   - Double-entry accounting balance sheet (`GET /api/v1/admin/reconciliation/ledger`) verifying inflows against merchant liabilities, platform commission equity, and customer refunds with zero penny variance.
+   - Vendor analytics engine (`AOV`, repeat customer rate, return rate, fulfillment speed) and Super-Admin benchmark leaderboard.
+
+10. **Phase 11: Enterprise Multi-Warehouse Inventory & Stock Transfers**:
+    - Relational multi-location warehousing (`Warehouse`, `WarehouseStock`) supporting regional fulfillment hubs with bin locations.
+    - Atomic cross-hub transfers (`POST /api/v1/inventory/stock/transfer`) enforcing strict unit conservation (`Total Before === Total After`) with immutable `StockMovement` audit logs.
+    - Configurable per-SKU low-stock thresholds with multi-channel SMS & transactional email alerts to merchants.
+
+11. **Phase 12: Resilient Asynchronous Email Dispatch & E2E Integration Suite**:
+    - BullMQ Redis-backed worker queue with in-memory concurrency-capped fallback (5 concurrent workers, exponential backoff) preventing HTTP thread blocking.
+    - Full 14-flow transactional email suite (OTP, password reset, order confirmation, vendor alert, courier milestones, delivery notice, returns, refunds, payouts).
+    - Standalone email diagnostics CLI: `npm run email:check [recipient]`.
+
+12. **Production System Audit & Financial Invariants**:
+    - **COD Abandonment Exemption**: Checkouts with `paymentMethod === 'COD'` are exempted from the 30-minute unpaid abandonment reaper (`reclaimAbandonedOrders`).
+    - **Automatic COD Settlement on Delivery**: Transitioning COD orders to `DELIVERED` atomically transitions `paymentStatus` to `'PAID'` and starts the 48-hour escrow countdown.
+    - **Multi-Warehouse Two-Way Stock Restoration**: Order cancellations and returns restore physical units to both `WarehouseStock` and `Product.stockQty` atomically, logging immutable `StockMovement` events.
+    - **Strict Payout Protection**: Gated vendor payouts on `order.paymentStatus === 'PAID'` to ensure unpaid orders never release merchant funds.
+    - **Dual-Inflow Reconciliation Equation**: Inflows calculate both Paystack gateway receipts and Cash on Delivery collections ($\text{Total Inflow} = \text{Gateway} + \text{COD Collections}$), maintaining zero-variance balance sheets.
+    - **COD Return Settlement**: Direct Mobile Money refunds for COD orders record simulated transactions (`COD-${orderNumber}-${timestamp}`), preventing invalid external gateway calls.
+    - **Live Diagnostics Suite**: `npm run verify:services` executes live end-to-end checks across DB, Redis, Paystack, Cloudinary, and financial invariants.
+
 ---
 
 ## 12. Verification & Operational Health
 
 The entire platform is fully verified and compiling cleanly:
-- **`next-backend`**: `npx tsc --noEmit` and `npx vitest run` pass with **0 errors** across all **35 tests** (100% pass rate).
-- **`next-frontend`**: `npx tsc --noEmit` passes with **0 type errors**; `npx eslint --quiet` passes with **0 lint errors**.
+- **`next-backend`**: `npx tsc --noEmit` exits with **0 errors**; Vitest test runner passes **15/15 test suites and 92/92 tests** (100% pass rate).
+- **`next-frontend`**: `npm run build` exits with **0 errors** across all **41 App Router static and dynamic routes**.
 - **Documentation**: All architecture documents (`README.md`, `PROJECT_OVERVIEW.md`, `PROJECT_PHASES_AND_ROADMAP.md`, `BACKEND_ARCHITECTURE.md`, `FRONTEND_CACHING_ARCHITECTURE.md`, `MULTI_VENDOR_OOD_ARCHITECTURE.md`, `codebase_analysis.md`) are synchronized with the live code.
 
