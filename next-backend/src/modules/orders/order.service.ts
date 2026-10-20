@@ -706,6 +706,11 @@ export class OrderService {
             status: "SUCCESS",
           },
         },
+        NOT: [
+          { notes: { contains: "payment method: cod", mode: "insensitive" } },
+          { notes: { contains: "cash on delivery", mode: "insensitive" } },
+          { notes: { contains: "cod", mode: "insensitive" } },
+        ],
       },
       select: {
         id: true,

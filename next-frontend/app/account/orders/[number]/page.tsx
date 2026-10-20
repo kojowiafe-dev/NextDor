@@ -14,6 +14,7 @@ import {
   RefreshCcw,
   ShoppingBag,
   RotateCcw,
+  ArrowLeft,
 } from "lucide-react";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { useAuth } from "@/context/AuthContext";

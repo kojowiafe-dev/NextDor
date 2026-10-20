@@ -353,10 +353,9 @@ export function ReturnRequestModal({
               {evidenceUrls.length < 5 && (
                 <div className="aspect-square flex items-center justify-center">
                   <ImageUpload
-                    onUploadComplete={handleAddEvidence}
+                    onChange={handleAddEvidence}
                     folder="nextdor/returns"
-                    buttonText="Add Photo"
-                    className="w-full h-full text-[10px]"
+                    label="Add Photo"
                   />
                 </div>
               )}

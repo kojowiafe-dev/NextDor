@@ -318,6 +318,7 @@ function TrackingContent() {
                     )}
                   </button>
 
+                  <div className="text-right">
                     <p className="text-xs text-zinc-400">Payment Method &amp; Status</p>
                     <p
                       className={`text-sm font-bold ${

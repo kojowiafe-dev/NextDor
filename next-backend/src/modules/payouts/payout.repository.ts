@@ -33,6 +33,7 @@ export class PayoutRepository {
             status: "DELIVERED",
             clearedAt: { lte: now },
             payoutId: null,
+            order: { paymentStatus: "PAID" },
           },
           select: {
             id: true,

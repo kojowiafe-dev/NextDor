@@ -155,6 +155,17 @@ export class OrderRepository {
                 );
               }
             }
+
+            if (item.warehouseId) {
+              await tx.warehouseStock.updateMany({
+                where: {
+                  warehouseId: item.warehouseId,
+                  productId: item.productId,
+                  quantity: { gte: item.quantity },
+                },
+                data: { quantity: { decrement: item.quantity } },
+              });
+            }
           }
         }
 
@@ -416,7 +427,7 @@ export class OrderRepository {
       if (status === "CANCELLED") {
         const items = await tx.orderItem.findMany({
           where: { orderId },
-          select: { productId: true, quantity: true, isBackorder: true },
+          select: { productId: true, quantity: true, isBackorder: true, warehouseId: true },
         });
         for (const item of items) {
           if (item.isBackorder) {
@@ -429,6 +440,12 @@ export class OrderRepository {
               where: { id: item.productId, stockQty: { not: null } },
               data: { stockQty: { increment: item.quantity } },
             });
+            if (item.warehouseId) {
+              await tx.warehouseStock.updateMany({
+                where: { warehouseId: item.warehouseId, productId: item.productId },
+                data: { quantity: { increment: item.quantity } },
+              });
+            }
           }
         }
         await tx.vendorOrder.updateMany({
@@ -445,6 +462,23 @@ export class OrderRepository {
             clearedAt: escrowClearance,
           },
         });
+
+        // If Cash on Delivery, mark paymentStatus as PAID upon delivery collection
+        const currentOrder = await tx.order.findUnique({
+          where: { id: orderId },
+          select: { notes: true, paymentStatus: true },
+        });
+        const notesLower = (currentOrder?.notes || "").toLowerCase();
+        const isCod =
+          notesLower.includes("payment method: cod") ||
+          notesLower.includes("cash on delivery") ||
+          notesLower.includes("cod");
+        if (isCod && currentOrder?.paymentStatus === "UNPAID") {
+          await tx.order.update({
+            where: { id: orderId },
+            data: { paymentStatus: "PAID" },
+          });
+        }
       } else if (status === "SHIPPED") {
         await tx.vendorOrder.updateMany({
           where: { orderId, status: { in: ["PENDING", "PROCESSING"] } },

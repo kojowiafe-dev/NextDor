@@ -45,10 +45,10 @@ export class ReconciliationService {
       disbursedAgg,
       disbursedCount,
 
-      // 4. In-Escrow Funds (Delivered but within 48-hour buyer protection window)
+      // 4. In-Escrow Funds (Delivered and paid, but within 48-hour buyer protection window)
       inEscrowAgg,
 
-      // 5. Unclaimed Available Balance (Delivered, escrow elapsed, not yet disbursed)
+      // 5. Unclaimed Available Balance (Delivered and paid, escrow elapsed, not yet disbursed)
       availableAgg,
 
       // 6. Processing Payouts (Disbursement in-flight)
@@ -57,6 +57,10 @@ export class ReconciliationService {
       // 7. Customer Refunds Settled
       refundsAgg,
       refundsCount,
+
+      // 8. Cash on Delivery Collections (Delivered and collected without online gateway payment)
+      codPaymentsAgg,
+      codPaymentsCount,
     ] = await Promise.all([
       prisma.payment.aggregate({
         where: paymentWhere,
@@ -91,6 +95,7 @@ export class ReconciliationService {
           status: "DELIVERED",
           clearedAt: { gt: now },
           payoutId: null,
+          order: { paymentStatus: "PAID" },
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },
@@ -101,6 +106,7 @@ export class ReconciliationService {
           status: "DELIVERED",
           clearedAt: { lte: now },
           payoutId: null,
+          order: { paymentStatus: "PAID" },
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },
@@ -116,9 +122,29 @@ export class ReconciliationService {
         _sum: { amount: true },
       }),
       prisma.refund.count({ where: refundWhere }),
+
+      prisma.order.aggregate({
+        where: {
+          paymentStatus: "PAID",
+          status: "DELIVERED",
+          payments: { none: { status: "SUCCESS" } },
+          ...(startDate || endDate ? { updatedAt: { gte: startDate, lte: endDate } } : {}),
+        },
+        _sum: { total: true },
+      }),
+      prisma.order.count({
+        where: {
+          paymentStatus: "PAID",
+          status: "DELIVERED",
+          payments: { none: { status: "SUCCESS" } },
+          ...(startDate || endDate ? { updatedAt: { gte: startDate, lte: endDate } } : {}),
+        },
+      }),
     ]);
 
-    const totalInflow = Number(customerPaymentsAgg._sum.amount || 0);
+    const totalGatewayInflow = Number(customerPaymentsAgg._sum.amount || 0);
+    const totalCodInflow = Number(codPaymentsAgg._sum.total || 0);
+    const totalInflow = totalGatewayInflow + totalCodInflow;
     const totalDisbursed = Number(disbursedAgg._sum.amount || 0);
     const totalInEscrow = Number(inEscrowAgg._sum.vendorEarnings || 0);
     const totalAvailable = Number(availableAgg._sum.vendorEarnings || 0);
@@ -183,7 +209,9 @@ export class ReconciliationService {
       inflow: {
         totalCustomerPaymentsGhs: totalInflow,
         totalCustomerPaymentsPesewas: Math.round(totalInflow * 100),
-        successfulPaymentsCount: customerPaymentsCount,
+        gatewayPaymentsGhs: totalGatewayInflow,
+        cashOnDeliveryGhs: totalCodInflow,
+        successfulPaymentsCount: customerPaymentsCount + codPaymentsCount,
       },
       liabilities: {
         vendorEscrowPendingGhs: totalInEscrow,

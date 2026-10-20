@@ -318,6 +318,7 @@ export class VendorRepository {
             deliveryMethod: true,
             shippingAddress: true,
             paymentStatus: true,
+            notes: true,
             createdAt: true,
             user: { select: { name: true, email: true, phone: true } },
             items: { where: { vendorId } },
@@ -403,29 +404,35 @@ export class VendorRepository {
           },
         },
       }),
-      // Lifetime net earnings (non-cancelled sub-orders)
+      // Lifetime net earnings (non-cancelled paid sub-orders)
       prisma.vendorOrder.aggregate({
-        where: { vendorId, status: { not: "CANCELLED" } },
+        where: {
+          vendorId,
+          status: { not: "CANCELLED" },
+          order: { paymentStatus: "PAID" },
+        },
         _sum: { vendorEarnings: true, subtotal: true },
       }),
-      // In 48h escrow (delivered but clearedAt > now)
+      // In 48h escrow (delivered and paid but clearedAt > now)
       prisma.vendorOrder.aggregate({
         where: {
           vendorId,
           status: "DELIVERED",
           clearedAt: { gt: now },
           payoutId: null,
+          order: { paymentStatus: "PAID" },
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },
       }),
-      // Available for payout (clearedAt <= now and payoutId is null)
+      // Available for payout (delivered and paid, clearedAt <= now and payoutId is null)
       prisma.vendorOrder.aggregate({
         where: {
           vendorId,
           status: "DELIVERED",
           clearedAt: { lte: now },
           payoutId: null,
+          order: { paymentStatus: "PAID" },
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },

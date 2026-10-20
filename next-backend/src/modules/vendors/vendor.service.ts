@@ -542,16 +542,33 @@ export class VendorService {
         });
 
         if (parentOrder && parentOrder.status !== masterNewStatus && parentOrder.status !== "DELIVERED" && parentOrder.status !== "CANCELLED") {
+          const notesLower = (orderObj.notes || "").toLowerCase();
+          const isCod =
+            notesLower.includes("payment method: cod") ||
+            notesLower.includes("cash on delivery") ||
+            notesLower.includes("cod");
+
+          const updateData: { status: "PROCESSING" | "SHIPPED" | "DELIVERED"; paymentStatus?: "PAID" } = {
+            status: masterNewStatus,
+          };
+
+          if (masterNewStatus === "DELIVERED" && isCod && orderObj.paymentStatus === "UNPAID") {
+            updateData.paymentStatus = "PAID";
+          }
+
           await prisma.order.update({
             where: { id: orderObj.id },
-            data: { status: masterNewStatus },
+            data: updateData,
           });
 
           await prisma.orderStatusHistory.create({
             data: {
               orderId: orderObj.id,
               status: masterNewStatus,
-              note: `All merchants have updated fulfillment to ${masterNewStatus}`,
+              note:
+                masterNewStatus === "DELIVERED" && isCod
+                  ? "All merchants have fulfilled items. Order delivered and Cash on Delivery payment collected."
+                  : `All merchants have updated fulfillment to ${masterNewStatus}`,
             },
           });
         }

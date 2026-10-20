@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import {
@@ -220,9 +221,29 @@ export class ReturnService {
       );
     }
 
-    const successfulPayment = returnRequest.order.payments[0];
+    let successfulPayment = returnRequest.order.payments[0];
+    const notesLower = (returnRequest.order.notes || "").toLowerCase();
+    const isCod =
+      notesLower.includes("payment method: cod") ||
+      notesLower.includes("cash on delivery") ||
+      notesLower.includes("cod");
+
     if (!successfulPayment) {
-      throw new UnprocessableError("No successful payment record found to execute refund against.");
+      if (isCod && returnRequest.order.paymentStatus === "PAID") {
+        successfulPayment = await prisma.payment.create({
+          data: {
+            orderId: returnRequest.orderId,
+            paystackRef: `COD-${returnRequest.order.number}-${Date.now()}`,
+            amount: returnRequest.order.total,
+            method: "MOMO",
+            status: "SUCCESS",
+            paidAt: returnRequest.order.updatedAt,
+            metadata: { method: "CASH_ON_DELIVERY", settledBy: "COURIER_COLLECTION" },
+          },
+        });
+      } else {
+        throw new UnprocessableError("No successful payment record found to execute refund against.");
+      }
     }
 
     const refundAmountPesewas = toPesewas(returnRequest.refundAmount);
@@ -236,29 +257,40 @@ export class ReturnService {
     });
 
     let gatewayRefundData: any = null;
-    try {
-      const res = await fetch(`${PAYSTACK_BASE_URL}/refund`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          transaction: successfulPayment.paystackRef,
-          amount: refundAmountPesewas,
-          currency: "GHS",
-          merchant_note: `Approved Return #${returnRequest.id}`,
-        }),
-      });
+    if (isCod || successfulPayment.paystackRef.startsWith("COD-")) {
+      gatewayRefundData = {
+        id: `cod_refund_${Date.now()}`,
+        status: "processed",
+        amount: refundAmountPesewas,
+        currency: "GHS",
+        note: "Cash on delivery return refund settled directly via Mobile Money",
+      };
+      logger.info({ returnId, orderNumber: returnRequest.order.number }, "Cash on Delivery return refund recorded");
+    } else {
+      try {
+        const res = await fetch(`${PAYSTACK_BASE_URL}/refund`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.PAYSTACK_SECRET_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            transaction: successfulPayment.paystackRef,
+            amount: refundAmountPesewas,
+            currency: "GHS",
+            merchant_note: `Approved Return #${returnRequest.id}`,
+          }),
+        });
 
-      const body = (await res.json()) as any;
-      if (body.status && body.data) {
-        gatewayRefundData = body.data;
-      } else {
-        logger.warn({ returnId, message: body.message }, "Paystack refund response rejected");
+        const body = (await res.json()) as any;
+        if (body.status && body.data) {
+          gatewayRefundData = body.data;
+        } else {
+          logger.warn({ returnId, message: body.message }, "Paystack refund response rejected");
+        }
+      } catch (err) {
+        logger.error({ err, returnId }, "Paystack refund network request failed");
       }
-    } catch (err) {
-      logger.error({ err, returnId }, "Paystack refund network request failed");
     }
 
     if (!gatewayRefundData && !isProduction) {
