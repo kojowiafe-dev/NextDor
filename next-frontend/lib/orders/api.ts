@@ -69,6 +69,7 @@ export type Order = {
   items: OrderItem[];
   statusHistory?: StatusHistoryEntry[];
   vendorOrders?: VendorOrder[];
+  returnRequests?: any[];
 };
 
 export type CartItem = {
@@ -258,6 +259,9 @@ export type PublicOrderTracking = {
   orderNumber: string;
   status: OrderStatus;
   paymentStatus: "UNPAID" | "PAID" | "PARTIAL" | "REFUNDED";
+  paymentMethod?: string;
+  isCod?: boolean;
+  total?: number;
   deliveryMethod: "STANDARD" | "EXPRESS" | "PICKUP";
   createdAt: string;
   destinationCity: string;

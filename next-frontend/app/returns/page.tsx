@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
+import { ReturnsLookupBar } from "@/components/returns/ReturnsLookupBar";
 
 export const metadata: Metadata = {
   title: "Returns & Refunds",
@@ -80,6 +81,11 @@ export default function ReturnsPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Interactive Order Return Lookup */}
+      <div className="mb-8">
+        <ReturnsLookupBar />
       </div>
 
       {/* How to return */}

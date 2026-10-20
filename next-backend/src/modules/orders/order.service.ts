@@ -350,10 +350,23 @@ export class OrderService {
 
     const shipping = (order.shippingAddress || {}) as any;
 
+    const notesLower = (order.notes || "").toLowerCase();
+    const isCod =
+      notesLower.includes("payment method: cod") ||
+      notesLower.includes("cash on delivery") ||
+      (order.payments.length === 0 && notesLower.includes("cod"));
+
+    const paymentMethod = isCod
+      ? "CASH_ON_DELIVERY"
+      : order.payments[0]?.method ?? "PAYSTACK";
+
     return {
       orderNumber: order.number,
       status: order.status,
       paymentStatus: order.paymentStatus,
+      paymentMethod,
+      isCod,
+      total: order.total ? Number(order.total) : undefined,
       deliveryMethod: order.deliveryMethod,
       createdAt: order.createdAt,
       destinationCity: shipping.city ?? "Accra",

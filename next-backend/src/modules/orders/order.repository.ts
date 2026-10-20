@@ -332,6 +332,12 @@ export class OrderRepository {
             paidAt: true,
           },
         },
+        returnRequests: {
+          include: {
+            refunds: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
   }
@@ -595,6 +601,12 @@ export class OrderRepository {
             status: true,
             vendor: { select: { name: true, slug: true, logoUrl: true } },
           },
+        },
+        notes: true,
+        total: true,
+        payments: {
+          select: { method: true, status: true },
+          take: 1,
         },
         items: { select: { productName: true, productImage: true, quantity: true } },
       },

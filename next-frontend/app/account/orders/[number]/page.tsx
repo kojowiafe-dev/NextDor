@@ -11,15 +11,18 @@ import {
   Truck,
   MapPin,
   XCircle,
-  ArrowLeft,
   RefreshCcw,
   ShoppingBag,
+  RotateCcw,
 } from "lucide-react";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { useAuth } from "@/context/AuthContext";
 import { fetchOrderByNumber, cancelOrder, type Order, type StatusHistoryEntry } from "@/lib/orders/api";
 import { createSWRCache } from "@/lib/cache/clientCache";
 import { ordersCache } from "@/app/account/orders/page";
+import { ReturnRequestModal } from "@/components/returns/ReturnRequestModal";
+import { ReturnClaimCard } from "@/components/returns/ReturnClaimCard";
+import type { ReturnRequest } from "@/lib/returns/api";
 
 const orderDetailCache = createSWRCache<Order>("nextdor_order_detail", 2 * 60_000);
 
@@ -183,6 +186,7 @@ export default function OrderDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
 
   const load = async (forceRefresh = false) => {
     const effectiveToken =
@@ -324,6 +328,17 @@ export default function OrderDetailPage({
                 Live Storefront Tracker
               </Link>
 
+              {order.status === "DELIVERED" && (
+                <button
+                  type="button"
+                  onClick={() => setShowReturnModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/20 border border-white/20 shadow-xs cursor-pointer"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 text-[#ff9900]" />
+                  Request Return / Refund
+                </button>
+              )}
+
               {canCancel && (
                 <button
                   onClick={handleCancel}
@@ -335,6 +350,20 @@ export default function OrderDetailPage({
               )}
             </div>
           </div>
+
+          {/* Active Return Claim Cards */}
+          {order.returnRequests && order.returnRequests.length > 0 && (
+            <div className="space-y-4">
+              {order.returnRequests.map((claim: any) => (
+                <ReturnClaimCard
+                  key={claim.id}
+                  claim={claim}
+                  token={token || ""}
+                  onRefresh={() => load(true)}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Two-col layout on desktop */}
           <div className="grid gap-5 lg:grid-cols-3">
@@ -426,6 +455,22 @@ export default function OrderDetailPage({
               )}
             </div>
           </div>
+
+          {/* Return Request Modal */}
+          {showReturnModal && (
+            <ReturnRequestModal
+              isOpen={showReturnModal}
+              onClose={() => setShowReturnModal(false)}
+              orderNumber={order.number}
+              items={order.items as any}
+              token={token || ""}
+              onSuccess={(newClaim) => {
+                alert("Return claim submitted successfully! The merchant has 24h to review.");
+                orderDetailCache.invalidate(number);
+                load(true);
+              }}
+            />
+          )}
         </div>
       )}
     </AccountLayout>

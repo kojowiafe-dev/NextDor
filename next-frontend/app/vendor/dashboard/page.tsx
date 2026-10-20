@@ -46,10 +46,13 @@ import {
   UploadCloud,
   RotateCcw,
   Award,
+  Printer,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { BulkUploadModal } from "@/components/vendor/BulkUploadModal";
 import { StoreSyncModal } from "@/components/vendor/StoreSyncModal";
+import { CourierDispatchModal } from "@/components/vendor/CourierDispatchModal";
+import { PackingSlipModal } from "@/components/vendor/PackingSlipModal";
 import {
   VendorAnalyticsResponse,
   getVendorPortalAnalytics,
@@ -238,6 +241,8 @@ export default function VendorDashboardPage() {
   // Orders Tab Filters & Actions
   const [selectedOrderStatus, setSelectedOrderStatus] = useState<string>("ALL");
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [selectedDispatchOrder, setSelectedDispatchOrder] = useState<VendorOrder | null>(null);
+  const [selectedPackingSlipOrder, setSelectedPackingSlipOrder] = useState<VendorOrder | null>(null);
 
   // Store Settings Form State
   const [settingName, setSettingName] = useState("");
@@ -665,6 +670,28 @@ export default function VendorDashboardPage() {
     } finally {
       setUpdatingOrderId(null);
     }
+  }
+
+  // Courier Dispatch Handler
+  async function handleCourierDispatch(dispatchData: {
+    carrier: "FEZ" | "KWIK" | "DHL" | "INTERNAL";
+    trackingNumber: string;
+    driverName?: string;
+    driverPhone?: string;
+    estimatedDelivery?: string;
+    notes?: string;
+  }) {
+    if (!selectedDispatchOrder) return;
+    const parts = [
+      `Carrier: ${dispatchData.carrier}`,
+      `Tracking: ${dispatchData.trackingNumber}`,
+      dispatchData.driverName ? `Rider: ${dispatchData.driverName}` : null,
+      dispatchData.driverPhone ? `Phone: ${dispatchData.driverPhone}` : null,
+      dispatchData.estimatedDelivery ? `Est Delivery: ${dispatchData.estimatedDelivery}` : null,
+      dispatchData.notes ? `Note: ${dispatchData.notes}` : null,
+    ].filter(Boolean);
+
+    await handleUpdateOrderStatus(selectedDispatchOrder.id, "SHIPPED", parts.join(" • "));
   }
 
   // Save Store Settings
@@ -1795,7 +1822,18 @@ export default function VendorDashboardPage() {
                         </div>
 
                         {/* Dispatch Action Buttons */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* Packing Slip Button */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPackingSlipOrder(vo)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition shadow-2xs"
+                            title="Print Customer Packing Slip &amp; Waybill"
+                          >
+                            <Printer className="h-3.5 w-3.5 text-zinc-500" />
+                            <span>Packing Slip</span>
+                          </button>
+
                           {vo.status === "PENDING" && (
                             <button
                               onClick={() => handleUpdateOrderStatus(vo.id, "PROCESSING", "Order accepted by merchant kitchen")}
@@ -1803,18 +1841,18 @@ export default function VendorDashboardPage() {
                               className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
                             >
                               <Check className="h-3.5 w-3.5" />
-                              <span>Accept & Prepare</span>
+                              <span>Accept &amp; Prepare</span>
                             </button>
                           )}
 
                           {vo.status === "PROCESSING" && (
                             <button
-                              onClick={() => handleUpdateOrderStatus(vo.id, "SHIPPED", "Dispatched with courier")}
+                              onClick={() => setSelectedDispatchOrder(vo)}
                               disabled={isUpdating}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition shadow-xs"
                             >
                               <Truck className="h-3.5 w-3.5" />
-                              <span>Dispatch & Ship Order</span>
+                              <span>Dispatch with Courier</span>
                             </button>
                           )}
 
@@ -2685,6 +2723,39 @@ export default function VendorDashboardPage() {
           loadVendorData(true);
         }}
       />
+
+      {/* Courier Dispatch Handover Modal */}
+      {selectedDispatchOrder && (
+        <CourierDispatchModal
+          isOpen={!!selectedDispatchOrder}
+          onClose={() => setSelectedDispatchOrder(null)}
+          vendorOrderId={selectedDispatchOrder.id}
+          orderNumber={selectedDispatchOrder.order.number}
+          customerName={
+            selectedDispatchOrder.order.user?.name ||
+            selectedDispatchOrder.order.shippingAddress?.fullName ||
+            "Customer"
+          }
+          destination={[
+            selectedDispatchOrder.order.shippingAddress?.city,
+            selectedDispatchOrder.order.shippingAddress?.region,
+            "Ghana",
+          ]
+            .filter(Boolean)
+            .join(", ")}
+          onDispatch={handleCourierDispatch}
+        />
+      )}
+
+      {/* Printable Merchant Packing Slip & Dispatch Note Modal */}
+      {selectedPackingSlipOrder && (
+        <PackingSlipModal
+          isOpen={!!selectedPackingSlipOrder}
+          onClose={() => setSelectedPackingSlipOrder(null)}
+          vendorOrder={selectedPackingSlipOrder}
+          vendorInfo={vendor}
+        />
+      )}
 
       {/* Merchant Back-Office Footer */}
       <footer className="mt-16 border-t border-zinc-200 bg-white py-6 text-center text-xs text-zinc-500">

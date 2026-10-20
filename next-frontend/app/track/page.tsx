@@ -27,20 +27,34 @@ import { NextDorPageLoader } from "@/components/ui/NextDorPageLoader";
 
 // ─── 5-Stage Order Lifecycle Progression (Aligned with Prisma Schema) ────────
 
-const ORDER_LIFECYCLE_STEPS = [
-  { id: "PENDING", label: "Placed", sub: "Order registered in system" },
-  { id: "CONFIRMED", label: "Confirmed", sub: "Payment verified by Paystack" },
-  { id: "PROCESSING", label: "Preparing", sub: "Merchant inspecting & packaging" },
-  { id: "SHIPPED", label: "Out for Delivery", sub: "Courier on the way to your door" },
-  { id: "DELIVERED", label: "Delivered", sub: "Package received & completed" },
-];
+export function getOrderLifecycleSteps(isCod?: boolean) {
+  return [
+    { id: "PENDING", label: "Placed", sub: "Order registered in system" },
+    {
+      id: "CONFIRMED",
+      label: "Confirmed",
+      sub: isCod
+        ? "Order verified & queued for Cash on Delivery"
+        : "Payment verified by Paystack",
+    },
+    { id: "PROCESSING", label: "Preparing", sub: "Merchant inspecting & packaging" },
+    { id: "SHIPPED", label: "Out for Delivery", sub: "Courier on the way to your door" },
+    {
+      id: "DELIVERED",
+      label: "Delivered",
+      sub: isCod
+        ? "Package received & Cash collected"
+        : "Package received & completed",
+    },
+  ];
+}
 
-function getStepIndex(status: string, paymentStatus: string): number {
+function getStepIndex(status: string, paymentStatus: string, isCod?: boolean): number {
   if (status === "CANCELLED" || status === "REFUNDED") return -1;
   if (status === "DELIVERED") return 4;
   if (status === "SHIPPED") return 3;
   if (status === "PROCESSING") return 2;
-  if (status === "CONFIRMED" || paymentStatus === "PAID") return 1;
+  if (status === "CONFIRMED" || (!isCod && paymentStatus === "PAID")) return 1;
   return 0; // PENDING
 }
 
@@ -136,8 +150,9 @@ function TrackingContent() {
   };
 
   const currentStepIdx = activeTracking
-    ? getStepIndex(activeTracking.status, activeTracking.paymentStatus)
+    ? getStepIndex(activeTracking.status, activeTracking.paymentStatus, activeTracking.isCod)
     : 0;
+  const lifecycleSteps = getOrderLifecycleSteps(activeTracking?.isCod);
 
   const isCancelled = activeTracking?.status === "CANCELLED";
   const isRefunded = activeTracking?.status === "REFUNDED";
@@ -303,16 +318,21 @@ function TrackingContent() {
                     )}
                   </button>
 
-                  <div className="text-right">
-                    <p className="text-xs text-zinc-400">Payment Status</p>
+                    <p className="text-xs text-zinc-400">Payment Method &amp; Status</p>
                     <p
                       className={`text-sm font-bold ${
                         activeTracking.paymentStatus === "PAID"
                           ? "text-emerald-400"
+                          : activeTracking.isCod
+                          ? "text-amber-300"
                           : "text-amber-400"
                       }`}
                     >
-                      {activeTracking.paymentStatus === "PAID" ? "VERIFIED PAID" : "PENDING / COD"}
+                      {activeTracking.paymentStatus === "PAID"
+                        ? "VERIFIED PAID (PAYSTACK)"
+                        : activeTracking.isCod
+                        ? `CASH ON DELIVERY ${activeTracking.total ? `(GH₵ ${activeTracking.total.toFixed(2)} DUE)` : "(PAY UPON ARRIVAL)"}`
+                        : "PAYMENT PENDING"}
                     </p>
                   </div>
                   <div className="rounded-xl bg-white/10 p-2.5 text-white">
@@ -356,7 +376,7 @@ function TrackingContent() {
                       ? "This order was cancelled."
                       : isRefunded
                       ? "This order was refunded."
-                      : `Current Status: Stage ${currentStepIdx + 1} of ${ORDER_LIFECYCLE_STEPS.length} (${ORDER_LIFECYCLE_STEPS[currentStepIdx]?.label ?? "In Progress"})`}
+                      : `Current Status: Stage ${currentStepIdx + 1} of ${lifecycleSteps.length} (${lifecycleSteps[currentStepIdx]?.label ?? "In Progress"})`}
                   </p>
                 </div>
                 {isCancelled && (
@@ -376,7 +396,7 @@ function TrackingContent() {
                 <div className="relative">
                   {/* Desktop horizontal progression */}
                   <div className="hidden grid-cols-5 gap-2 md:grid">
-                    {ORDER_LIFECYCLE_STEPS.map((step, idx) => {
+                    {lifecycleSteps.map((step, idx) => {
                       const isCompleted = idx < currentStepIdx;
                       const isCurrent = idx === currentStepIdx;
 
@@ -430,7 +450,7 @@ function TrackingContent() {
 
                   {/* Mobile stacked progression */}
                   <div className="space-y-4 md:hidden">
-                    {ORDER_LIFECYCLE_STEPS.map((step, idx) => {
+                    {lifecycleSteps.map((step, idx) => {
                       const isCompleted = idx < currentStepIdx;
                       const isCurrent = idx === currentStepIdx;
 
