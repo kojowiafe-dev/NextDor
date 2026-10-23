@@ -33,7 +33,7 @@ export type SettleResult = {
 
 const ORDER_PAYMENT_INCLUDE = {
   payments: true,
-  user: { select: { email: true, name: true } },
+  user: { select: { email: true, name: true, phone: true } },
 } satisfies Prisma.OrderInclude;
 
 export class PaymentRepository {

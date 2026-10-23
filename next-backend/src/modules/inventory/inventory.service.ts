@@ -2,6 +2,7 @@ import { InventoryRepository } from "./inventory.repository.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { SmsService } from "../../lib/sms.js";
+import { WhatsAppService } from "../../lib/whatsapp.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import {
@@ -389,6 +390,8 @@ export class InventoryService {
           name: true,
           email: true,
           phone: true,
+          whatsappPhone: true,
+          whatsappOptIn: true,
           lowStockAlertEmail: true,
           lowStockAlertPhone: true,
           enableLowStockAlerts: true,
@@ -398,7 +401,10 @@ export class InventoryService {
       if (vendor && vendor.enableLowStockAlerts) {
         vendorName = vendor.name;
         notifyEmail = vendor.lowStockAlertEmail || vendor.email;
-        notifyPhone = vendor.lowStockAlertPhone || vendor.phone;
+        notifyPhone = vendor.whatsappPhone || vendor.lowStockAlertPhone || vendor.phone;
+        if (vendor.whatsappOptIn === false) {
+          // opted out
+        }
       }
     }
 
@@ -415,6 +421,22 @@ export class InventoryService {
 
       await SmsService.sendSms(notifyPhone, smsText).catch((err) => {
         logger.warn({ err, notifyPhone }, "Failed to send low stock SMS");
+      });
+    }
+
+    // 1b. Send WhatsApp alert to vendor
+    if (notifyPhone) {
+      WhatsAppService.sendVendorLowStockAlert(
+        notifyPhone,
+        {
+          storeName: vendorName,
+          productName: params.productName,
+          currentStock: params.quantity,
+          threshold: params.threshold,
+        },
+        notifyEmail ? { email: notifyEmail } : undefined
+      ).catch((err) => {
+        logger.warn({ err, notifyPhone }, "Failed to send low stock WhatsApp alert");
       });
     }
 

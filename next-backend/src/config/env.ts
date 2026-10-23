@@ -89,6 +89,17 @@ const envSchema = z.object({
   ARKESEL_API_KEY: z.string().min(5),
   SMS_FROM: z.string().default("NextDor"),
 
+  // ── WhatsApp Provider & WATI / Meta Configuration ────────────────────────
+  WHATSAPP_PROVIDER: z.enum(["meta", "wati"]).default("meta"),
+  WATI_API_ENDPOINT: z.string().optional(),
+  WATI_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
+  WHATSAPP_API_VERSION: z.string().default("v21.0"),
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  WHATSAPP_APP_SECRET: z.string().optional(),
+
   // ── CORS ─────────────────────────────────────────────────────────────────
   CORS_ORIGINS: z
     .string()

@@ -107,7 +107,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
             user: result.user,
             requiresVerification: true,
             email: result.email,
-            message: "Account created! A 6-digit verification code has been sent to your email.",
+            otpChannel: result.otpChannel,
+            message: result.otpChannel === "whatsapp"
+              ? "Account created! A 6-digit verification code has been sent to your WhatsApp."
+              : "Account created! A 6-digit verification code has been sent to your email.",
           },
         });
       } catch (err: any) {
@@ -182,18 +185,18 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const body = resendCodeSchema.parse(req.body);
 
       if (body.type === "RESET_PASSWORD") {
-        const result = await authService.forgotPassword(body.email);
-        return reply.send({ success: true, message: result.message });
+        const result = await authService.forgotPassword(body.email, body.preferredOtpChannel);
+        return reply.send({ success: true, message: result.message, channel: result.channel });
       }
 
-      const result = await authService.resendVerificationCode(body.email);
-      return reply.send({ success: true, message: result.message });
+      const result = await authService.resendVerificationCode(body.email, body.preferredOtpChannel);
+      return reply.send({ success: true, message: result.message, channel: result.channel });
     },
   );
 
   /**
    * POST /auth/forgot-password
-   * Dispatches 6-digit password recovery code to registered email.
+   * Dispatches 6-digit password recovery code to registered email or WhatsApp.
    */
   app.post(
     "/forgot-password",
@@ -206,8 +209,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const body = forgotPasswordSchema.parse(req.body);
-      const result = await authService.forgotPassword(body.email);
-      return reply.send({ success: true, message: result.message });
+      const result = await authService.forgotPassword(body.email, body.preferredOtpChannel);
+      return reply.send({ success: true, message: result.message, channel: result.channel });
     },
   );
 

@@ -15,6 +15,7 @@ import { isOriginAllowed } from "../../lib/originPolicy.js";
 import { originOf } from "../../lib/origins.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { SmsService } from "../../lib/sms.js";
+import { WhatsAppService } from "../../lib/whatsapp.js";
 import { ADMIN_ROLES, type AuthUser } from "../../lib/auth.guards.js";
 import {
   AppError,
@@ -360,10 +361,22 @@ export class PaymentService {
       }).catch((err) => logger.warn({ err, orderNumber: order.number }, "Failed to queue payment receipt email"));
     }
 
-    if (ship.recipientPhone) {
-      SmsService.sendOrderConfirmed(ship.recipientPhone, order.number, Number(order.total)).catch((err) =>
-        logger.warn({ err, orderNumber: order.number }, "Failed to send payment confirmation SMS"),
-      );
+    const customerPhone = ship.recipientPhone || (order.user as any)?.phone;
+    const customerName = ship.recipientName || order.user?.name || "Valued Customer";
+
+    if (order.whatsappOptIn !== false && customerPhone) {
+      WhatsAppService.sendPaymentReceipt(
+        customerPhone,
+        {
+          orderNumber: order.number,
+          amountPaid: Number(order.total),
+          paystackRef: reference,
+          paymentChannel: method,
+          paidAt: paidAt ? new Date(paidAt) : new Date(),
+          customerName,
+        },
+        email ? { email } : undefined
+      ).catch((err) => logger.warn({ err, orderNumber: order.number }, "Failed to send WhatsApp payment receipt"));
     }
   }
 }

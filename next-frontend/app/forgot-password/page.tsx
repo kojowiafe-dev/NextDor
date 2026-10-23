@@ -10,6 +10,7 @@ import { forgotPassword } from "@/lib/auth/api";
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [channel, setChannel] = useState<"email" | "whatsapp">("whatsapp");
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,11 +28,20 @@ export default function ForgotPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await forgotPassword(cleanEmail);
-      setSuccessMsg(res.message || "A 6-digit recovery code has been sent to your email.");
+      const res = await forgotPassword(cleanEmail, channel);
+      setSuccessMsg(
+        res.message ||
+          (channel === "whatsapp"
+            ? "A 6-digit recovery code has been sent to your WhatsApp."
+            : "A 6-digit recovery code has been sent to your email.")
+      );
 
       setTimeout(() => {
-        router.push(`/reset-password?email=${encodeURIComponent(cleanEmail)}`);
+        router.push(
+          `/reset-password?email=${encodeURIComponent(cleanEmail)}&channel=${encodeURIComponent(
+            res.channel || channel
+          )}`
+        );
       }, 1200);
     } catch (err: any) {
       setError(err?.message || "Failed to process request. Please try again.");
@@ -89,12 +99,43 @@ export default function ForgotPasswordPage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Channel Selector */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Receive Recovery Code Via:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChannel("whatsapp")}
+                  className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${
+                    channel === "whatsapp"
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-800 shadow-xs ring-1 ring-emerald-400"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                >
+                  <span className="text-base">💬</span> WhatsApp (Fast)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChannel("email")}
+                  className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${
+                    channel === "email"
+                      ? "border-[#ff9900] bg-amber-50 text-amber-900 shadow-xs ring-1 ring-[#ff9900]"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                >
+                  <span className="text-base">✉️</span> Email
+                </button>
+              </div>
+            </div>
+
             <div>
               <label
                 htmlFor="email"
                 className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5"
               >
-                Account Email
+                Registered Account Email
               </label>
               <input
                 id="email"

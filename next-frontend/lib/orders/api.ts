@@ -96,6 +96,7 @@ export type CheckoutPayload = {
   };
   deliveryMethod?: "STANDARD" | "EXPRESS" | "PICKUP";
   notes?: string;
+  whatsappOptIn?: boolean;
 };
 
 // ─── Token Helper ─────────────────────────────────────────────────────────────

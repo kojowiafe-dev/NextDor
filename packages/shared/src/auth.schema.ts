@@ -41,6 +41,8 @@ export const registerSchema = z.object({
     .string()
     .regex(/^\+?[0-9\s\-()]{7,20}$/, "Please enter a valid phone number")
     .optional(),
+  preferredOtpChannel: z.enum(["email", "whatsapp"]).default("email").optional(),
+  whatsappOptIn: z.boolean().default(true).optional(),
 });
 
 export const loginSchema = z.object({
@@ -65,10 +67,12 @@ export const verifyEmailSchema = z.object({
 export const resendCodeSchema = z.object({
   email: z.string().email().transform((v) => v.toLowerCase().trim()),
   type: z.enum(["VERIFY_EMAIL", "RESET_PASSWORD"]).default("VERIFY_EMAIL"),
+  preferredOtpChannel: z.enum(["email", "whatsapp"]).default("email").optional(),
 });
 
 export const forgotPasswordSchema = z.object({
   email: z.string().email().transform((v) => v.toLowerCase().trim()),
+  preferredOtpChannel: z.enum(["email", "whatsapp"]).default("email").optional(),
 });
 
 export const resetPasswordSchema = z.object({

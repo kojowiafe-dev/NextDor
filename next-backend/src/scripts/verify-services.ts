@@ -17,6 +17,7 @@ import { config } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { v2 as cloudinary } from "cloudinary";
 import https from "node:https";
+import { WhatsAppService, normalizeWatiBaseUrl } from "../lib/whatsapp.js";
 
 interface CheckResult {
   service: string;
@@ -270,6 +271,91 @@ async function runPreflight() {
       });
       console.log(`   ⚠ Cloudinary notice: ${err.message}`);
     }
+  }
+
+  // 6. WhatsApp Service (WATI or Meta Cloud API)
+  const waProvider = WhatsAppService.getProvider();
+  console.log(`\n6. Checking WhatsApp Service (Active Provider: ${waProvider.toUpperCase()})...`);
+
+  if (waProvider === "wati") {
+    try {
+      const baseUrl = normalizeWatiBaseUrl(config.WATI_API_ENDPOINT);
+      const { status, data, durationMs } = await pingUrl(
+        `${baseUrl}/api/v1/getMessageTemplates`,
+        {
+          headers: {
+            Authorization: `Bearer ${config.WATI_ACCESS_TOKEN}`,
+          },
+        }
+      );
+
+      if (status >= 200 && status < 300) {
+        results.push({
+          service: "WATI WhatsApp Gateway",
+          status: "OK",
+          latencyMs: durationMs,
+          details: `Connected (${durationMs}ms). Base URL: ${baseUrl}.`,
+        });
+        console.log(`   ✓ WATI WhatsApp Gateway connected (${durationMs}ms)`);
+      } else {
+        results.push({
+          service: "WATI WhatsApp Gateway",
+          status: "WARNING",
+          details: `WATI API returned HTTP ${status}: ${data.info || data.message || "Verify WATI access token"}`,
+        });
+        console.log(`   ⚠ WATI API returned: ${data.info || data.message || status}`);
+      }
+    } catch (err: any) {
+      results.push({
+        service: "WATI WhatsApp Gateway",
+        status: "WARNING",
+        details: `Network error connecting to WATI: ${err.message}`,
+      });
+      console.log(`   ⚠ WATI WhatsApp network notice: ${err.message}`);
+    }
+  } else if (waProvider === "meta") {
+    try {
+      const apiVer = config.WHATSAPP_API_VERSION || "v21.0";
+      const { status, data, durationMs } = await pingUrl(
+        `https://graph.facebook.com/${apiVer}/${config.WHATSAPP_PHONE_NUMBER_ID}`,
+        {
+          headers: {
+            Authorization: `Bearer ${config.WHATSAPP_ACCESS_TOKEN}`,
+          },
+        }
+      );
+
+      if (status === 200 && data.id) {
+        results.push({
+          service: "Meta WhatsApp Cloud API",
+          status: "OK",
+          latencyMs: durationMs,
+          details: `Connected (${durationMs}ms). Verified Phone ID: ${data.id}. Display Name: ${data.verified_name || data.display_phone_number || "Active"}.`,
+        });
+        console.log(`   ✓ Meta WhatsApp Cloud API connected (${durationMs}ms)`);
+      } else {
+        results.push({
+          service: "Meta WhatsApp Cloud API",
+          status: "WARNING",
+          details: `Meta API returned HTTP ${status}: ${data.error?.message || "Verify access token"}`,
+        });
+        console.log(`   ⚠ Meta WhatsApp API returned: ${data.error?.message || status}`);
+      }
+    } catch (err: any) {
+      results.push({
+        service: "Meta WhatsApp Cloud API",
+        status: "WARNING",
+        details: `Network error: ${err.message}`,
+      });
+      console.log(`   ⚠ Meta WhatsApp network notice: ${err.message}`);
+    }
+  } else {
+    results.push({
+      service: "WhatsApp Messaging Gateway",
+      status: "WARNING",
+      details: "WhatsApp credentials pending. Operating in Developer Mock mode with automatic Email fallback.",
+    });
+    console.log("   ⚠ WhatsApp credentials pending (Dev terminal mock active with Email fallback)");
   }
 
   // Summary Table

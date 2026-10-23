@@ -4,6 +4,7 @@ import { logger } from "../../lib/logger.js";
 import { SmsService } from "../../lib/sms.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
+import { WhatsAppService } from "../../lib/whatsapp.js";
 import {
   NotFoundError,
   BadRequestError,
@@ -203,12 +204,27 @@ export class LogisticsService {
     const recipientName = shippingAddr.recipientName || shipment.order.user?.name || "Valued Customer";
     const recipientEmail = shipment.order.user?.email || shipment.order.guestEmail;
 
+    const optIn = (shipment.order as any).whatsappOptIn !== false;
+
     if (payload.status === "OUT_FOR_DELIVERY") {
       if (recipientPhone) {
         SmsService.sendSms(
           recipientPhone,
           `NextDor Update: Your package (${shipment.trackingNumber}) is out for delivery! Our courier ${payload.courierName || "driver"} will contact you shortly.`,
         ).catch((err) => logger.warn({ err: err?.message }, "Failed to dispatch delivery SMS"));
+      }
+      if (optIn && recipientPhone) {
+        WhatsAppService.sendCourierDelivery(
+          recipientPhone,
+          {
+            orderNumber: shipment.order.number,
+            trackingNumber: shipment.trackingNumber,
+            courierName: payload.courierName || shipment.carrier || "NextDor Express",
+            status: "OUT_FOR_DELIVERY",
+            recipientName,
+          },
+          recipientEmail ? { email: recipientEmail } : undefined
+        ).catch((err) => logger.warn({ err }, "Failed to dispatch WhatsApp out-for-delivery alert"));
       }
     } else if (payload.status === "DELIVERED") {
       if (recipientPhone) {
@@ -227,6 +243,19 @@ export class LogisticsService {
             deliveryAddress: `${shippingAddr.street || "Direct Delivery"}, ${shippingAddr.city || "Accra"}`,
           },
         }).catch((err) => logger.warn({ err }, "Failed to queue delivery confirmation email"));
+      }
+      if (optIn && recipientPhone) {
+        WhatsAppService.sendCourierDelivery(
+          recipientPhone,
+          {
+            orderNumber: shipment.order.number,
+            trackingNumber: shipment.trackingNumber,
+            courierName: payload.courierName || shipment.carrier || "NextDor Express",
+            status: "DELIVERED",
+            recipientName,
+          },
+          recipientEmail ? { email: recipientEmail, deliveryAddress: `${shippingAddr.street || "Direct Delivery"}, ${shippingAddr.city || "Accra"}` } : undefined
+        ).catch((err) => logger.warn({ err }, "Failed to dispatch WhatsApp delivery confirmation alert"));
       }
     }
 

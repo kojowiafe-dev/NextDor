@@ -24,6 +24,7 @@ import { logger } from "../../lib/logger.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { SmsService } from "../../lib/sms.js";
+import { WhatsAppService } from "../../lib/whatsapp.js";
 import { LogisticsService } from "../logistics/logistics.service.js";
 import { LogisticsRepository } from "../logistics/logistics.repository.js";
 import {
@@ -65,6 +66,7 @@ export type CheckoutInput = {
   deliveryMethod?: DeliveryMethod;
   notes?: string;
   couponId?: string;
+  whatsappOptIn?: boolean;
 };
 
 // Delivery fee schedule (GHS) — Roadmap: pull from a region-based delivery zone config table
@@ -295,6 +297,7 @@ export class OrderService {
       deliveryFee: deliveryFee.toDecimal(),
       discount: discount.toDecimal(),
       total: total.toDecimal(),
+      whatsappOptIn: input.whatsappOptIn,
     });
 
     logger.info(
@@ -311,7 +314,8 @@ export class OrderService {
       enrichedItems,
       input.shippingAddress,
       cleanGuestEmail,
-      finalUserId
+      finalUserId,
+      input.whatsappOptIn !== false
     ).catch((err) => {
       logger.warn({ err, orderNumber: order.number }, "Order placed email dispatch error");
     });
@@ -422,7 +426,9 @@ export class OrderService {
       "Your order has been cancelled upon your request.",
       order.guestEmail || undefined,
       order.userId || undefined,
-      shipAddr?.recipientName
+      shipAddr?.recipientName,
+      shipAddr?.recipientPhone,
+      order.whatsappOptIn !== false
     ).catch((err) => {
       logger.warn({ err, orderNumber: order.number }, "Order cancellation email dispatch error");
     });
@@ -460,7 +466,9 @@ export class OrderService {
       note,
       order.guestEmail || undefined,
       order.userId || undefined,
-      shipAddr?.recipientName
+      shipAddr?.recipientName,
+      shipAddr?.recipientPhone,
+      order.whatsappOptIn !== false
     ).catch((err) => {
       logger.warn({ err, orderNumber: order.number }, "Order status update email dispatch error");
     });
@@ -550,17 +558,20 @@ export class OrderService {
       region: string;
     },
     guestEmail?: string,
-    userId?: string
+    userId?: string,
+    whatsappOptIn = true
   ): Promise<void> {
     try {
       let customerEmail = guestEmail;
       let customerName = shippingAddress?.recipientName || "Valued Customer";
+      let customerPhone = shippingAddress?.recipientPhone;
 
       if (userId) {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (user) {
           customerEmail = user.email || customerEmail;
           customerName = user.name || customerName;
+          customerPhone = customerPhone || user.phone || undefined;
         }
       }
 
@@ -591,15 +602,41 @@ export class OrderService {
       }
 
       // 1b. Dispatch SMS acknowledgement if recipient phone number is provided.
-      // NOTE: this is an "order received" message. The "payment confirmed" SMS is sent
-      // once, by the PaymentService, when the payment is actually settled.
       if (shippingAddress?.recipientPhone) {
         SmsService.sendOrderReceived(shippingAddress.recipientPhone, orderNumber, Number(total)).catch((err) => {
           logger.warn({ err, orderNumber }, "Failed to dispatch order received SMS");
         });
       }
 
-      // 2. Group items by vendor and dispatch merchant notifications via resilient queue
+      // 1c. Dispatch instant WhatsApp order acknowledgement to customer
+      if (whatsappOptIn && customerPhone) {
+        WhatsAppService.sendOrderReceived(
+          customerPhone,
+          {
+            orderNumber,
+            total: Number(total),
+            customerName,
+            itemCount: items.reduce((acc, i) => acc + (i.quantity || 1), 0),
+          },
+          customerEmail
+            ? {
+                email: customerEmail,
+                shippingAddress,
+                items: items.map((i) => ({
+                  productName: i.productName,
+                  quantity: i.quantity,
+                  unitPrice: Number(i.unitPrice),
+                  subtotal: Number(i.subtotal),
+                  productImage: i.productImage || undefined,
+                })),
+              }
+            : undefined
+        ).catch((waErr) => {
+          logger.warn({ waErr, orderNumber }, "Failed to dispatch WhatsApp order confirmation");
+        });
+      }
+
+      // 2. Group items by vendor and dispatch merchant notifications via resilient queue + WhatsApp
       const vendorItemsMap = new Map<string, typeof items>();
       for (const item of items) {
         if (item.vendorId) {
@@ -617,6 +654,7 @@ export class OrderService {
 
           const vendorEmail = vendor?.email || vendor?.owner?.email;
           const storeName = vendor?.name || "NextDor Vendor";
+          const vendorPhone = vendor?.whatsappPhone || vendor?.phone || vendor?.owner?.phone;
 
           if (vendorEmail) {
             dispatchEmailAsync({
@@ -636,6 +674,33 @@ export class OrderService {
               logger.warn({ vErr, vendorId, orderNumber }, "Failed to queue vendor notification");
             });
           }
+
+          // WhatsApp Merchant Alert
+          if (vendor?.whatsappOptIn !== false && vendorPhone) {
+            const vTotal = vItems.reduce((acc, i) => acc + Number(i.subtotal || 0), 0);
+            WhatsAppService.sendVendorNewOrderAlert(
+              vendorPhone,
+              {
+                storeName,
+                orderNumber,
+                itemCount: vItems.reduce((acc, i) => acc + (i.quantity || 1), 0),
+                total: vTotal,
+                city: `${shippingAddress.city}, ${shippingAddress.region}`,
+              },
+              vendorEmail
+                ? {
+                    email: vendorEmail,
+                    items: vItems.map((i) => ({
+                      productName: i.productName,
+                      quantity: i.quantity,
+                      unitPrice: Number(i.unitPrice),
+                    })),
+                  }
+                : undefined
+            ).catch((waErr) => {
+              logger.warn({ waErr, vendorId, orderNumber }, "Failed to dispatch vendor WhatsApp new order alert");
+            });
+          }
         } catch (vErr) {
           logger.warn({ vErr, vendorId, orderNumber }, "Failed to prepare vendor notification");
         }
@@ -651,17 +716,21 @@ export class OrderService {
     note?: string,
     guestEmail?: string,
     userId?: string,
-    recipientName?: string
+    recipientName?: string,
+    phone?: string,
+    whatsappOptIn = true
   ): Promise<void> {
     try {
       let customerEmail = guestEmail;
       let customerName = recipientName || "Valued Customer";
+      let customerPhone = phone;
 
       if (userId) {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (user) {
           customerEmail = user.email || customerEmail;
           customerName = user.name || customerName;
+          customerPhone = customerPhone || user.phone || undefined;
         }
       }
 
@@ -677,6 +746,21 @@ export class OrderService {
           },
         }).catch((err) => {
           logger.warn({ err, orderNumber }, "Failed to queue status update email");
+        });
+      }
+
+      if (whatsappOptIn && customerPhone) {
+        WhatsAppService.sendOrderStatusUpdate(
+          customerPhone,
+          {
+            orderNumber,
+            status,
+            customerName,
+            note,
+          },
+          customerEmail ? { email: customerEmail } : undefined
+        ).catch((waErr) => {
+          logger.warn({ waErr, orderNumber }, "Failed to dispatch WhatsApp status update");
         });
       }
     } catch (err) {

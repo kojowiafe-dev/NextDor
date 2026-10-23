@@ -80,6 +80,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
             deliveryMethod: { type: "string", enum: ["STANDARD", "EXPRESS", "PICKUP"] },
             notes: { type: "string", maxLength: 1000 },
             couponId: { type: "string", format: "uuid" },
+            whatsappOptIn: { type: "boolean" },
           },
         },
       },
@@ -96,6 +97,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         deliveryMethod: body.deliveryMethod,
         notes: body.notes,
         couponId: body.couponId,
+        whatsappOptIn: body.whatsappOptIn,
       });
 
       return reply.status(201).send({

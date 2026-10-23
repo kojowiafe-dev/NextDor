@@ -27,6 +27,7 @@ import {
 import { UserRepository } from "./user.repository.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
+import { WhatsAppService } from "../../lib/whatsapp.js";
 import type { User } from "@prisma/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -107,14 +108,16 @@ export class AuthService {
   public static signAccessToken = signAccessToken;
 
   /**
-   * Register a new customer account and dispatch a 6-digit email verification code.
+   * Register a new customer account and dispatch a 6-digit verification code (Email or WhatsApp).
    */
   async register(input: {
     name: string;
     email: string;
     password: string;
     phone?: string;
-  }): Promise<{ user: AuthUser; requiresVerification: boolean; email: string }> {
+    preferredOtpChannel?: "email" | "whatsapp";
+    whatsappOptIn?: boolean;
+  }): Promise<{ user: AuthUser; requiresVerification: boolean; email: string; otpChannel: "email" | "whatsapp" }> {
     const normalizedEmail = input.email.toLowerCase().trim();
     const existing = await this.userRepo.findByEmail(normalizedEmail);
     if (existing) {
@@ -131,6 +134,7 @@ export class AuthService {
         phone: input.phone,
         passwordHash,
         emailVerified: false,
+        whatsappOptIn: input.whatsappOptIn ?? true,
       });
     } catch (err: any) {
       if (err?.code === "P2002") {
@@ -151,19 +155,32 @@ export class AuthService {
       expiresAt,
     });
 
-    // FIX #13: Send verification email asynchronously via queue (non-blocking)
-    await dispatchEmailAsync({
-      type: "verification",
-      email: normalizedEmail,
-      name: user.name,
-      code,
-    });
-    logger.info({ userId: user.id, email: normalizedEmail }, "auth: verification code dispatched on register");
+    const otpChannel = input.preferredOtpChannel === "whatsapp" && input.phone ? "whatsapp" : "email";
+
+    if (otpChannel === "whatsapp" && input.phone) {
+      await WhatsAppService.sendOtp(
+        input.phone,
+        code,
+        "verification",
+        { email: normalizedEmail, name: user.name }
+      );
+      logger.info({ userId: user.id, phone: input.phone }, "auth: verification code dispatched on register via WhatsApp");
+    } else {
+      // FIX #13: Send verification email asynchronously via queue (non-blocking)
+      await dispatchEmailAsync({
+        type: "verification",
+        email: normalizedEmail,
+        name: user.name,
+        code,
+      });
+      logger.info({ userId: user.id, email: normalizedEmail }, "auth: verification code dispatched on register via email");
+    }
 
     return {
       user: this._safeUser(user),
       requiresVerification: true,
       email: normalizedEmail,
+      otpChannel,
     };
   }
 
@@ -222,9 +239,12 @@ export class AuthService {
   }
 
   /**
-   * Resends a 6-digit verification code with a 60-second cooldown rate limit.
+   * Resends a 6-digit verification code with a 60-second cooldown rate limit (Email or WhatsApp).
    */
-  async resendVerificationCode(email: string): Promise<{ success: boolean; message: string }> {
+  async resendVerificationCode(
+    email: string,
+    preferredOtpChannel?: "email" | "whatsapp"
+  ): Promise<{ success: boolean; message: string; channel: "email" | "whatsapp" }> {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await this.userRepo.findByEmail(normalizedEmail);
     if (!user) {
@@ -252,27 +272,50 @@ export class AuthService {
       expiresAt,
     });
 
-    // FIX #13: Asynchronously dispatch verification email
-    await dispatchEmailAsync({
-      type: "verification",
-      email: normalizedEmail,
-      name: user.name,
-      code,
-    });
-    logger.info({ email: normalizedEmail }, "auth: verification code resent");
+    const channel = preferredOtpChannel === "whatsapp" && user.phone ? "whatsapp" : "email";
 
-    return {
-      success: true,
-      message: "A new 6-digit verification code has been sent to your email.",
-    };
+    if (channel === "whatsapp" && user.phone) {
+      await WhatsAppService.sendOtp(
+        user.phone,
+        code,
+        "verification",
+        { email: normalizedEmail, name: user.name }
+      );
+      logger.info({ email: normalizedEmail, phone: user.phone }, "auth: verification code resent via WhatsApp");
+      return {
+        success: true,
+        message: "A new 6-digit verification code has been sent to your WhatsApp.",
+        channel: "whatsapp",
+      };
+    } else {
+      // FIX #13: Asynchronously dispatch verification email
+      await dispatchEmailAsync({
+        type: "verification",
+        email: normalizedEmail,
+        name: user.name,
+        code,
+      });
+      logger.info({ email: normalizedEmail }, "auth: verification code resent via email");
+
+      return {
+        success: true,
+        message: "A new 6-digit verification code has been sent to your email.",
+        channel: "email",
+      };
+    }
   }
 
   /**
-   * Sends a 6-digit password reset recovery code to the user's email.
+   * Sends a 6-digit password reset recovery code to the user's email or WhatsApp.
    */
-  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+  async forgotPassword(
+    email: string,
+    preferredOtpChannel?: "email" | "whatsapp"
+  ): Promise<{ success: boolean; message: string; channel: "email" | "whatsapp" }> {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await this.userRepo.findByEmail(normalizedEmail);
+
+    let channel: "email" | "whatsapp" = "email";
 
     if (user && !user.deletedAt) {
       // 60-second cooldown
@@ -289,21 +332,35 @@ export class AuthService {
           expiresAt,
         });
 
-        // FIX #13: Asynchronously dispatch password reset email
-        await dispatchEmailAsync({
-          type: "password_reset",
-          email: normalizedEmail,
-          name: user.name,
-          code,
-        });
-        logger.info({ email: normalizedEmail }, "auth: password reset code dispatched");
+        if (preferredOtpChannel === "whatsapp" && user.phone) {
+          channel = "whatsapp";
+          await WhatsAppService.sendOtp(
+            user.phone,
+            code,
+            "password_reset",
+            { email: normalizedEmail, name: user.name }
+          );
+          logger.info({ email: normalizedEmail, phone: user.phone }, "auth: password reset code dispatched via WhatsApp");
+        } else {
+          // FIX #13: Asynchronously dispatch password reset email
+          await dispatchEmailAsync({
+            type: "password_reset",
+            email: normalizedEmail,
+            name: user.name,
+            code,
+          });
+          logger.info({ email: normalizedEmail }, "auth: password reset code dispatched via email");
+        }
       }
     }
 
     // Always return generic success to prevent account enumeration
     return {
       success: true,
-      message: "If an account exists with this email address, a password reset code has been sent.",
+      message: channel === "whatsapp"
+        ? "If an account exists, a password reset code has been sent to your WhatsApp."
+        : "If an account exists with this email address, a password reset code has been sent to your email.",
+      channel,
     };
   }
 

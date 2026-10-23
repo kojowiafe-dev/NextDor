@@ -55,6 +55,7 @@ export type PlaceOrderInput = {
   deliveryFee: Prisma.Decimal;
   discount: Prisma.Decimal;
   total: Prisma.Decimal;
+  whatsappOptIn?: boolean;
 };
 
 // ─── Repository ───────────────────────────────────────────────────────────────
@@ -186,6 +187,7 @@ export class OrderRepository {
           total: input.total,
           status: "PENDING",
           paymentStatus: "UNPAID",
+          whatsappOptIn: input.whatsappOptIn ?? true,
           // 3. Create OrderItems inline (price snapshots — immutable after creation)
           items: {
             create: input.items.map((item) => ({

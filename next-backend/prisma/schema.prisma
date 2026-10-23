@@ -35,6 +35,8 @@ model User {
   passwordHash  String
   name          String
   phone         String?
+  whatsappOptIn Boolean    @default(true)
+  phoneVerifiedAt DateTime?
   role          UserRole   @default(CUSTOMER)
   status        UserStatus @default(ACTIVE)
   createdAt     DateTime   @default(now())
@@ -106,6 +108,8 @@ model Vendor {
   lowStockAlertEmail     String?
   lowStockAlertPhone     String?
   enableLowStockAlerts   Boolean            @default(true)
+  whatsappOptIn          Boolean            @default(true)
+  whatsappPhone          String?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   deletedAt              DateTime?
@@ -349,6 +353,7 @@ model Order {
   deliveryMethod  DeliveryMethod       @default(STANDARD)
   couponId        String?              @db.Uuid
   notes           String?
+  whatsappOptIn   Boolean              @default(true)
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -1022,4 +1027,24 @@ enum StockAlertStatus {
   RESOLVED
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// MULTI-CHANNEL NOTIFICATIONS & AUDIT TRAIL
+// ═══════════════════════════════════════════════════════════════════
 
+/// Comprehensive audit log for multi-channel notifications (WhatsApp, Email, SMS).
+model NotificationLog {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel       String   @db.VarChar(20) // "WHATSAPP", "EMAIL", "SMS"
+  event         String   @db.VarChar(50) // "OTP", "ORDER_PLACED", "PAYMENT_RECEIPT", "ORDER_STATUS", "COURIER_DISPATCH", "VENDOR_NEW_ORDER", "VENDOR_LOW_STOCK", "VENDOR_PAYOUT"
+  recipient     String   @db.VarChar(255)
+  status        String   @db.VarChar(30) // "DISPATCHED", "DELIVERED", "FAILED", "FALLBACK_TRIGGERED"
+  providerMsgId String?  @map("provider_msg_id") @db.VarChar(255)
+  error         String?
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([channel, event])
+  @@index([recipient])
+  @@index([createdAt])
+  @@map("notification_logs")
+}

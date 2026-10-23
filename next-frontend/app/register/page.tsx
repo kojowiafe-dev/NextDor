@@ -67,6 +67,8 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [preferredOtpChannel, setPreferredOtpChannel] = useState<"email" | "whatsapp">("whatsapp");
+  const [whatsappOptIn, setWhatsappOptIn] = useState(true);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -115,6 +117,15 @@ export default function RegisterPage() {
     if (!email.trim()) errs.email = "Email address is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       errs.email = "Please enter a valid email address.";
+
+    if (preferredOtpChannel === "whatsapp") {
+      if (!phone.trim()) {
+        errs.phone = "Phone number is required to receive verification code via WhatsApp.";
+      } else if (!/^\+?[0-9\s\-()]{7,20}$/.test(phone)) {
+        errs.phone = "Please enter a valid Ghana phone number (e.g. 0244123456 or +233...).";
+      }
+    }
+
     if (!password) errs.password = "Password is required.";
     else if (password.length < 8) errs.password = "Password must be at least 8 characters.";
     if (!confirmPassword) errs.confirmPassword = "Please confirm your password.";
@@ -133,13 +144,21 @@ export default function RegisterPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await register({ name, email, password, phone: phone || undefined });
+      const res = await register({
+        name,
+        email,
+        password,
+        phone: phone || undefined,
+        preferredOtpChannel,
+        whatsappOptIn,
+      });
       const searchRedirect =
         typeof window !== "undefined"
           ? new URLSearchParams(window.location.search).get("redirect")
           : null;
 
-      const verifyUrl = `/verify-email?email=${encodeURIComponent(email)}${
+      const channel = res.otpChannel || preferredOtpChannel;
+      const verifyUrl = `/verify-email?email=${encodeURIComponent(email)}&channel=${encodeURIComponent(channel)}${
         searchRedirect ? `&redirect=${encodeURIComponent(searchRedirect)}` : ""
       }`;
       router.replace(verifyUrl);
@@ -266,16 +285,57 @@ export default function RegisterPage() {
               required
             />
 
+            {/* OTP Channel Selector */}
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Receive 6-Digit Verification Code Via:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreferredOtpChannel("whatsapp")}
+                  className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${
+                    preferredOtpChannel === "whatsapp"
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-800 shadow-xs ring-1 ring-emerald-400"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                >
+                  <span className="text-base">💬</span> WhatsApp (Fast)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreferredOtpChannel("email")}
+                  className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${
+                    preferredOtpChannel === "email"
+                      ? "border-[#ff9900] bg-amber-50 text-amber-900 shadow-xs ring-1 ring-[#ff9900]"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                >
+                  <span className="text-base">✉️</span> Email
+                </button>
+              </div>
+            </div>
+
             <AuthFormField
-              label="Phone number (optional)"
+              label={
+                preferredOtpChannel === "whatsapp"
+                  ? "WhatsApp Phone Number"
+                  : "Phone number (optional)"
+              }
               id="phone"
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               error={errors.phone}
-              placeholder="+233 XX XXX XXXX"
+              placeholder={preferredOtpChannel === "whatsapp" ? "0244123456 or +233..." : "+233 XX XXX XXXX"}
               autoComplete="tel"
+              required={preferredOtpChannel === "whatsapp"}
             />
+            {preferredOtpChannel === "whatsapp" && (
+              <p className="-mt-2 text-xs text-emerald-600">
+                ✓ We will send your instant 6-digit code directly to your WhatsApp.
+              </p>
+            )}
 
             {/* Password with toggle + strength */}
             <div className="space-y-1">
@@ -334,6 +394,26 @@ export default function RegisterPage() {
               {errors.confirmPassword && (
                 <p className="text-xs text-red-600">{errors.confirmPassword}</p>
               )}
+            </div>
+
+            {/* WhatsApp Updates Opt-in */}
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+              <label className="flex items-start gap-2.5 text-xs text-zinc-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={whatsappOptIn}
+                  onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 accent-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <span className="font-semibold text-emerald-950 flex items-center gap-1">
+                    <span>💬</span> WhatsApp Order Alerts & Official Receipts
+                  </span>
+                  <p className="mt-0.5 text-zinc-500">
+                    Receive instant order summaries, payment receipts, and live courier tracking on WhatsApp.
+                  </p>
+                </div>
+              </label>
             </div>
 
             {/* Terms */}

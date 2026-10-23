@@ -44,6 +44,7 @@ type FormData = {
   payment: PaymentMethod;
   momoNumber?: string;
   momoNetwork?: string;
+  whatsappOptIn?: boolean;
 };
 
 const REGIONS = [
@@ -134,6 +135,7 @@ export default function CheckoutPage() {
     payment: "momo",
     momoNumber: "",
     momoNetwork: "MTN MoMo",
+    whatsappOptIn: true,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
@@ -270,6 +272,7 @@ export default function CheckoutPage() {
           notes: `Payment method: ${form.payment}${
             form.payment === "momo" ? ` (${form.momoNetwork} - ${form.momoNumber})` : ""
           }`,
+          whatsappOptIn: form.whatsappOptIn !== false,
         },
         activeToken,
       );
@@ -497,6 +500,27 @@ export default function CheckoutPage() {
                   />
                   {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
                 </Field>
+
+                {/* WhatsApp Order & Tracking Notification Opt-In */}
+                <div className="sm:col-span-2 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3.5">
+                  <label className="flex items-start gap-2.5 text-xs text-zinc-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.whatsappOptIn !== false}
+                      onChange={(e) => set("whatsappOptIn", e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 accent-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <span className="font-semibold text-emerald-950 flex items-center gap-1.5">
+                        <span className="text-sm">💬</span> Receive live tracking & digital receipts on WhatsApp
+                      </span>
+                      <p className="mt-0.5 text-zinc-500">
+                        We'll send real-time order updates, official payment receipts, and courier tracking to{" "}
+                        <span className="font-medium text-emerald-900">{form.phone || "your phone number"}</span>.
+                      </p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </Section>
 

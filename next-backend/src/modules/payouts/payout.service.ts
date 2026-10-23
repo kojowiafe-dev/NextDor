@@ -5,6 +5,7 @@ import { Money } from "../../domain/Money.js";
 import { logger } from "../../lib/logger.js";
 import { SmsService } from "../../lib/sms.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
+import { WhatsAppService } from "../../lib/whatsapp.js";
 import {
   BadRequestError,
   NotFoundError,
@@ -169,6 +170,23 @@ export class PayoutService {
             logger.warn({ err: err?.message, vendorId: vendor.id }, "Payout email notice failed")
           );
         }
+
+        // Send WhatsApp Payout Confirmation to merchant
+        const waPhone = vendor.whatsappPhone || vendor.phone || vendor.momoNumber;
+        if (vendor.whatsappOptIn !== false && waPhone) {
+          WhatsAppService.sendVendorPayoutAlert(
+            waPhone,
+            {
+              storeName: vendor.name,
+              amount: Number(payout.amount),
+              batchId: transferRef,
+              network: vendor.momoNetwork || "MoMo",
+            },
+            vendor.email ? { email: vendor.email, netEarnings: Number(payout.amount) } : undefined
+          ).catch((err) =>
+            logger.warn({ err: err?.message, vendorId: vendor.id }, "Payout WhatsApp notice failed")
+          );
+        }
       } catch (itemErr: any) {
         failureCount++;
         logger.error(
@@ -259,6 +277,20 @@ export class PayoutService {
             batchReference: payout.batch?.batchReference,
           },
         }).catch(() => {});
+      }
+
+      const waPhone = (payout.vendor as any).whatsappPhone || payout.vendor.phone || payout.vendor.momoNumber;
+      if ((payout.vendor as any).whatsappOptIn !== false && waPhone) {
+        WhatsAppService.sendVendorPayoutAlert(
+          waPhone,
+          {
+            storeName: payout.vendor.name,
+            amount: Number(payout.amount),
+            batchId: data.reference,
+            network: payout.vendor.momoNetwork || "MoMo",
+          },
+          payout.vendor.email ? { email: payout.vendor.email, netEarnings: Number(payout.amount) } : undefined
+        ).catch(() => {});
       }
     } else if (event === "transfer.failed" || event === "transfer.reversed") {
       await this.repo.updatePayout(payout.id, {

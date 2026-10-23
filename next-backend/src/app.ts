@@ -34,6 +34,7 @@ import { inventoryRoutes } from "./modules/inventory/inventory.routes.js";
 import { redis } from "./lib/redis.js";
 import { ResilientRateLimitStore } from "./lib/rateLimitStore.js";
 import { isOriginAllowed } from "./lib/originPolicy.js";
+import { whatsappWebhookRoutes, adminNotificationRoutes } from "./modules/notifications/whatsapp.routes.js";
 
 const isProduction = config.NODE_ENV === "production";
 
@@ -258,6 +259,8 @@ export async function buildApp() {
   await app.register(adminRoutes,       { prefix: "/api/v1/admin" });
   await app.register(vendorOrderRoutes, { prefix: "/api/v1/vendors" });
   await app.register(vendorReturnRoutes, { prefix: "/api/v1/vendors" });
+  await app.register(whatsappWebhookRoutes, { prefix: "/api/v1/webhooks" });
+  await app.register(adminNotificationRoutes, { prefix: "/api/v1/admin/notifications" });
 
   return app;
 }

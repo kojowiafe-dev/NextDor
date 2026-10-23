@@ -15,8 +15,10 @@ function VerifyEmailContent() {
 
   const emailParam = searchParams.get("email") || "";
   const redirectParam = searchParams.get("redirect") || "";
+  const channelParam = searchParams.get("channel") === "whatsapp" ? "whatsapp" : "email";
 
   const [email, setEmail] = useState(emailParam);
+  const [activeChannel, setActiveChannel] = useState<"email" | "whatsapp">(channelParam);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -93,15 +95,21 @@ function VerifyEmailContent() {
     }
   }
 
-  async function handleResend() {
+  async function handleResend(targetChannel: "email" | "whatsapp" = activeChannel) {
     if (cooldown > 0 || !email || isResending) return;
 
     setError(null);
     setIsResending(true);
 
     try {
-      const res = await resendCode(email, "VERIFY_EMAIL");
-      setSuccessMsg(res.message || "A new 6-digit code has been dispatched to your email.");
+      const res = await resendCode(email, "VERIFY_EMAIL", targetChannel);
+      setActiveChannel(res.channel || targetChannel);
+      setSuccessMsg(
+        res.message ||
+          (targetChannel === "whatsapp"
+            ? "A new 6-digit code has been dispatched to your WhatsApp."
+            : "A new 6-digit code has been dispatched to your email.")
+      );
       setCooldown(60);
       setCode("");
       inputRef.current?.focus();
@@ -135,15 +143,31 @@ function VerifyEmailContent() {
 
           {/* Icon & Title */}
           <div className="text-center mb-6">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ff9900]/15 text-[#ff9900] ring-4 ring-[#ff9900]/10">
-              <Mail className="h-7 w-7" />
+            <div
+              className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl ${
+                activeChannel === "whatsapp"
+                  ? "bg-emerald-100 text-emerald-700 ring-4 ring-emerald-500/20"
+                  : "bg-[#ff9900]/15 text-[#ff9900] ring-4 ring-[#ff9900]/10"
+              }`}
+            >
+              {activeChannel === "whatsapp" ? (
+                <span className="text-3xl">💬</span>
+              ) : (
+                <Mail className="h-7 w-7" />
+              )}
             </div>
-            <h1 className="text-xl font-bold text-zinc-900">Verify your email address</h1>
+            <h1 className="text-xl font-bold text-zinc-900">
+              {activeChannel === "whatsapp"
+                ? "Verify via WhatsApp"
+                : "Verify your email address"}
+            </h1>
             <p className="mt-1 text-xs sm:text-sm text-zinc-500">
-              We sent a 6-digit verification code to
+              {activeChannel === "whatsapp"
+                ? "We sent a 6-digit security code to your WhatsApp account"
+                : "We sent a 6-digit verification code to"}
             </p>
             <p className="mt-0.5 text-xs sm:text-sm font-semibold text-zinc-800 break-all">
-              {email || "your email address"}
+              {email || "your account"}
             </p>
           </div>
 
@@ -211,28 +235,41 @@ function VerifyEmailContent() {
 
           {/* Resend Action */}
           <div className="mt-6 pt-5 border-t border-zinc-100 text-center">
-            <p className="text-xs text-zinc-500">Didn't receive the email code?</p>
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={cooldown > 0 || isResending}
-              className={`mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold transition ${
-                cooldown > 0
-                  ? "text-zinc-400 cursor-not-allowed"
-                  : "text-[#ff9900] hover:text-[#f08804] hover:underline"
-              }`}
-            >
-              {isResending ? (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  <span>Sending code...</span>
-                </>
-              ) : cooldown > 0 ? (
-                <span>Resend code in {cooldown}s</span>
-              ) : (
-                <span>Resend 6-digit code</span>
-              )}
-            </button>
+            <p className="text-xs text-zinc-500 mb-2">Didn't receive your 6-digit code?</p>
+            {cooldown > 0 ? (
+              <p className="text-xs font-semibold text-zinc-400">
+                Resend code available in {cooldown}s
+              </p>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleResend("whatsapp")}
+                  disabled={isResending}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  {isResending ? (
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <span>💬</span>
+                  )}
+                  <span>Resend via WhatsApp</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleResend("email")}
+                  disabled={isResending}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+                >
+                  {isResending ? (
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <span>✉️</span>
+                  )}
+                  <span>Resend via Email</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Change email link */}

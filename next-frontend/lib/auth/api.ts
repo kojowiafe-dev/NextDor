@@ -30,6 +30,8 @@ export type SignUpPayload = {
   email: string;
   password: string;
   phone?: string;
+  preferredOtpChannel?: "email" | "whatsapp";
+  whatsappOptIn?: boolean;
 };
 
 export type UpdateProfilePayload = {
@@ -104,6 +106,7 @@ export type SignUpResult = {
   user: AuthUser;
   requiresVerification: boolean;
   email: string;
+  otpChannel?: "email" | "whatsapp";
 };
 
 /**
@@ -135,6 +138,7 @@ export async function signUp(payload: SignUpPayload): Promise<SignUpResult> {
     },
     requiresVerification: Boolean(json.data.requiresVerification),
     email: json.data.email || rawUser.email,
+    otpChannel: json.data.otpChannel || "email",
   };
 }
 
@@ -178,35 +182,39 @@ export async function verifyEmail(payload: { email: string; code: string }): Pro
 export async function resendCode(
   email: string,
   type: "VERIFY_EMAIL" | "RESET_PASSWORD" = "VERIFY_EMAIL",
-): Promise<{ success: boolean; message: string }> {
+  preferredOtpChannel?: "email" | "whatsapp"
+): Promise<{ success: boolean; message: string; channel?: "email" | "whatsapp" }> {
   const res = await fetch(`${API_BASE}/auth/resend-code`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, type }),
+    body: JSON.stringify({ email, type, preferredOtpChannel }),
   });
 
   const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.error?.message || "Failed to resend code.");
   }
-  return { success: true, message: json.message };
+  return { success: true, message: json.message, channel: json.channel };
 }
 
 /**
  * Request password recovery code via POST /api/v1/auth/forgot-password.
  */
-export async function forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+export async function forgotPassword(
+  email: string,
+  preferredOtpChannel?: "email" | "whatsapp"
+): Promise<{ success: boolean; message: string; channel?: "email" | "whatsapp" }> {
   const res = await fetch(`${API_BASE}/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, preferredOtpChannel }),
   });
 
   const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.error?.message || "Failed to submit password reset request.");
   }
-  return { success: true, message: json.message };
+  return { success: true, message: json.message, channel: json.channel };
 }
 
 /**

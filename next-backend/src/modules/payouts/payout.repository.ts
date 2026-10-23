@@ -25,6 +25,8 @@ export class PayoutRepository {
         name: true,
         email: true,
         phone: true,
+        whatsappPhone: true,
+        whatsappOptIn: true,
         momoNumber: true,
         momoNetwork: true,
         paystackRecipientCode: true,
@@ -136,6 +138,8 @@ export class PayoutRepository {
                 momoNetwork: true,
                 email: true,
                 phone: true,
+                whatsappPhone: true,
+                whatsappOptIn: true,
               },
             },
             vendorOrders: {
