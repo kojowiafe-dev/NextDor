@@ -16,6 +16,7 @@
  *    Also: "xUnit Test Patterns" by Gerard Meszaros — "Fresh Fixture" pattern.
  */
 
+import crypto from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { config } from "./config/env.js";
 import { logger } from "./lib/logger.js";
@@ -66,7 +67,7 @@ export async function buildApp() {
   // Gracefully handle empty JSON bodies and store rawBody for webhook HMAC verification
   app.addContentTypeParser(
     "application/json",
-    { parseAs: "string" },
+    { parseAs: "string" as const },
     (req, body: string, done) => {
       (req as any).rawBody = body;
       if (!body || body.trim() === "") {
