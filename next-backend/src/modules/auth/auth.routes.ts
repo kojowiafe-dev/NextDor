@@ -27,15 +27,7 @@
 
 import type { FastifyPluginAsync } from "fastify";
 
-declare module "fastify" {
-  interface FastifyRequest {
-    cookies: Record<string, string>;
-  }
-  interface FastifyReply {
-    setCookie(name: string, value: string, options?: any): this;
-    clearCookie(name: string, options?: any): this;
-  }
-}
+
 import { AuthService, authService } from "./auth.service.js";
 import {
   registerSchema,
