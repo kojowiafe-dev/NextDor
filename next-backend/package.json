@@ -28,6 +28,9 @@
     "@fastify/swagger-ui": "^5.1.0",
     "@nextdor/shared": "*",
     "@prisma/client": "^5.22.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.5.5",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.13.2",
     "cloudinary": "^2.5.1",
@@ -39,9 +42,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/jsonwebtoken": "^9.0.7",
-    "@types/node": "^22.5.5",
     "pino-pretty": "^11.2.2",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
