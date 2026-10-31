@@ -4,6 +4,7 @@ import {
   getAllProducts,
 } from "@/lib/catalog";
 import { StreamlinedStorefront } from "@/components/home/StreamlinedStorefront";
+import { HeroCarousel } from "@/components/home/HeroCarousel";
 
 export const revalidate = 60; // Revalidate every 60 seconds
 
@@ -15,10 +16,13 @@ export default async function HomePage() {
   ]);
 
   return (
-    <StreamlinedStorefront
-      products={products}
-      categories={categories}
-      dealProduct={dealProduct}
-    />
+    <main className="space-y-4">
+      <HeroCarousel />
+      <StreamlinedStorefront
+        products={products}
+        categories={categories}
+        dealProduct={dealProduct}
+      />
+    </main>
   );
 }

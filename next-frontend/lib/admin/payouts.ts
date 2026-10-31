@@ -7,6 +7,9 @@ export interface LedgerInflow {
 }
 
 export interface LedgerLiabilities {
+  vendorPendingFulfillmentGhs?: number;
+  vendorPendingFulfillmentPesewas?: number;
+  vendorPendingFulfillmentOrdersCount?: number;
   vendorEscrowPendingPesewas: number;
   vendorEscrowPendingGhs: number;
   vendorEscrowOrdersCount: number;

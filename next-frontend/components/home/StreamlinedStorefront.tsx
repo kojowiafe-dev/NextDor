@@ -3,17 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Search,
   CheckCircle2,
-  Sparkles,
-  ShoppingBag,
-  ArrowRight,
   Filter,
-  X,
   Flame,
-  Store,
-  Truck,
-  ShieldCheck,
+  Search,
 } from "lucide-react";
 import type { Category, Product } from "@/lib/catalog/types";
 import { ProductCard } from "@/components/product/ProductCard";
@@ -94,78 +87,8 @@ export function StreamlinedStorefront({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
-      {/* ─── 1. CLEAN & WELCOMING STOREFRONT HERO ─────────────────────── */}
-      <section className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-[#131921] via-[#1a2536] to-[#232f3e] p-6 text-white shadow-lg sm:p-10 ring-1 ring-white/10">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-[#ff9900]/15 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 right-1/4 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
-
-        <div className="relative z-10 max-w-3xl">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#ff9900]/20 border border-[#ff9900]/40 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#ff9900]">
-            <ShoppingBag className="h-3.5 w-3.5 fill-[#ff9900]" />
-            <span>NextDor Public Storefront</span>
-          </div>
-
-          <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl lg:text-5xl leading-tight">
-            Shop Verified Essentials &amp; Big Savings in Ghana
-          </h1>
-
-          <p className="mt-3 text-sm leading-relaxed text-zinc-300 sm:text-base">
-            Easily check available products in stock and add items to your cart
-            with 1-click. Enjoy fast doorstep delivery and seamless Mobile Money
-            checkout.
-          </p>
-
-          {/* Quick Search on Storefront */}
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1 max-w-lg">
-              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search available items (e.g., Laptop, Cake, Perfume)..."
-                className="w-full rounded-xl bg-white/10 border border-white/20 pl-10 pr-10 py-3 text-sm text-white placeholder-zinc-400 backdrop-blur-sm focus:border-[#ff9900] focus:bg-white/15 focus:outline-none focus:ring-1 focus:ring-[#ff9900] transition"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            <Link
-              href="/shop"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff9900] px-5 py-3 text-sm font-extrabold text-[#131921] shadow-lg shadow-[#ff9900]/20 transition-all hover:bg-[#f08804] active:scale-95"
-            >
-              <span>Explore All</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          {/* Trust Highlights */}
-          <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-zinc-300 sm:gap-6 border-t border-white/10 pt-4">
-            <span className="flex items-center gap-1.5 font-medium">
-              <Truck className="h-4 w-4 text-emerald-400" />
-              Ghana Doorstep Delivery
-            </span>
-            <span className="flex items-center gap-1.5 font-medium">
-              <CheckCircle2 className="h-4 w-4 text-[#ff9900]" />
-              100% Genuine Items
-            </span>
-            <span className="flex items-center gap-1.5 font-medium">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              MTN / Telecel MoMo Protected
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 2. CONVENIENT FILTER & AVAILABILITY BAR ───────────────────── */}
+    <div className="mx-auto max-w-7xl px-4 py-2 sm:py-4">
+      {/* ─── 1. CONVENIENT FILTER & AVAILABILITY BAR ───────────────────── */}
       <section className="sticky top-0 z-20 mb-6 rounded-2xl bg-white/95 p-3.5 shadow-sm backdrop-blur-md ring-1 ring-zinc-200/80 transition-all">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Main Filter Tabs */}

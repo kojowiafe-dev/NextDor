@@ -384,7 +384,16 @@ export class VendorRepository {
 
     const now = new Date();
 
-    const [total, payouts, earningsAgg, inEscrowAgg, availableAgg, paidOutAgg] = await Promise.all([
+    const [
+      total,
+      payouts,
+      earningsAgg,
+      pendingFulfillmentAgg,
+      inEscrowAgg,
+      availableAgg,
+      processingPayoutsAgg,
+      paidOutAgg,
+    ] = await Promise.all([
       prisma.vendorPayout.count({ where }),
       prisma.vendorPayout.findMany({
         where,
@@ -413,6 +422,17 @@ export class VendorRepository {
         },
         _sum: { vendorEarnings: true, subtotal: true },
       }),
+      // Pre-delivery fulfillment (paid, pending dispatch or transit, payoutId is null)
+      prisma.vendorOrder.aggregate({
+        where: {
+          vendorId,
+          status: { in: ["PENDING", "PROCESSING", "SHIPPED"] },
+          payoutId: null,
+          order: { paymentStatus: "PAID" },
+        },
+        _sum: { vendorEarnings: true },
+        _count: { id: true },
+      }),
       // In 48h escrow (delivered and paid but clearedAt > now)
       prisma.vendorOrder.aggregate({
         where: {
@@ -437,6 +457,12 @@ export class VendorRepository {
         _sum: { vendorEarnings: true },
         _count: { id: true },
       }),
+      // Payouts currently processing / in flight
+      prisma.vendorPayout.aggregate({
+        where: { vendorId, status: "PROCESSING" },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
       // Total already paid out
       prisma.vendorPayout.aggregate({
         where: { vendorId, status: "PAID" },
@@ -453,10 +479,14 @@ export class VendorRepository {
       escrowSummary: {
         lifetimeGrossSales: Number(earningsAgg._sum.subtotal || 0),
         lifetimeNetEarnings: Number(earningsAgg._sum.vendorEarnings || 0),
+        pendingFulfillmentAmount: Number(pendingFulfillmentAgg._sum.vendorEarnings || 0),
+        pendingFulfillmentOrdersCount: pendingFulfillmentAgg._count.id || 0,
         inEscrowAmount: Number(inEscrowAgg._sum.vendorEarnings || 0),
         inEscrowOrdersCount: inEscrowAgg._count.id || 0,
         availableForPayoutAmount: Number(availableAgg._sum.vendorEarnings || 0),
         availableOrdersCount: availableAgg._count.id || 0,
+        inFlightPayoutAmount: Number(processingPayoutsAgg._sum.amount || 0),
+        inFlightPayoutsCount: processingPayoutsAgg._count.id || 0,
         totalPaidOut: Number(paidOutAgg._sum.amount || 0),
       },
     };

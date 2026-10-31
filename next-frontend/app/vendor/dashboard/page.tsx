@@ -142,10 +142,14 @@ interface VendorOrder {
 interface EscrowSummary {
   lifetimeGrossSales: number;
   lifetimeNetEarnings: number;
+  pendingFulfillmentAmount?: number;
+  pendingFulfillmentOrdersCount?: number;
   inEscrowAmount: number;
   inEscrowOrdersCount: number;
   availableForPayoutAmount: number;
   availableOrdersCount: number;
+  inFlightPayoutAmount?: number;
+  inFlightPayoutsCount?: number;
   totalPaidOut: number;
 }
 
@@ -1893,7 +1897,7 @@ export default function VendorDashboardPage() {
         {activeTab === "payouts" && (
           <div className="space-y-6">
             {/* Escrow & Earnings Breakdown Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
@@ -1904,7 +1908,22 @@ export default function VendorDashboardPage() {
                 <p className="mt-2 text-2xl font-bold text-zinc-900">
                   {formatPrice(escrowSummary?.lifetimeNetEarnings ?? 0, "GHS")}
                 </p>
-                <p className="mt-1 text-xs text-zinc-400">Total 90% revenue across all completed orders</p>
+                <p className="mt-1 text-xs text-zinc-400">Total 90% revenue across all completed/paid orders</p>
+              </div>
+
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                    Pending Delivery
+                  </span>
+                  <Package className="h-4 w-4 text-blue-600" />
+                </div>
+                <p className="mt-2 text-2xl font-extrabold text-blue-900">
+                  {formatPrice(escrowSummary?.pendingFulfillmentAmount ?? 0, "GHS")}
+                </p>
+                <p className="mt-1 text-xs text-blue-800">
+                  {escrowSummary?.pendingFulfillmentOrdersCount ?? 0} paid orders being prepared or in transit
+                </p>
               </div>
 
               <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm">

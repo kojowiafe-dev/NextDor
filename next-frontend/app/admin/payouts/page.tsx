@@ -285,8 +285,14 @@ export default function AdminPayoutsPage() {
             </p>
             <div className="mt-2 space-y-1 text-xs">
               <div className="flex justify-between text-zinc-600">
-                <span>In Escrow (Delivery pending):</span>
-                <span className="font-semibold">{formatPrice(ledger.liabilities.vendorEscrowPendingGhs, "GHS")}</span>
+                <span>Pre-Delivery (In-flight):</span>
+                <span className="font-semibold text-blue-600">
+                  {formatPrice(ledger.liabilities.vendorPendingFulfillmentGhs ?? 0, "GHS")}
+                </span>
+              </div>
+              <div className="flex justify-between text-zinc-600">
+                <span>In 48h Escrow (Delivered):</span>
+                <span className="font-semibold text-amber-600">{formatPrice(ledger.liabilities.vendorEscrowPendingGhs, "GHS")}</span>
               </div>
               <div className="flex justify-between text-zinc-600">
                 <span>Ready for Payout:</span>

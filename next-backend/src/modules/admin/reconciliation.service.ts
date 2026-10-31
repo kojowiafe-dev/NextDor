@@ -61,6 +61,9 @@ export class ReconciliationService {
       // 8. Cash on Delivery Collections (Delivered and collected without online gateway payment)
       codPaymentsAgg,
       codPaymentsCount,
+
+      // 9. Pre-Delivery Merchant Allocations (Paid, awaiting delivery & 48h escrow window)
+      pendingFulfillmentAgg,
     ] = await Promise.all([
       prisma.payment.aggregate({
         where: paymentWhere,
@@ -140,6 +143,15 @@ export class ReconciliationService {
           ...(startDate || endDate ? { updatedAt: { gte: startDate, lte: endDate } } : {}),
         },
       }),
+      prisma.vendorOrder.aggregate({
+        where: {
+          status: { in: ["PENDING", "PROCESSING", "SHIPPED"] },
+          payoutId: null,
+          order: { paymentStatus: "PAID" },
+        },
+        _sum: { vendorEarnings: true },
+        _count: { id: true },
+      }),
     ]);
 
     const totalGatewayInflow = Number(customerPaymentsAgg._sum.amount || 0);
@@ -149,6 +161,7 @@ export class ReconciliationService {
     const totalInEscrow = Number(inEscrowAgg._sum.vendorEarnings || 0);
     const totalAvailable = Number(availableAgg._sum.vendorEarnings || 0);
     const totalProcessing = Number(processingPayoutsAgg._sum.amount || 0);
+    const totalPendingFulfillment = Number(pendingFulfillmentAgg._sum.vendorEarnings || 0);
     const totalCommissions = Number(commissionsAgg._sum.commissionAmount || 0);
     const totalDeliveryFees = Number(deliveryFeesAgg._sum.deliveryFee || 0);
     const totalRefunds = Number(refundsAgg._sum.amount || 0);
@@ -156,9 +169,9 @@ export class ReconciliationService {
     // Platform Net Profit = Commissions + Delivery Fees
     const platformRevenue = totalCommissions + totalDeliveryFees;
 
-    // Total Merchant Liabilities = Disbursed + In-Flight + In-Escrow + Available
+    // Total Merchant Liabilities = Disbursed + In-Flight + In-Escrow + Available + Pre-Delivery In-Flight
     const totalMerchantLiabilities =
-      totalDisbursed + totalProcessing + totalInEscrow + totalAvailable;
+      totalDisbursed + totalProcessing + totalInEscrow + totalAvailable + totalPendingFulfillment;
 
     // Mathematical Balance & Variance Check
     // Accounted Funds = Merchant Allocations + Platform Revenue + Customer Refunds
@@ -214,6 +227,9 @@ export class ReconciliationService {
         successfulPaymentsCount: customerPaymentsCount + codPaymentsCount,
       },
       liabilities: {
+        vendorPendingFulfillmentGhs: totalPendingFulfillment,
+        vendorPendingFulfillmentPesewas: Math.round(totalPendingFulfillment * 100),
+        vendorPendingFulfillmentOrdersCount: pendingFulfillmentAgg._count.id || 0,
         vendorEscrowPendingGhs: totalInEscrow,
         vendorEscrowPendingPesewas: Math.round(totalInEscrow * 100),
         vendorEscrowOrdersCount: inEscrowAgg._count.id || 0,
