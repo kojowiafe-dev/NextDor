@@ -23,6 +23,7 @@ import {
 import { logger } from "../../lib/logger.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
+import type { OrderStatus } from "@prisma/client";
 import { flushPattern } from "../../lib/redis.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
@@ -526,13 +527,13 @@ export class VendorService {
       const allDelivered = allStatuses.every((s) => s === "DELIVERED");
       const allProcessing = allStatuses.every((s) => s === "PROCESSING" || s === "SHIPPED" || s === "DELIVERED");
 
-      let masterNewStatus: "PROCESSING" | "SHIPPED" | "DELIVERED" | null = null;
+      let masterNewStatus: "ACCEPTED" | "DISPATCHED" | "DELIVERED_VERIFIED" | null = null;
       if (allDelivered) {
-        masterNewStatus = "DELIVERED";
+        masterNewStatus = "DELIVERED_VERIFIED";
       } else if (allShipped) {
-        masterNewStatus = "SHIPPED";
+        masterNewStatus = "DISPATCHED";
       } else if (allProcessing) {
-        masterNewStatus = "PROCESSING";
+        masterNewStatus = "ACCEPTED";
       }
 
       if (masterNewStatus) {
@@ -541,18 +542,18 @@ export class VendorService {
           select: { status: true },
         });
 
-        if (parentOrder && parentOrder.status !== masterNewStatus && parentOrder.status !== "DELIVERED" && parentOrder.status !== "CANCELLED") {
+        if (parentOrder && parentOrder.status !== masterNewStatus && parentOrder.status !== "DELIVERED_VERIFIED" && parentOrder.status !== "COMPLETED" && parentOrder.status !== "CANCELLED") {
           const notesLower = (orderObj.notes || "").toLowerCase();
           const isCod =
             notesLower.includes("payment method: cod") ||
             notesLower.includes("cash on delivery") ||
             notesLower.includes("cod");
 
-          const updateData: { status: "PROCESSING" | "SHIPPED" | "DELIVERED"; paymentStatus?: "PAID" } = {
+          const updateData: { status: OrderStatus; paymentStatus?: "PAID" } = {
             status: masterNewStatus,
           };
 
-          if (masterNewStatus === "DELIVERED" && isCod && orderObj.paymentStatus === "UNPAID") {
+          if (masterNewStatus === "DELIVERED_VERIFIED" && isCod && orderObj.paymentStatus === "PENDING") {
             updateData.paymentStatus = "PAID";
           }
 
@@ -566,7 +567,7 @@ export class VendorService {
               orderId: orderObj.id,
               status: masterNewStatus,
               note:
-                masterNewStatus === "DELIVERED" && isCod
+                masterNewStatus === "DELIVERED_VERIFIED" && isCod
                   ? "All merchants have fulfilled items. Order delivered and Cash on Delivery payment collected."
                   : `All merchants have updated fulfillment to ${masterNewStatus}`,
             },

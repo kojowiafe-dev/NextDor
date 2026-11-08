@@ -352,6 +352,7 @@ export class VendorRepository {
       });
       if (!existing?.clearedAt) {
         data.clearedAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48-hour escrow window
+        data.fundsStatus = "ESCROW";
       }
     }
 

@@ -348,8 +348,10 @@ model Order {
   discount        Decimal              @default(0) @db.Decimal(12, 2)
   total           Decimal              @db.Decimal(12, 2)
   currency        String               @default("GHS")
-  status          OrderStatus          @default(PENDING)
-  paymentStatus   PaymentStatus        @default(UNPAID)
+  /// Spec §3: Order lifecycle status
+  status          OrderStatus          @default(PLACED)
+  /// Spec §3: Payment lifecycle status (separate column)
+  paymentStatus   PaymentStatus        @default(PENDING)
   deliveryMethod  DeliveryMethod       @default(STANDARD)
   couponId        String?              @db.Uuid
   notes           String?
@@ -374,20 +376,27 @@ model Order {
   @@map("orders")
 }
 
+/// Spec §3: Order lifecycle — separate from payment and payout lifecycles.
 enum OrderStatus {
-  PENDING
-  CONFIRMED
-  PROCESSING
-  SHIPPED
-  DELIVERED
+  /// Customer placed and paid; waiting for vendor acceptance
+  PLACED
+  /// Vendor accepted the order
+  ACCEPTED
+  /// Vendor has dispatched (NOT the same as delivery verified)
+  DISPATCHED
+  /// Delivery confirmed by a third party or customer code — starts 48h escrow window
+  DELIVERED_VERIFIED
+  /// 48h window passed (or customer confirmed early) with no open dispute
+  COMPLETED
   CANCELLED
-  REFUNDED
+  DISPUTED
 }
 
+/// Spec §3: Payment lifecycle — did the customer pay?
 enum PaymentStatus {
-  UNPAID
-  PARTIAL
+  PENDING
   PAID
+  FAILED
   PARTIALLY_REFUNDED
   REFUNDED
 }
@@ -455,32 +464,53 @@ model OrderItem {
 /// A vendor-specific sub-order partitioned from a Master Order.
 /// DESIGN: The Master Order captures the customer transaction, while
 /// VendorOrder models the independent fulfillment and financial settlement per merchant.
+/// Spec §8: Each vendor gets its own VendorOrder with its own dispute scope.
 model VendorOrder {
-  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId          String            @db.Uuid
-  vendorId         String            @db.Uuid
-  subtotal         Decimal           @db.Decimal(12, 2)
-  commissionAmount Decimal           @db.Decimal(12, 2)
-  vendorEarnings   Decimal           @db.Decimal(12, 2)
-  status           VendorOrderStatus @default(PENDING)
-  notes            String?
-  /// When 48h escrow clearance passes and funds are unlocked for payout
-  clearedAt        DateTime?
-  payoutId         String?           @db.Uuid
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId             String            @db.Uuid
+  vendorId            String            @db.Uuid
+  /// Subtotal of items (delivery fee allocated separately)
+  subtotal            Decimal           @db.Decimal(12, 2)
+  /// Delivery fee allocated to this vendor line
+  deliveryFeeAlloc    Decimal           @default(0) @db.Decimal(12, 2)
+  commissionAmount    Decimal           @db.Decimal(12, 2)
+  /// vendorEarnings = subtotal − commissionAmount (never computed independently)
+  vendorEarnings      Decimal           @db.Decimal(12, 2)
+  status              VendorOrderStatus @default(PENDING)
+  /// Spec §3: Funds lifecycle is separate from order lifecycle.
+  fundsStatus         VendorFundsStatus @default(PENDING_FULFILLMENT)
+  notes               String?
+  /// Set when a delivery agent or customer confirms delivery (not the vendor)
+  deliveryVerifiedAt  DateTime?
+  /// Set when the 48-hour escrow window starts (= deliveryVerifiedAt)
+  escrowStartedAt     DateTime?
+  /// Set when the 48-hour window expires (= escrowStartedAt + 48h)
+  escrowExpiresAt     DateTime?
+  /// Spec §4 fallback: vendor dispatched but no verified delivery in 7 days
+  flaggedForReview    Boolean           @default(false)
+  /// When funds were cleared (moved from ESCROW → AVAILABLE)
+  clearedAt           DateTime?
+  payoutId            String?           @db.Uuid
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  vendor           Vendor            @relation(fields: [vendorId], references: [id])
-  payout           VendorPayout?     @relation(fields: [payoutId], references: [id])
+  order               Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor              Vendor            @relation(fields: [vendorId], references: [id])
+  payout              VendorPayout?     @relation(fields: [payoutId], references: [id])
+  ledgerEntries       LedgerEntry[]
+  disputes            Dispute[]
 
   @@index([orderId])
   @@index([vendorId])
   @@index([status])
+  @@index([fundsStatus])
   @@index([payoutId])
+  @@index([escrowExpiresAt]) // Scheduler queries orders whose escrow window has expired
+  @@index([flaggedForReview])
   @@map("vendor_orders")
 }
 
+/// Kept for backward compat; the canonical funds lifecycle is VendorFundsStatus.
 enum VendorOrderStatus {
   PENDING
   PROCESSING
@@ -489,19 +519,44 @@ enum VendorOrderStatus {
   CANCELLED
 }
 
+/// Spec §3: Vendor funds lifecycle — per order, per vendor.
+enum VendorFundsStatus {
+  /// Payment received; waiting for fulfillment
+  PENDING_FULFILLMENT
+  /// Delivery verified; 48-hour inspection window active
+  ESCROW
+  /// Window cleared (no dispute or customer confirmed); eligible for payout
+  AVAILABLE
+  /// Dispute opened; frozen for admin resolution
+  DISPUTED
+  /// Included in an active payout batch (PROCESSING status)
+  IN_PAYOUT
+  /// Payout confirmed by gateway
+  PAID_OUT
+  /// Refunded to customer
+  REFUNDED
+}
+
 /// A financial settlement disbursement to a vendor.
+/// Spec §7: One payout per transfer, one unique transfer_reference.
+/// Payout lifecycle: DRAFT → APPROVED → PROCESSING → PAID (or FAILED/REVERSED).
 model VendorPayout {
   id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   vendorId            String       @db.Uuid
   batchId             String?      @db.Uuid
   amount              Decimal      @db.Decimal(12, 2)
   currency            String       @default("GHS")
-  status              PayoutStatus @default(PENDING)
+  /// Spec §3 correction: NEVER created as PAID. Starts as DRAFT.
+  status              PayoutStatus @default(DRAFT)
+  /// Stored BEFORE calling the gateway (idempotency key)
   paystackTransferRef String?      @unique
   recipientCode       String?      // Paystack recipient code used for this transfer
   failureReason       String?
   gatewayResponse     Json?
   paidAt              DateTime?
+  /// Spec §7 approval step: who approved this payout
+  approvedBy          String?      @db.Uuid
+  approvedAt          DateTime?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -521,10 +576,13 @@ model PayoutBatch {
   batchReference     String            @unique // e.g. "PB-20261014-ABC123"
   totalAmount        Decimal           @db.Decimal(12, 2)
   totalCount         Int
-  status             PayoutBatchStatus @default(PENDING)
+  /// Batch starts DRAFT; admin approves before any transfer is initiated
+  status             PayoutBatchStatus @default(DRAFT)
   paystackBatchCode  String?
   notes              String?
   createdBy          String?           @db.Uuid
+  approvedBy         String?           @db.Uuid
+  approvedAt         DateTime?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -535,19 +593,25 @@ model PayoutBatch {
   @@map("payout_batches")
 }
 
+/// Spec §3: Payout batch lifecycle.
 enum PayoutBatchStatus {
-  PENDING
+  DRAFT
+  APPROVED
   PROCESSING
   SUCCESS
   PARTIAL
   FAILED
 }
 
+/// Spec §3: Payout lifecycle — NEVER created as PAID.
 enum PayoutStatus {
-  PENDING
+  DRAFT
+  APPROVED
   PROCESSING
   PAID
   FAILED
+  /// A previously-PAID transfer was reversed by the gateway
+  REVERSED
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -790,6 +854,204 @@ enum RefundStatus {
   PENDING
   PROCESSED
   FAILED
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IMMUTABLE DOUBLE-ENTRY LEDGER (Spec §6)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Named chart-of-accounts for the double-entry ledger.
+/// Spec §6: Account types — Asset, Liability, Revenue, Expense.
+model LedgerAccount {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String           @unique  // e.g. "GATEWAY_CLEARING", "VENDOR_PAYABLE_PENDING"
+  name        String
+  accountType LedgerAccountType
+  description String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+
+  lines       LedgerLine[]
+
+  @@map("ledger_accounts")
+}
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  REVENUE
+  EXPENSE
+}
+
+/// An immutable double-entry ledger transaction (journal entry group).
+/// Spec §6 rules:
+///   - Append-only. Never UPDATE or DELETE.
+///   - Total debits MUST equal total credits (enforced in code + DB check constraint).
+///   - Every entry links to a source (order, payment, payout, dispute).
+model LedgerEntry {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Human-readable description of this journal entry
+  description     String
+  /// Which ledger event type this represents (maps to spec entries A–J)
+  entryType       LedgerEntryType
+  /// Currency: always stored in ISO code; amounts in minor units (pesewas)
+  currency        String           @default("GHS")
+  /// FK source references (one or more may be set)
+  orderId         String?          @db.Uuid
+  vendorOrderId   String?          @db.Uuid
+  paymentId       String?          @db.Uuid
+  payoutId        String?          @db.Uuid
+  disputeId       String?          @db.Uuid
+  /// ISO timestamp when this economic event occurred (may differ from DB insert time)
+  occurredAt      DateTime         @default(now())
+  createdAt       DateTime         @default(now())
+
+  lines           LedgerLine[]
+  vendorOrder     VendorOrder?     @relation(fields: [vendorOrderId], references: [id])
+
+  @@index([orderId])
+  @@index([vendorOrderId])
+  @@index([paymentId])
+  @@index([payoutId])
+  @@index([disputeId])
+  @@index([entryType])
+  @@index([createdAt])
+  @@map("ledger_entries")
+}
+
+/// Spec §6 entries A–J.
+enum LedgerEntryType {
+  /// A: Payment received and verified by gateway
+  PAYMENT_RECEIVED
+  /// C: Delivery verified → escrow starts
+  ESCROW_START
+  /// D: Escrow cleared (48h window with no dispute, or customer confirmed)
+  ESCROW_CLEARED
+  /// E: Gateway settles to bank/MoMo (net of fees)
+  GATEWAY_SETTLEMENT
+  /// F: Payout initiated (status PROCESSING)
+  PAYOUT_INITIATED
+  /// G: Payout confirmed by gateway (status PAID)
+  PAYOUT_CONFIRMED
+  /// H: Payout transfer fee charged
+  PAYOUT_FEE
+  /// I: Payout failed — funds restored to AVAILABLE
+  PAYOUT_FAILED_REVERSAL
+  /// Payout reversed after success
+  PAYOUT_REVERSED
+  /// J: Full refund (pre-fulfillment or post-dispute)
+  REFUND_FULL
+  /// Partial refund (proportional reversal)
+  REFUND_PARTIAL
+  /// Dispute opened — funds frozen
+  DISPUTE_FREEZE
+  /// Dispute resolved — funds released to vendor
+  DISPUTE_RELEASE
+  /// Adjustment or correction entry
+  ADJUSTMENT
+}
+
+/// One line (debit or credit) within a LedgerEntry.
+/// Amounts stored as integer PESEWAS (spec §6: never floats).
+model LedgerLine {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entryId         String        @db.Uuid
+  accountId       String        @db.Uuid
+  /// Amount in integer PESEWAS (spec §6: store as integer, not decimal)
+  amountPesewas   Int
+  isDebit         Boolean       // true = debit, false = credit
+  /// Optional per-line note
+  memo            String?
+  vendorId        String?       @db.Uuid
+
+  entry           LedgerEntry   @relation(fields: [entryId], references: [id])
+  account         LedgerAccount @relation(fields: [accountId], references: [id])
+  // NOTE: credit FK also points to LedgerAccount but we use a single accountId column.
+  // The isDebit flag distinguishes debit vs credit side.
+
+  @@index([entryId])
+  @@index([accountId])
+  @@index([vendorId])
+  @@map("ledger_lines")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DISPUTES (Spec §5)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Spec §5: Per-order, per-vendor dispute that freezes only the affected vendor's funds.
+/// A dispute against one vendor must NOT freeze other vendors' funds.
+model Dispute {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorOrderId   String          @db.Uuid
+  orderId         String          @db.Uuid
+  vendorId        String          @db.Uuid
+  customerId      String?         @db.Uuid
+  reason          DisputeReason
+  details         String?
+  evidenceUrls    String[]        @default([])
+  status          DisputeStatus   @default(OPEN)
+  resolution      DisputeResolution?
+  resolutionNote  String?
+  /// Amount frozen (= vendorEarnings of the affected VendorOrder)
+  frozenAmountPesewas Int
+  /// Amount refunded if partial/full refund resolution
+  refundAmountPesewas Int?
+  resolvedBy      String?         @db.Uuid
+  resolvedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  vendorOrder     VendorOrder     @relation(fields: [vendorOrderId], references: [id])
+
+  @@index([vendorOrderId])
+  @@index([orderId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("disputes")
+}
+
+enum DisputeReason {
+  WRONG_PRODUCT
+  DAMAGED_PRODUCT
+  MISSING_ITEMS
+  ORDER_NEVER_ARRIVED
+  NOT_AS_DESCRIBED
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  ESCALATED
+}
+
+enum DisputeResolution {
+  RELEASE_TO_VENDOR
+  PARTIAL_REFUND
+  FULL_REFUND
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WEBHOOK IDEMPOTENCY (Spec §7)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Spec §7: Duplicate webhooks must produce no duplicate ledger entries.
+/// Store processed event IDs so re-delivered webhooks are safely ignored.
+model ProcessedWebhookEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// The unique event ID from the gateway (e.g. Paystack event ID or transfer ref + event type)
+  eventKey      String   @unique
+  /// e.g. "charge.success", "transfer.success", "transfer.failed", "transfer.reversed"
+  eventType     String
+  /// Raw gateway payload for audit
+  rawPayload    Json?
+  processedAt   DateTime @default(now())
+
+  @@index([eventType])
+  @@index([processedAt])
+  @@map("processed_webhook_events")
 }
 
 // ═══════════════════════════════════════════════════════════════════

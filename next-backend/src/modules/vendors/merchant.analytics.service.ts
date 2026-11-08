@@ -100,7 +100,7 @@ export class MerchantAnalyticsService {
       where: {
         vendorId,
         order: {
-          status: { notIn: ["CANCELLED", "REFUNDED"] },
+          status: { not: "CANCELLED" },
           createdAt: dateFilter,
         },
       },

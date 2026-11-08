@@ -27,6 +27,7 @@ import { syncRoutes } from "./modules/sync/sync.routes.js";
 import { productRoutes } from "./modules/products/product.routes.js";
 import { vendorRoutes } from "./modules/vendors/vendor.routes.js";
 import { orderRoutes, adminOrderRoutes, vendorOrderRoutes } from "./modules/orders/order.routes.js";
+import { escrowRoutes } from "./modules/orders/escrow.routes.js";
 import { returnRoutes, vendorReturnRoutes, adminReturnRoutes } from "./modules/returns/return.routes.js";
 import { logisticsRoutes } from "./modules/logistics/logistics.routes.js";
 import { payoutRoutes } from "./modules/payouts/payout.routes.js";
@@ -250,6 +251,8 @@ export async function buildApp() {
   await app.register(productRoutes,     { prefix: "/api/v1/products" });
   await app.register(vendorRoutes,      { prefix: "/api/v1/vendors" });
   await app.register(orderRoutes,       { prefix: "/api/v1/orders" });
+  await app.register(escrowRoutes,      { prefix: "/api/v1/orders/escrow" });
+  await app.register(escrowRoutes,      { prefix: "/api/v1/escrow" });
   await app.register(returnRoutes,      { prefix: "/api/v1/returns" });
   await app.register(logisticsRoutes,   { prefix: "/api/v1/logistics" });
   await app.register(inventoryRoutes,   { prefix: "/api/v1/inventory" });

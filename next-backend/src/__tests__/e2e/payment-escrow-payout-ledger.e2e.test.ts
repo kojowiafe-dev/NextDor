@@ -175,7 +175,7 @@ describe("E2E: Payment Lifecycle, 48-Hour Escrow, MoMo Payouts & Financial Ledge
       data: {
         number: testOrderNumber,
         userId: customerUserId,
-        status: "CONFIRMED",
+        status: "PLACED",
         paymentStatus: "PAID",
         currency: "GHS",
         subtotal: itemSubtotal,
@@ -226,6 +226,7 @@ describe("E2E: Payment Lifecycle, 48-Hour Escrow, MoMo Payouts & Financial Ledge
         commissionAmount: commission,
         vendorEarnings,
         status: "PROCESSING",
+        fundsStatus: "PENDING_FULFILLMENT",
         // Not cleared yet because order is not delivered
         clearedAt: null,
       },
@@ -328,7 +329,7 @@ describe("E2E: Payment Lifecycle, 48-Hour Escrow, MoMo Payouts & Financial Ledge
     // Fast-forward clearedAt in DB to 10 seconds in the past (48h elapsed)
     await prisma.vendorOrder.update({
       where: { id: vendorOrderId },
-      data: { clearedAt: new Date(Date.now() - 10000) },
+      data: { clearedAt: new Date(Date.now() - 10000), fundsStatus: "AVAILABLE" },
     });
 
     // Verify Vendor Dashboard: inEscrow drops to 0, availableForPayout becomes 180.00
@@ -385,7 +386,7 @@ describe("E2E: Payment Lifecycle, 48-Hour Escrow, MoMo Payouts & Financial Ledge
     createdBatchId = batch.id;
     expect(batch.batchReference).toContain("PB-");
     expect(Number(batch.totalAmount)).toBe(180.0);
-    expect(batch.status).toBe("PENDING");
+    expect(batch.status).toBe("DRAFT");
 
     const payouts = body.data.payouts;
     expect(payouts).toHaveLength(1);
@@ -393,7 +394,17 @@ describe("E2E: Payment Lifecycle, 48-Hour Escrow, MoMo Payouts & Financial Ledge
     expect(Number(payouts[0].amount)).toBe(180.0);
   });
 
-  it("Step 6: Admin executes batch and dispatches Mobile Money transfer to vendor", async () => {
+  it("Step 6: Admin approves and executes batch and dispatches Mobile Money transfer to vendor", async () => {
+    // 1. Admin approves batch (DRAFT -> APPROVED) per Spec §7
+    const approveRes = await app.inject({
+      method: "POST",
+      url: `/api/v1/payouts/batches/${createdBatchId}/approve`,
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    expect(approveRes.statusCode).toBe(200);
+
     const execRes = await app.inject({
       method: "POST",
       url: "/api/v1/payouts/batches/execute",

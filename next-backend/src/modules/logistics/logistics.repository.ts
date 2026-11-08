@@ -211,21 +211,21 @@ export class LogisticsRepository {
         include: { events: true },
       });
 
-      // Automatically advance Order status to SHIPPED if currently PENDING, CONFIRMED, or PROCESSING
+      // Automatically advance Order status to DISPATCHED if currently PLACED or ACCEPTED
       const order = await tx.order.findUnique({
         where: { id: input.orderId },
         select: { status: true },
       });
 
-      if (order && (order.status === "CONFIRMED" || order.status === "PROCESSING" || order.status === "PENDING")) {
+      if (order && (order.status === "PLACED" || order.status === "ACCEPTED")) {
         await tx.order.update({
           where: { id: input.orderId },
-          data: { status: "SHIPPED" },
+          data: { status: "DISPATCHED" },
         });
         await tx.orderStatusHistory.create({
           data: {
             orderId: input.orderId,
-            status: "SHIPPED",
+            status: "DISPATCHED",
             note: `Dispatched via courier ${input.carrier.toUpperCase()} (Tracking: ${input.trackingNumber.trim()})`,
           },
         });
@@ -332,15 +332,15 @@ export class LogisticsRepository {
 
       // 2. Propagate to Order status and VendorOrder escrow clearance
       if (params.status === "DELIVERED") {
-        if (existing.order.status !== "DELIVERED") {
+        if (existing.order.status !== "DELIVERED_VERIFIED") {
           await tx.order.update({
             where: { id: existing.orderId },
-            data: { status: "DELIVERED" },
+            data: { status: "DELIVERED_VERIFIED" },
           });
           await tx.orderStatusHistory.create({
             data: {
               orderId: existing.orderId,
-              status: "DELIVERED",
+              status: "DELIVERED_VERIFIED",
               note: `Automated: Courier ${existing.carrier} marked package ${existing.trackingNumber} as DELIVERED`,
             },
           });
@@ -354,25 +354,39 @@ export class LogisticsRepository {
           // Specific sub-order package delivered
           await tx.vendorOrder.updateMany({
             where: { id: targetVendorOrderId, status: { not: "CANCELLED" } },
-            data: { status: "DELIVERED", clearedAt: escrowClearance },
+            data: {
+              status: "DELIVERED",
+              fundsStatus: "ESCROW",
+              deliveryVerifiedAt: new Date(),
+              escrowStartedAt: new Date(),
+              escrowExpiresAt: escrowClearance,
+              clearedAt: escrowClearance,
+            },
           });
         } else {
           // Master delivery: cascade to all active sub-orders and initialize 48h escrow clearance
           await tx.vendorOrder.updateMany({
             where: { orderId: existing.orderId, status: { not: "CANCELLED" } },
-            data: { status: "DELIVERED", clearedAt: escrowClearance },
+            data: {
+              status: "DELIVERED",
+              fundsStatus: "ESCROW",
+              deliveryVerifiedAt: new Date(),
+              escrowStartedAt: new Date(),
+              escrowExpiresAt: escrowClearance,
+              clearedAt: escrowClearance,
+            },
           });
         }
       } else if (params.status === "OUT_FOR_DELIVERY" || params.status === "IN_TRANSIT") {
-        if (existing.order.status === "CONFIRMED" || existing.order.status === "PROCESSING" || existing.order.status === "PENDING") {
+        if (existing.order.status === "PLACED" || existing.order.status === "ACCEPTED") {
           await tx.order.update({
             where: { id: existing.orderId },
-            data: { status: "SHIPPED" },
+            data: { status: "DISPATCHED" },
           });
           await tx.orderStatusHistory.create({
             data: {
               orderId: existing.orderId,
-              status: "SHIPPED",
+              status: "DISPATCHED",
               note: `Automated: Courier ${existing.carrier} marked shipment ${existing.trackingNumber} as ${params.status}`,
             },
           });

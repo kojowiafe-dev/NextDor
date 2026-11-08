@@ -72,7 +72,7 @@ export class PaymentService {
     if (order.paymentStatus === "PAID") {
       return { orderNumber: order.number, alreadyPaid: true as const };
     }
-    if (order.status === "CANCELLED" || order.status === "REFUNDED") {
+    if (order.status === "CANCELLED") {
       throw new UnprocessableError(`Order ${order.number} is ${order.status} and can no longer be paid`);
     }
 
@@ -271,11 +271,31 @@ export class PaymentService {
     }
 
     if (input.payload?.event !== "charge.success") {
+      // Still acknowledge gracefully
       return { status: 200, body: { received: true } };
     }
 
     const reference: string | undefined = input.payload.data?.reference;
     if (!reference) return { status: 200, body: { received: true } };
+
+    // ── Spec §7: Webhook idempotency — deduplicate by eventKey ─────────────
+    const eventKey = `charge.success:${reference}`;
+    try {
+      await (await import("../../lib/prisma.js")).prisma.processedWebhookEvent.create({
+        data: {
+          eventKey,
+          eventType: "charge.success",
+          rawPayload: input.payload as any,
+        },
+      });
+    } catch (dupErr: any) {
+      if (dupErr?.code === "P2002") {
+        // Unique constraint violated — already processed
+        logger.info({ eventKey }, "Paystack webhook: duplicate charge.success — skipped (idempotent)");
+        return { status: 200, body: { received: true, idempotent: true } };
+      }
+      throw dupErr;
+    }
 
     const payment = await this.repo.findPaymentByReference(reference);
     if (!payment) {

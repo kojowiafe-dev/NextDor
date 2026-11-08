@@ -80,13 +80,13 @@ export const DELIVERY_FEES: Record<DeliveryMethod, number> = {
 // Guards against illegal state jumps (e.g. DELIVERED → PENDING is nonsensical).
 
 export const ALLOWED_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
-  PENDING:     ["CONFIRMED", "PROCESSING", "CANCELLED"],
-  CONFIRMED:   ["PROCESSING", "SHIPPED", "CANCELLED"],
-  PROCESSING:  ["SHIPPED", "DELIVERED", "CANCELLED"],
-  SHIPPED:     ["DELIVERED", "CANCELLED"],
-  DELIVERED:   ["REFUNDED"],
-  CANCELLED:   [],
-  REFUNDED:    [],
+  PLACED:             ["ACCEPTED", "CANCELLED", "DISPUTED"],
+  ACCEPTED:           ["DISPATCHED", "CANCELLED", "DISPUTED"],
+  DISPATCHED:         ["DELIVERED_VERIFIED", "CANCELLED", "DISPUTED"],
+  DELIVERED_VERIFIED: ["COMPLETED", "DISPUTED"],
+  COMPLETED:          ["DISPUTED"],
+  CANCELLED:          [],
+  DISPUTED:           ["COMPLETED", "CANCELLED"],
 };
 
 export const ALLOWED_VENDOR_TRANSITIONS: Partial<Record<VendorOrderStatus, VendorOrderStatus[]>> = {
@@ -475,11 +475,11 @@ export class OrderService {
 
     // Trigger Ghana SMS notifications for key courier milestones
     if (shipAddr?.recipientPhone) {
-      if (newStatus === "SHIPPED") {
+      if (newStatus === "DISPATCHED") {
         SmsService.sendOrderShipped(shipAddr.recipientPhone, order.number).catch((err) => {
           logger.warn({ err, orderNumber: order.number }, "Order shipped SMS dispatch error");
         });
-      } else if (newStatus === "DELIVERED") {
+      } else if (newStatus === "DELIVERED_VERIFIED") {
         SmsService.sendOrderDelivered(shipAddr.recipientPhone, order.number).catch((err) => {
           logger.warn({ err, orderNumber: order.number }, "Order delivered SMS dispatch error");
         });
@@ -782,8 +782,8 @@ export class OrderService {
 
     const abandoned = await prisma.order.findMany({
       where: {
-        status: "PENDING",
-        paymentStatus: "UNPAID",
+        status: "PLACED",
+        paymentStatus: "PENDING",
         createdAt: { lte: cutoff },
         payments: {
           none: {
@@ -816,7 +816,7 @@ export class OrderService {
           "CANCELLED",
           `Automated: Order cancelled due to checkout inactivity (${olderThanMinutes} min timeout). Inventory returned to stock.`,
           undefined, // createdBy system
-          "PENDING",
+          "PLACED",
         );
         reclaimedNumbers.push(ord.number);
       } catch (err) {

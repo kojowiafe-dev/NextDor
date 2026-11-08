@@ -32,10 +32,8 @@ export class PayoutRepository {
         paystackRecipientCode: true,
         vendorOrders: {
           where: {
-            status: "DELIVERED",
-            clearedAt: { lte: now },
+            fundsStatus: "AVAILABLE",
             payoutId: null,
-            order: { paymentStatus: "PAID" },
           },
           select: {
             id: true,
@@ -79,13 +77,13 @@ export class PayoutRepository {
     }>;
   }) {
     return prisma.$transaction(async (tx) => {
-      // 1. Create PayoutBatch
+      // 1. Create PayoutBatch (starts in DRAFT status per Spec §3 & §7)
       const batch = await tx.payoutBatch.create({
         data: {
           batchReference: params.batchReference,
           totalAmount: new Prisma.Decimal(params.totalAmount),
           totalCount: params.payouts.length,
-          status: "PENDING",
+          status: "DRAFT",
           createdBy: params.createdBy || null,
           notes: params.notes || null,
         },
@@ -100,7 +98,7 @@ export class PayoutRepository {
             batchId: batch.id,
             amount: new Prisma.Decimal(item.amount),
             currency: "GHS",
-            status: "PENDING",
+            status: "DRAFT",
             recipientCode: item.recipientCode || null,
           },
         });

@@ -38,9 +38,9 @@ export class ReturnService {
       throw new ForbiddenError("You can only request returns for your own orders.");
     }
 
-    if (order.status !== "DELIVERED") {
+    if (order.status !== "DELIVERED_VERIFIED" && order.status !== "COMPLETED") {
       throw new UnprocessableError(
-        `Returns can only be requested for DELIVERED orders. Current order status: ${order.status}`
+        `Returns can only be requested for delivered orders. Current order status: ${order.status}`
       );
     }
 
@@ -349,7 +349,7 @@ export class ReturnService {
   private async getDeliveredTimestamp(orderId: string): Promise<Date | null> {
     const { prisma } = await import("../../lib/prisma.js");
     const statusEntry = await prisma.orderStatusHistory.findFirst({
-      where: { orderId, status: "DELIVERED" },
+      where: { orderId, status: "DELIVERED_VERIFIED" },
       orderBy: { createdAt: "desc" },
     });
     return statusEntry?.createdAt || null;

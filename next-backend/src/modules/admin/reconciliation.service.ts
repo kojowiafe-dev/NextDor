@@ -82,7 +82,7 @@ export class ReconciliationService {
       prisma.order.aggregate({
         where: {
           paymentStatus: "PAID",
-          status: { notIn: ["CANCELLED", "REFUNDED"] },
+          status: { not: "CANCELLED" },
         },
         _sum: { deliveryFee: true },
       }),
@@ -129,7 +129,7 @@ export class ReconciliationService {
       prisma.order.aggregate({
         where: {
           paymentStatus: "PAID",
-          status: "DELIVERED",
+          status: { in: ["DELIVERED_VERIFIED", "COMPLETED"] },
           payments: { none: { status: "SUCCESS" } },
           ...(startDate || endDate ? { updatedAt: { gte: startDate, lte: endDate } } : {}),
         },
@@ -138,7 +138,7 @@ export class ReconciliationService {
       prisma.order.count({
         where: {
           paymentStatus: "PAID",
-          status: "DELIVERED",
+          status: { in: ["DELIVERED_VERIFIED", "COMPLETED"] },
           payments: { none: { status: "SUCCESS" } },
           ...(startDate || endDate ? { updatedAt: { gte: startDate, lte: endDate } } : {}),
         },
@@ -155,7 +155,7 @@ export class ReconciliationService {
     ]);
 
     const totalGatewayInflow = Number(customerPaymentsAgg._sum.amount || 0);
-    const totalCodInflow = Number(codPaymentsAgg._sum.total || 0);
+    const totalCodInflow = Number(codPaymentsAgg._sum?.total || 0);
     const totalInflow = totalGatewayInflow + totalCodInflow;
     const totalDisbursed = Number(disbursedAgg._sum.amount || 0);
     const totalInEscrow = Number(inEscrowAgg._sum.vendorEarnings || 0);
@@ -163,7 +163,7 @@ export class ReconciliationService {
     const totalProcessing = Number(processingPayoutsAgg._sum.amount || 0);
     const totalPendingFulfillment = Number(pendingFulfillmentAgg._sum.vendorEarnings || 0);
     const totalCommissions = Number(commissionsAgg._sum.commissionAmount || 0);
-    const totalDeliveryFees = Number(deliveryFeesAgg._sum.deliveryFee || 0);
+    const totalDeliveryFees = Number(deliveryFeesAgg._sum?.deliveryFee || 0);
     const totalRefunds = Number(refundsAgg._sum.amount || 0);
 
     // Platform Net Profit = Commissions + Delivery Fees

@@ -49,6 +49,7 @@ export class AdminCustomerService {
             select: {
               total: true,
               status: true,
+              paymentStatus: true,
             },
           },
         },
@@ -57,7 +58,7 @@ export class AdminCustomerService {
 
     const customers = users.map((u) => {
       const totalSpent = u.orders
-        .filter((o) => o.status !== "CANCELLED" && o.status !== "REFUNDED")
+        .filter((o) => o.status !== "CANCELLED" && o.paymentStatus !== "REFUNDED")
         .reduce((sum, o) => sum + Number(o.total), 0);
 
       return {
@@ -126,7 +127,7 @@ export class AdminCustomerService {
     }
 
     const totalSpent = user.orders
-      .filter((o) => o.status !== "CANCELLED" && o.status !== "REFUNDED")
+      .filter((o) => o.status !== "CANCELLED" && o.paymentStatus !== "REFUNDED")
       .reduce((sum, o) => sum + Number(o.total), 0);
 
     return {

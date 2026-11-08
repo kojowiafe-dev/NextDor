@@ -185,8 +185,8 @@ export class OrderRepository {
           deliveryFee: input.deliveryFee,
           discount: input.discount,
           total: input.total,
-          status: "PENDING",
-          paymentStatus: "UNPAID",
+          status: "PLACED",
+          paymentStatus: "PENDING",
           whatsappOptIn: input.whatsappOptIn ?? true,
           // 3. Create OrderItems inline (price snapshots — immutable after creation)
           items: {
@@ -210,12 +210,13 @@ export class OrderRepository {
               commissionAmount: v.commissionAmount,
               vendorEarnings: v.vendorEarnings,
               status: "PENDING" as VendorOrderStatus,
+              fundsStatus: "PENDING_FULFILLMENT",
             })),
           },
-          // 5. Seed the status history with the initial PENDING state
+          // 5. Seed the status history with the initial PLACED state
           statusHistory: {
             create: {
-              status: "PENDING",
+              status: "PLACED",
               note: "Order placed successfully",
             },
           },
@@ -454,13 +455,17 @@ export class OrderRepository {
           where: { orderId, status: { notIn: ["DELIVERED", "CANCELLED"] } },
           data: { status: "CANCELLED" },
         });
-      } else if (status === "DELIVERED") {
+      } else if (status === "DELIVERED_VERIFIED") {
         const escrowClearance = new Date(Date.now() + 48 * 60 * 60 * 1000);
         // Cascade delivery to all non-cancelled sub-orders and initialize 48h escrow release timer
         await tx.vendorOrder.updateMany({
           where: { orderId, status: { not: "CANCELLED" } },
           data: {
             status: "DELIVERED",
+            fundsStatus: "ESCROW",
+            deliveryVerifiedAt: new Date(),
+            escrowStartedAt: new Date(),
+            escrowExpiresAt: escrowClearance,
             clearedAt: escrowClearance,
           },
         });
@@ -475,13 +480,13 @@ export class OrderRepository {
           notesLower.includes("payment method: cod") ||
           notesLower.includes("cash on delivery") ||
           notesLower.includes("cod");
-        if (isCod && currentOrder?.paymentStatus === "UNPAID") {
+        if (isCod && currentOrder?.paymentStatus === "PENDING") {
           await tx.order.update({
             where: { id: orderId },
             data: { paymentStatus: "PAID" },
           });
         }
-      } else if (status === "SHIPPED") {
+      } else if (status === "DISPATCHED") {
         await tx.vendorOrder.updateMany({
           where: { orderId, status: { in: ["PENDING", "PROCESSING"] } },
           data: { status: "SHIPPED" },

@@ -298,7 +298,7 @@ export class ReturnRepository {
           where: { id: params.orderId },
           data: {
             paymentStatus: isFullRefund ? "REFUNDED" : "PARTIALLY_REFUNDED",
-            status: isFullRefund ? "REFUNDED" : undefined,
+            status: isFullRefund ? "CANCELLED" : undefined,
           },
         });
 

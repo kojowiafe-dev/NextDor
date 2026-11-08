@@ -289,7 +289,7 @@ export class ProductRepository {
       where: {
         order: {
           createdAt: { gte: sevenDaysAgo },
-          status: { notIn: ["CANCELLED", "REFUNDED"] },
+          status: { not: "CANCELLED" },
         },
       },
       _sum: { quantity: true },
@@ -304,7 +304,7 @@ export class ProductRepository {
     for (const s of recentSales) {
       if (s.productId) {
         trendingProductIds.push(s.productId);
-        velocityMap.set(s.productId, s._sum.quantity || 1);
+        velocityMap.set(s.productId, s._sum?.quantity || 1);
       }
     }
 

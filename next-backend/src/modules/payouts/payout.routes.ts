@@ -30,6 +30,30 @@ export const payoutRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post(
+    "/batches/:id/approve",
+    {
+      preHandler: requireSuperAdmin,
+      schema: {
+        description: "Admin approves a DRAFT payout batch before gateway execution (Spec §7)",
+        tags: ["Admin Payouts"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: {
+            id: { type: "string", format: "uuid" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const result = await payoutService.approveBatch(id, req.authUser!.userId);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.post(
     "/batches/execute",
     {
       preHandler: requireSuperAdmin,

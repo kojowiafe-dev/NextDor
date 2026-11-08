@@ -13,6 +13,7 @@ export class AdminAnalyticsService {
       select: {
         total: true,
         status: true,
+        paymentStatus: true,
         createdAt: true,
       },
     });
@@ -20,7 +21,7 @@ export class AdminAnalyticsService {
     // Bucket into 30 days
     const revenueBuckets = new Array(30).fill(0);
     for (const order of recentOrders) {
-      if (order.status !== "CANCELLED" && order.status !== "REFUNDED") {
+      if (order.status !== "CANCELLED" && order.paymentStatus !== "REFUNDED") {
         const diffDays = Math.floor(
           (now.getTime() - order.createdAt.getTime()) / (24 * 60 * 60 * 1000),
         );
@@ -36,10 +37,16 @@ export class AdminAnalyticsService {
     });
 
     const ordersByStatus = {
+      placed: 0,
+      accepted: 0,
+      dispatched: 0,
+      delivered_verified: 0,
+      completed: 0,
+      cancelled: 0,
+      disputed: 0,
       delivered: 0,
       shipped: 0,
       processing: 0,
-      cancelled: 0,
       pending: 0,
       confirmed: 0,
     };
@@ -49,13 +56,23 @@ export class AdminAnalyticsService {
       if (key in ordersByStatus) {
         ordersByStatus[key] = sc._count.id;
       }
+      if (sc.status === "DELIVERED_VERIFIED" || sc.status === "COMPLETED") {
+        ordersByStatus.delivered += sc._count.id;
+      } else if (sc.status === "DISPATCHED") {
+        ordersByStatus.shipped += sc._count.id;
+      } else if (sc.status === "ACCEPTED") {
+        ordersByStatus.processing += sc._count.id;
+      } else if (sc.status === "PLACED") {
+        ordersByStatus.pending += sc._count.id;
+      }
     }
 
     // 3. Top products by revenue (excluding CANCELLED and REFUNDED orders)
     const validOrderItems = await prisma.orderItem.findMany({
       where: {
         order: {
-          status: { notIn: ["CANCELLED", "REFUNDED"] },
+          status: { not: "CANCELLED" },
+          paymentStatus: { not: "REFUNDED" },
         },
       },
       select: {
@@ -88,7 +105,8 @@ export class AdminAnalyticsService {
             orderItems: {
               where: {
                 order: {
-                  status: { notIn: ["CANCELLED", "REFUNDED"] },
+                  status: { not: "CANCELLED" },
+                  paymentStatus: { not: "REFUNDED" },
                 },
               },
               select: {
@@ -117,7 +135,7 @@ export class AdminAnalyticsService {
       prisma.user.count({ where: { role: "CUSTOMER", deletedAt: null } }),
       prisma.order.count({
         where: {
-          status: { in: ["CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED"] },
+          status: { in: ["PLACED", "ACCEPTED", "DISPATCHED", "DELIVERED_VERIFIED", "COMPLETED"] },
         },
       }),
       prisma.product.count({ where: { deletedAt: null } }),
@@ -129,7 +147,7 @@ export class AdminAnalyticsService {
         : "0.0%";
 
     const validRecentOrders = recentOrders.filter(
-      (o) => o.status !== "CANCELLED" && o.status !== "REFUNDED",
+      (o) => o.status !== "CANCELLED" && o.paymentStatus !== "REFUNDED",
     );
 
     return {

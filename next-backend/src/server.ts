@@ -36,6 +36,7 @@ import { prisma } from "./lib/prisma.js";
 import { redis, redisForQueue } from "./lib/redis.js";
 import { closeEmailQueue } from "./lib/email.queue.js";
 import { orderService } from "./modules/orders/order.service.js";
+import { EscrowScheduler } from "./modules/orders/escrow.scheduler.js";
 
 async function main() {
   const app = await buildApp();
@@ -62,6 +63,7 @@ async function main() {
       if (reclamationTimer) {
         clearInterval(reclamationTimer);
       }
+      EscrowScheduler.stop();
 
       // 2. Stop accepting new connections
       await app.close();
@@ -137,6 +139,9 @@ async function main() {
       }
     }, RECLAMATION_INTERVAL_MS);
     reclamationTimer.unref();
+
+    // ─── 48-Hour Escrow & 7-Day Dispatch Fallback Scheduler (Spec §10 Rule 7) ─
+    EscrowScheduler.start();
   } catch (err) {
     logger.fatal({ err }, "Failed to start server");
     process.exit(1);

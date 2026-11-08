@@ -1,1 +1,0 @@
-@"C:\Users\pc\AppData\Local\Programs\Python\Python313\python.exe" -c "import sys, subprocess; args = sys.argv[1:]; cmd = ' '.join(args[args.index('-Command')+1:]) if '-Command' in args else ' '.join(args); sys.exit(subprocess.run(cmd, shell=True).returncode)" %*

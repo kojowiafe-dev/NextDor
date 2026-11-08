@@ -29,7 +29,7 @@ async function main() {
     prisma.order.aggregate({
       where: {
         paymentStatus: "PAID",
-        status: { notIn: ["CANCELLED", "REFUNDED"] },
+        status: { not: "CANCELLED" },
       },
       _sum: { deliveryFee: true },
     }),
@@ -83,7 +83,7 @@ async function main() {
   const totalProcessing = Number(processingPayoutsAgg._sum.amount || 0);
   const totalPendingFulfillment = Number(pendingFulfillmentAgg._sum.vendorEarnings || 0);
   const totalCommissions = Number(commissionsAgg._sum.commissionAmount || 0);
-  const totalDeliveryFees = Number(deliveryFeesAgg._sum.deliveryFee || 0);
+  const totalDeliveryFees = Number(deliveryFeesAgg._sum?.deliveryFee || 0);
   const totalRefunds = Number(refundsAgg._sum.amount || 0);
 
   const platformRevenue = totalCommissions + totalDeliveryFees;
