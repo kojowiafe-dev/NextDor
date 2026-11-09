@@ -479,31 +479,117 @@ export class AuthService {
    * is a one-way function for 256-bit entropy input). bcrypt.compare adds a second
    * layer: tamper-proof verification that the token truly matches. Belt + suspenders.
    */
+  // In-flight refresh promises map to prevent concurrent refresh race conditions
+  private static inFlightRefreshes = new Map<string, Promise<AuthTokens>>();
+
+  /**
+   * Exchange a refresh token for a new access + refresh pair (Family Rotation).
+   *
+   * CONCURRENCY & REPLAY RESILIENCE:
+   * 1. In-flight Promise deduplication: Concurrent requests with the same raw token
+   *    await the same promise, preventing race condition collisions.
+   * 2. 30-second Grace Window: In single-page applications, multiple parallel API calls
+   *    triggering refresh simultaneously within 30s of rotation receive valid tokens
+   *    instead of falsely triggering the replay protection revocation.
+   * 3. O(1) indexed lookup via SHA-256 lookupHash + bcrypt verification.
+   */
   async refresh(rawRefreshToken: string): Promise<AuthTokens> {
-    const { prisma } = await import("../../lib/prisma.js");
     const lookupHash = makeLookupHash(rawRefreshToken);
 
-    // O(1) indexed lookup — no table scan
+    // Concurrency Lock: reuse existing in-flight refresh for the same token
+    const existingPromise = AuthService.inFlightRefreshes.get(lookupHash);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const refreshPromise = this._executeRefresh(rawRefreshToken, lookupHash);
+    AuthService.inFlightRefreshes.set(lookupHash, refreshPromise);
+
+    try {
+      return await refreshPromise;
+    } finally {
+      AuthService.inFlightRefreshes.delete(lookupHash);
+    }
+  }
+
+  private async _executeRefresh(rawRefreshToken: string, lookupHash: string): Promise<AuthTokens> {
+    const { prisma } = await import("../../lib/prisma.js");
+
+    // O(1) indexed lookup
     const matched = await prisma.refreshToken.findUnique({
       where: { lookupHash },
     });
 
-    if (!matched || matched.revokedAt || matched.expiresAt <= new Date()) {
+    if (!matched) {
       throw new UnauthorizedError("Invalid or expired refresh token");
     }
 
-    // Final verification: bcrypt confirms token was not tampered with
+    // Verify token authenticity via bcrypt
     const isValid = await bcrypt.compare(rawRefreshToken, matched.tokenHash);
     if (!isValid) {
       throw new UnauthorizedError("Invalid refresh token");
     }
 
-    // Check if this family has any revoked tokens (= replay attack detected)
-    const familyHasRevoked = await prisma.refreshToken.findFirst({
-      where: { family: matched.family, revokedAt: { not: null } },
+    // Check expiration
+    if (matched.expiresAt <= new Date()) {
+      throw new UnauthorizedError("Invalid or expired refresh token");
+    }
+
+    // Handle token that was already revoked: Grace Period vs Malicious Replay
+    if (matched.revokedAt) {
+      const msSinceRevocation = Date.now() - matched.revokedAt.getTime();
+      const GRACE_PERIOD_MS = 30_000; // 30 seconds grace window for concurrent requests
+
+      if (msSinceRevocation <= GRACE_PERIOD_MS) {
+        // Concurrent refresh race: return the active token from the same family
+        const activeToken = await prisma.refreshToken.findFirst({
+          where: {
+            family: matched.family,
+            revokedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (activeToken) {
+          const user = await this.userRepo.findById(matched.userId);
+          if (user && !user.deletedAt && user.status !== "SUSPENDED") {
+            const accessToken = signAccessToken(user.id, user.role, user.email, user.vendorId);
+            logger.info(
+              { userId: matched.userId, family: matched.family, msSinceRevocation },
+              "auth: concurrent refresh request handled within 30s grace window"
+            );
+            return {
+              accessToken,
+              // Return active token if raw was rotated, client updates access token
+              refreshToken: rawRefreshToken,
+            };
+          }
+        }
+      }
+
+      // Replay attack outside grace period: revoke entire family
+      await this.userRepo.revokeTokenFamily(matched.family);
+      logger.warn(
+        { userId: matched.userId, family: matched.family, msSinceRevocation },
+        "auth: refresh token replay detected outside grace window — entire family revoked"
+      );
+      throw new UnauthorizedError("Session invalidated due to suspicious activity. Please log in again.");
+    }
+
+    // Check if this family has any older revoked tokens that were revoked outside grace period
+    const revokedTokensInFamily = await prisma.refreshToken.findMany({
+      where: {
+        family: matched.family,
+        revokedAt: { not: null },
+      },
     });
 
-    if (familyHasRevoked) {
+    const isActualReplay = revokedTokensInFamily.some(
+      (t) => t.revokedAt && Date.now() - t.revokedAt.getTime() > 30_000
+    );
+
+    if (isActualReplay) {
       await this.userRepo.revokeTokenFamily(matched.family);
       logger.warn(
         { userId: matched.userId, family: matched.family },

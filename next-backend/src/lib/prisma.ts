@@ -39,8 +39,8 @@ declare global {
 }
 
 /**
- * Ensures connection pooling parameters (connection_limit, pool_timeout)
- * are configured on the PostgreSQL connection string for scale (Fix #10).
+ * Ensures connection pooling parameters (connection_limit, pool_timeout, pgbouncer, connect_timeout)
+ * are configured on the PostgreSQL connection string for Neon Serverless stability (Fix #10).
  */
 function getPooledDatabaseUrl(): string {
   try {
@@ -51,6 +51,12 @@ function getPooledDatabaseUrl(): string {
     }
     if (!url.searchParams.has("pool_timeout")) {
       url.searchParams.set("pool_timeout", "30");
+    }
+    if (!url.searchParams.has("connect_timeout")) {
+      url.searchParams.set("connect_timeout", "15");
+    }
+    if (url.hostname.includes("pooler") && !url.searchParams.has("pgbouncer")) {
+      url.searchParams.set("pgbouncer", "true");
     }
     return url.toString();
   } catch {

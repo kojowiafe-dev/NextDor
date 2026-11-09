@@ -43,6 +43,7 @@ async function main() {
 
   let isShuttingDown = false;
   let reclamationTimer: NodeJS.Timeout | null = null;
+  let dbKeepaliveTimer: NodeJS.Timeout | null = null;
 
   // Graceful shutdown handler
   async function shutdown(signal: string) {
@@ -62,6 +63,9 @@ async function main() {
       // 1. Stop background workers
       if (reclamationTimer) {
         clearInterval(reclamationTimer);
+      }
+      if (dbKeepaliveTimer) {
+        clearInterval(dbKeepaliveTimer);
       }
       EscrowScheduler.stop();
 
@@ -127,6 +131,20 @@ async function main() {
   try {
     const address = await app.listen({ port: config.PORT, host: config.HOST });
     logger.info({ address, env: config.NODE_ENV }, "🚀 NextDor API is running");
+
+    // ─── Database Pool Keep-Alive (Neon Serverless Stability) ──────────────
+    // Pings database every 2.5 minutes to prevent idle socket termination by serverless proxies
+    const DB_KEEPALIVE_MS = 2.5 * 60 * 1000;
+    dbKeepaliveTimer = setInterval(async () => {
+      try {
+        await prisma.$queryRawUnsafe("SELECT 1;");
+      } catch {
+        try {
+          await prisma.$connect();
+        } catch {}
+      }
+    }, DB_KEEPALIVE_MS);
+    dbKeepaliveTimer.unref();
 
     // ─── Automated Inventory Reclamation Worker (Loophole 2 Fix) ─────────────
     // Runs every 10 minutes to release reserved stock from unpaid abandoned checkouts

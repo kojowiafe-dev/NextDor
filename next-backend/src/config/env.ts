@@ -53,6 +53,8 @@ const envSchema = z.object({
 
   // ── Redis ────────────────────────────────────────────────────────────────
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
+  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 
   // ── JWT ─────────────────────────────────────────────────────────────────
   //

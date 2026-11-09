@@ -189,6 +189,12 @@ try {
     },
   });
 
+  emailQueue.on("error", (err: any) => {
+    if (err.code !== "ECONNREFUSED") {
+      logger.warn({ err }, "BullMQ: emailQueue error");
+    }
+  });
+
   emailWorker = new Worker<EmailJobData>(
     "email-dispatch",
     async (job: Job<EmailJobData>) => {
@@ -196,6 +202,12 @@ try {
     },
     { connection: redisForQueue as any }
   );
+
+  emailWorker.on("error", (err: any) => {
+    if (err.code !== "ECONNREFUSED") {
+      logger.warn({ err }, "BullMQ: emailWorker connection error");
+    }
+  });
 
   emailWorker.on("failed", (job, err) => {
     logger.error({ jobId: job?.id, type: job?.data?.type, err }, "BullMQ: email worker job failed");
