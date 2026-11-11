@@ -13,7 +13,14 @@ import type { AdminProduct } from "@/lib/admin/mockData";
 type ProductFormData = Omit<AdminProduct, "id" | "slug">;
 
 const CATEGORIES = [
-  "Electronics", "Laptops", "Beauty & Personal Care", "Bakery", "Fashion", "Home & Kitchen",
+  "Electronics",
+  "Phones & Tablets",
+  "Laptops & Computers",
+  "Home & Kitchen",
+  "Appliances",
+  "Fashion & Apparel",
+  "Beauty & Personal Care",
+  "Bakery & Groceries",
 ];
 
 const EMPTY_FORM: ProductFormData = {
@@ -32,9 +39,21 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
   const [form, setForm] = useState<ProductFormData>({ ...EMPTY_FORM, ...initial });
   const [errors, setErrors] = useState<Partial<Record<keyof ProductFormData, string>>>({});
   const [serverError, setServerError] = useState<string | null>(null);
-  const [categories, setCategories] = useState<string[]>(CATEGORIES);
+  const [categories, setCategories] = useState<string[]>(() =>
+    initial?.category && !CATEGORIES.includes(initial.category)
+      ? [initial.category, ...CATEGORIES]
+      : CATEGORIES
+  );
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (initial) {
+      setForm((prev) => ({ ...prev, ...initial }));
+    }
+  }, [initial]);
 
   useEffect(() => {
     async function loadCategories() {
@@ -42,18 +61,27 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
         const res = await fetch(`${API_BASE}/products/categories`);
         if (res.ok) {
           const json = await res.json();
-          if (Array.isArray(json.data)) {
-            const names = json.data.map((c: any) => c.name).filter(Boolean);
-            const combined = Array.from(new Set([...CATEGORIES, ...names]));
-            setCategories(combined);
-          }
+          const rawList = Array.isArray(json.data?.categories)
+            ? json.data.categories
+            : Array.isArray(json.data)
+            ? json.data
+            : [];
+          const names = rawList.map((c: any) => c.name).filter(Boolean);
+          const combined = Array.from(
+            new Set([
+              ...(initial?.category ? [initial.category] : []),
+              ...names,
+              ...CATEGORIES,
+            ])
+          );
+          setCategories(combined);
         }
       } catch {
         // fallback to default categories
       }
     }
     loadCategories();
-  }, []);
+  }, [initial?.category]);
 
   function set<K extends keyof ProductFormData>(key: K, value: ProductFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -207,15 +235,41 @@ export function ProductForm({ initial, onSave, title }: ProductFormProps) {
                     Category <span className="text-red-500">*</span>
                   </label>
                   <select
-                    value={form.category}
-                    onChange={(e) => set("category", e.target.value)}
+                    value={isCustomCategory ? "__custom__" : form.category}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "__custom__") {
+                        setIsCustomCategory(true);
+                        set("category", customCategory);
+                      } else {
+                        setIsCustomCategory(false);
+                        set("category", val);
+                      }
+                    }}
                     className={`w-full rounded-lg border px-4 py-2.5 text-sm text-zinc-900 outline-none focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/20 ${
                       errors.category ? "border-red-400 bg-red-50" : "border-zinc-300"
                     }`}
                   >
                     <option value="">Select category</option>
-                    {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                    <option value="__custom__">+ Create New Category...</option>
                   </select>
+                  {isCustomCategory && (
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => {
+                        setCustomCategory(e.target.value);
+                        set("category", e.target.value);
+                      }}
+                      placeholder="Enter new category name (e.g. Gaming & Consoles)"
+                      className="mt-2 w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-900 outline-none focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/20"
+                    />
+                  )}
                   {errors.category && <p className="text-xs text-red-600">{errors.category}</p>}
                 </div>
                 <div className="space-y-1">

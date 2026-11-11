@@ -8,6 +8,7 @@ import { ProductForm } from "@/components/admin/ProductForm";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useAuth } from "@/context/AuthContext";
 import { API_BASE } from "@/lib/api-config";
+import { invalidateProductsCache } from "@/lib/cache/adminCache";
 
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
@@ -30,7 +31,7 @@ export default function EditProductPage() {
             setProduct({
               id: p.id,
               name: p.name,
-              category: p.categories?.[0]?.name || p.categories?.[0]?.slug || "General",
+              category: p.categories?.[0]?.name || "",
               price: Number(p.price || 0),
               salePrice: p.salePrice ? Number(p.salePrice) : undefined,
               currency: p.currency || "GHS",
@@ -76,13 +77,15 @@ export default function EditProductPage() {
   }
 
   async function handleSave(data: any) {
-    if (!token) throw new Error("Authentication required");
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("nextdor-token") : null);
+    if (!activeToken) throw new Error("Authentication required");
 
     const res = await fetch(`${API_BASE}/products/${product.id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${activeToken}`,
       },
       body: JSON.stringify({
         name: data.name,
@@ -96,10 +99,13 @@ export default function EditProductPage() {
       }),
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || "Failed to update product");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || "Failed to update product");
     }
+
+    // Invalidate local client cache so admin products table reflects the new category/details immediately
+    invalidateProductsCache();
   }
 
   return (

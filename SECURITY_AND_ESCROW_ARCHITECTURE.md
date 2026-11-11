@@ -213,3 +213,76 @@ stateDiagram-v2
 - **Why This Choice Was Made:**
   - **Single Source of Financial Truth:** Every dashboard metric, customer order badge, and Paystack MoMo payout batch now reads from the exact same `fundsStatus` state machine and double-entry ledger, eliminating reconciliation drift.
 
+---
+
+## Part 4: Catalog Category Resolution & Multi-Tenant Cache Consistency
+
+### 4.1 Canonical Category Resolution Across Admin & Vendor Flows
+- **Files:** [`next-backend/src/modules/products/product.service.ts`](next-backend/src/modules/products/product.service.ts), [`next-backend/src/modules/vendors/vendor.service.ts`](next-backend/src/modules/vendors/vendor.service.ts), [`next-backend/src/modules/vendors/vendor.routes.ts`](next-backend/src/modules/vendors/vendor.routes.ts)
+- **The Problem:**
+  1. Selecting a category when creating or editing a product on the Admin Panel silently failed because `ProductService.updateProduct` only searched existing database rows (`categories.find(...)`) and did nothing if the selected preset category (`"Electronics"`, `"Groceries"`, etc.) had not yet been seeded into the `categories` table, while `ProductService.createProduct` ignored the `category` string field entirely.
+  2. Vendors had no `category` field in `POST /vendors/portal/products` or `PATCH /vendors/portal/products/:id`, and `bulkCreateVendorProducts` appended a random 4-digit suffix to new category slugs (`${catSlug}-${rand}`), polluting the catalog with duplicate category slugs.
+- **The Choice:** Created a shared, idempotent helper `ProductService.resolveOrUpsertCategoryId(categoryInput)` and wired it into Admin create/update, Vendor single create/update, and Vendor bulk CSV/Excel import:
+  - Matches existing categories case-insensitively by **UUID**, **canonical slug**, or **name**.
+  - If no match exists, atomically `upsert`s the category using its clean canonical `slugify(name)`.
+  - Evicts Redis keys (`CacheKey.categories()`, `CacheKey.product(id)`, and `products:list:*`) whenever categories or product associations change.
+- **Why This Choice Was Made:**
+  - **DRY & Idempotent:** One canonical category resolution algorithm serves Admin forms, Vendor single-item forms, and Vendor bulk spreadsheets, preventing duplicate categories and ensuring every product is filterable on the storefront immediately.
+
+### 4.2 Admin `ProductForm` Payload Contract & Vendor Portal Category Selector
+- **Files:** [`next-frontend/components/admin/ProductForm.tsx`](next-frontend/components/admin/ProductForm.tsx), [`next-frontend/app/admin/products/[id]/page.tsx`](next-frontend/app/admin/products/[id]/page.tsx), [`next-frontend/app/vendor/dashboard/page.tsx`](next-frontend/app/vendor/dashboard/page.tsx)
+- **The Problem:**
+  1. `GET /api/v1/products/categories` returns `{ success: true, data: { categories: [...] } }`, but `ProductForm.tsx` checked `if (Array.isArray(json.data))` — which was always `false`, preventing live database categories from populating the Admin dropdown.
+  2. `EditProductPage` (`app/admin/products/[id]/page.tsx`) defaulted uncategorized products to a fake `"General"` string and did not call `invalidateProductsCache()` after `PATCH /products/:id`, causing `/admin/products` to show stale cached data after saving.
+  3. The Vendor Portal (`/vendor/dashboard`) had no Category selector in the **"Add New Product to Store"** modal or the inline product editor.
+- **The Choice:**
+  - Fixed `ProductForm.tsx` to read `json.data?.categories`, sync initial form state when product data finishes loading, and support creating custom categories inline (`+ Create New Category...`).
+  - Added `invalidateProductsCache()` to `EditProductPage` on save and removed the fake `"General"` category fallback.
+  - Added a required **Category** selector to the Vendor Dashboard's **"Add New Product"** modal, category badges on each row in the Vendor Inventory table, and a Category dropdown in the inline OCC product editor.
+- **Why This Choice Was Made:**
+  - **End-to-End Catalog Integrity:** Products listed by either Admins or Vendors now require and persist a valid category and invalidate client/server caches immediately on mutation.
+
+---
+
+## Part 5: Financial Single-Source-of-Truth & Admin Panel Accuracy
+
+### 5.1 Eliminating Hardcoded & Estimated Financial Metrics on `/admin`
+- **Files:** [`next-backend/src/modules/admin/admin.analytics.service.ts`](next-backend/src/modules/admin/admin.analytics.service.ts), [`next-frontend/app/admin/page.tsx`](next-frontend/app/admin/page.tsx)
+- **The Problem:**
+  - The main Admin Overview (`/admin`) computed `platformFee = totalRevenue * 0.10` and `escrowHold = totalRevenue * 0.90` on the frontend using only the last 100 orders (including unpaid/pending orders), and displayed a hardcoded `"↑ 12% vs last week"` badge.
+  - In reality, flagship NextDor items have 0% vendor commission, individual merchants can have custom commission rates, delivery fees belong to platform revenue, and settled payouts leave the escrow pool.
+  - Furthermore, `/admin` made 3 redundant API calls (`/admin/analytics/overview`, `/admin/customers?limit=1`, `/products?limit=1`) to fetch counts already returned by `/admin/analytics/overview`.
+- **The Choice:**
+  - Extended `AdminAnalyticsService.getOverview()` to compute true database-backed financial metrics in parallel:
+    - `grossMerchandiseValue`: Sum of `order.total` for `PAID`, non-cancelled/non-refunded orders.
+    - `platformRevenue`: Sum of actual `vendorOrder.commissionAmount` + `order.deliveryFee` (minus platform-absorbed `order.discount`) on paid active orders.
+    - `escrowPool`: Sum of `vendorOrder.vendorEarnings` where `fundsStatus === "ESCROW"` (or active `clearedAt > now`) and `payoutId === null`.
+    - `weeklyRevenue` & `weeklyGrowthPercent`: Real 7-day GMV vs. prior 7-day GMV percentage change.
+  - Updated `next-frontend/app/admin/page.tsx` to render these exact backend figures and removed the redundant `/admin/customers?limit=1` and `/products?limit=1` requests.
+- **Why This Choice Was Made:**
+  - **Zero False Numbers:** Financial dashboards must never approximate revenue with flat frontend multipliers or display hardcoded growth badges. Computing exact sums in PostgreSQL and caching for 5 minutes in Redis gives both financial accuracy and high scalability.
+
+### 5.2 Aligning the Double-Entry Reconciliation Ledger (`ReconciliationService`) with `fundsStatus`
+- **Files:** [`next-backend/src/modules/admin/reconciliation.service.ts`](next-backend/src/modules/admin/reconciliation.service.ts)
+- **The Problem:**
+  - `ReconciliationService.getLedger()` (powering `/admin/payouts` → **Ledger & Reconciliation**) still queried the legacy `clearedAt` column instead of `fundsStatus: "ESCROW"` and `fundsStatus: "AVAILABLE"`, hardcoded `potentialPlatformCommissionGhs: 0`, and ignored promotional coupon discounts (`order.discount`), which could trigger false reconciliation variance alerts whenever a customer used a discount code.
+- **The Choice:**
+  - Updated `inEscrowAgg`, `availableAgg`, and `pendingFulfillmentAgg` to query `fundsStatus` (`"ESCROW"`, `"AVAILABLE"`, `"PENDING_FULFILLMENT"`).
+  - Separated `earnedPlatformCommissionGhs` (delivered/completed sub-orders + delivery fees) from `potentialPlatformCommissionGhs` (in-flight paid sub-orders + delivery fees).
+  - Deducted platform-absorbed promotional `order.discount` from platform equity so the fundamental accounting identity (`Total Inflow === Disbursed + In-Escrow + Available + Processing + Pending Fulfillment + Net Platform Equity + Refunds`) balances to the pesewa.
+- **Why This Choice Was Made:**
+  - **Auditability & Zero False Alarms:** An accounting reconciliation engine must account for every pesewa across every state transition (`PENDING_FULFILLMENT` → `ESCROW` → `AVAILABLE` → `IN_PAYOUT` → `PAID_OUT`) as well as promotional discounts.
+
+### 5.3 Fixing Merchant Leaderboard & Analytics Data Contracts + Removing Fake Fallbacks
+- **Files:** [`next-backend/src/modules/vendors/merchant.analytics.service.ts`](next-backend/src/modules/vendors/merchant.analytics.service.ts), [`next-backend/src/modules/admin/admin.customer.service.ts`](next-backend/src/modules/admin/admin.customer.service.ts), [`next-frontend/app/admin/inventory/page.tsx`](next-frontend/app/admin/inventory/page.tsx)
+- **The Problem:**
+  1. `MerchantAnalyticsService.getAdminMerchantLeaderboard()` returned a flat array with top-level fields, whereas `/admin/analytics` expected `{ asOf, merchantsCount, leaderboard }` with nested `kpis` and `topProduct` — causing the Admin Merchant Leaderboard tab to always appear empty (`0` merchants).
+  2. `MerchantAnalyticsService.getVendorAnalytics()` defaulted `avgFulfillmentHours` to a fake `24.0` hours when a merchant had `0` delivered orders, and returned `{ name, quantity, revenue }` instead of `{ productId, name, slug, totalQuantitySold, totalRevenue }`, causing `"undefined units sold"` and `NaN` on the Vendor Analytics tab.
+  3. `AdminCustomerService.listCustomers()` summed `order.total` without excluding `REFUNDED` or `FAILED` payments.
+  4. `/admin/inventory` (`app/admin/inventory/page.tsx`) populated 3 hardcoded fake warehouses (`wh-acc-01`, `wh-ksi-01`, `wh-tkr-01` with fake stock counts `142`, `86`, `38`) when the API failed.
+- **The Choice:**
+  - Standardized `getAdminMerchantLeaderboard()` and `getVendorAnalytics()` to match the frontend TypeScript contracts, excluded `REFUNDED`/`FAILED` orders from GMV and customer spend, changed `avgFulfillmentHours` when `deliveredCount === 0` from `24.0` to `0`, and removed the fake fallback warehouses from `/admin/inventory`.
+- **Why This Choice Was Made:**
+  - **Data Trustworthiness:** If an API call fails or a merchant has zero deliveries, the UI must show `0` or an explicit error state — never fabricated numbers.
+
+

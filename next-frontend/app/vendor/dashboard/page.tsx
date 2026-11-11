@@ -214,6 +214,7 @@ export default function VendorDashboardPage() {
   const [editPrice, setEditPrice] = useState<string>("");
   const [editPreviousPrice, setEditPreviousPrice] = useState<string>("");
   const [editStock, setEditStock] = useState<string>("");
+  const [editCategory, setEditCategory] = useState<string>("");
   const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   // Add product modal & Bulk Ingestion Modals
@@ -224,7 +225,19 @@ export default function VendorDashboardPage() {
   const [productSearch, setProductSearch] = useState("");
   const [productStockFilter, setProductStockFilter] = useState<"ALL" | "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK">("ALL");
 
+  const DEFAULT_VENDOR_CATEGORIES = [
+    "Electronics",
+    "Phones & Tablets",
+    "Laptops & Computers",
+    "Home & Kitchen",
+    "Appliances",
+    "Fashion & Apparel",
+    "Beauty & Personal Care",
+    "Bakery & Groceries",
+  ];
+  const [availableCategories, setAvailableCategories] = useState<string[]>(DEFAULT_VENDOR_CATEGORIES);
   const [newProdName, setNewProdName] = useState("");
+  const [newProdCategory, setNewProdCategory] = useState("");
   const [newProdDesc, setNewProdDesc] = useState("");
   const [newProdPrice, setNewProdPrice] = useState("");
   const [newProdPreviousPrice, setNewProdPreviousPrice] = useState("");
@@ -477,6 +490,27 @@ export default function VendorDashboardPage() {
     }
   }, [activeTab, analyticsRange]);
 
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch(`${API_BASE}/products/categories`);
+        if (res.ok) {
+          const json = await res.json();
+          const rawList = Array.isArray(json.data?.categories)
+            ? json.data.categories
+            : Array.isArray(json.data)
+            ? json.data
+            : [];
+          const names = rawList.map((c: any) => c.name).filter(Boolean);
+          setAvailableCategories(Array.from(new Set([...names, ...DEFAULT_VENDOR_CATEGORIES])));
+        }
+      } catch {
+        // fallback to default categories
+      }
+    }
+    loadCategories();
+  }, []);
+
   // Product Inline Edit with OCC
   function startEditing(product: VendorProduct) {
     setEditingId(product.id);
@@ -488,6 +522,7 @@ export default function VendorDashboardPage() {
       setEditPreviousPrice("");
     }
     setEditStock(String(product.stockQty ?? 0));
+    setEditCategory(product.categories?.[0]?.name || "");
     setErrorNotice(null);
     setSuccessNotice(null);
   }
@@ -521,6 +556,7 @@ export default function VendorDashboardPage() {
           price: payloadPrice,
           salePrice: payloadSalePrice,
           stockQty: parseInt(editStock, 10),
+          category: editCategory || undefined,
         }),
       });
 
@@ -582,6 +618,7 @@ export default function VendorDashboardPage() {
           price: payloadPrice,
           salePrice: payloadSalePrice,
           stockQty: parseInt(newProdStock, 10),
+          category: newProdCategory || undefined,
           imageUrl: newProdImage || undefined,
         }),
       });
@@ -596,6 +633,7 @@ export default function VendorDashboardPage() {
       setSuccessNotice(`Created "${json.data.product.name}" successfully!`);
       setShowAddModal(false);
       setNewProdName("");
+      setNewProdCategory("");
       setNewProdDesc("");
       setNewProdPrice("");
       setNewProdPreviousPrice("");
@@ -1321,6 +1359,24 @@ export default function VendorDashboardPage() {
                                 <div className="min-w-0 max-w-xs">
                                   <p className="font-semibold text-zinc-900 truncate">{prod.name}</p>
                                   <p className="text-xs text-zinc-400 line-clamp-1">{prod.description}</p>
+                                  {isEditing ? (
+                                    <select
+                                      value={editCategory}
+                                      onChange={(e) => setEditCategory(e.target.value)}
+                                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 focus:border-purple-600 focus:outline-none"
+                                    >
+                                      <option value="">Select Category</option>
+                                      {availableCategories.map((c) => (
+                                        <option key={c} value={c}>
+                                          {c}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className="mt-1 inline-block rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+                                      {prod.categories?.[0]?.name || "Uncategorized"}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -2514,16 +2570,34 @@ export default function VendorDashboardPage() {
             )}
 
             <form onSubmit={handleCreateProduct} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700">Product Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Fresh Ghana Meat Pies (Pack of 6)"
-                  value={newProdName}
-                  onChange={(e) => setNewProdName(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700">Product Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Fresh Ghana Meat Pies (Pack of 6)"
+                    value={newProdName}
+                    onChange={(e) => setNewProdName(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700">Category *</label>
+                  <select
+                    required
+                    value={newProdCategory}
+                    onChange={(e) => setNewProdCategory(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-purple-600 focus:outline-none"
+                  >
+                    <option value="">Select category</option>
+                    {availableCategories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>

@@ -22,10 +22,16 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
   delivered: { label: "Delivered", classes: "bg-green-100 text-green-700" },
+  delivered_verified: { label: "Delivered", classes: "bg-green-100 text-green-700" },
+  completed: { label: "Completed", classes: "bg-emerald-100 text-emerald-800" },
   processing: { label: "Processing", classes: "bg-blue-100 text-blue-700" },
+  accepted: { label: "Accepted", classes: "bg-blue-100 text-blue-700" },
   pending: { label: "Pending", classes: "bg-amber-100 text-amber-700" },
+  placed: { label: "Placed", classes: "bg-amber-100 text-amber-700" },
   confirmed: { label: "Confirmed", classes: "bg-blue-100 text-blue-700" },
   shipped: { label: "Shipped", classes: "bg-amber-100 text-amber-700" },
+  dispatched: { label: "Dispatched", classes: "bg-indigo-100 text-indigo-700" },
+  disputed: { label: "Disputed", classes: "bg-red-100 text-red-700" },
   cancelled: { label: "Cancelled", classes: "bg-red-100 text-red-700" },
   refunded: { label: "Refunded", classes: "bg-zinc-100 text-zinc-700" },
 };
@@ -123,12 +129,12 @@ export default function AdminOrdersPage() {
   const statusCounts = useMemo(() => {
     return {
       all: orders.length,
-      processing: orders.filter(
-        (o) => o.status === "processing" || o.status === "pending" || o.status === "confirmed"
+      processing: orders.filter((o) =>
+        ["placed", "pending", "confirmed", "accepted", "processing"].includes(o.status)
       ).length,
-      shipped: orders.filter((o) => o.status === "shipped").length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-      cancelled: orders.filter((o) => o.status === "cancelled" || o.status === "refunded").length,
+      shipped: orders.filter((o) => ["shipped", "dispatched"].includes(o.status)).length,
+      delivered: orders.filter((o) => ["delivered", "delivered_verified", "completed"].includes(o.status)).length,
+      cancelled: orders.filter((o) => ["cancelled", "refunded", "disputed"].includes(o.status)).length,
     };
   }, [orders]);
 
@@ -136,12 +142,18 @@ export default function AdminOrdersPage() {
   const filtered = useMemo(() => {
     if (filter === "all") return orders;
     if (filter === "processing") {
-      return orders.filter(
-        (o) => o.status === "processing" || o.status === "pending" || o.status === "confirmed"
+      return orders.filter((o) =>
+        ["placed", "pending", "confirmed", "accepted", "processing"].includes(o.status)
       );
     }
+    if (filter === "shipped") {
+      return orders.filter((o) => ["shipped", "dispatched"].includes(o.status));
+    }
+    if (filter === "delivered") {
+      return orders.filter((o) => ["delivered", "delivered_verified", "completed"].includes(o.status));
+    }
     if (filter === "cancelled") {
-      return orders.filter((o) => o.status === "cancelled" || o.status === "refunded");
+      return orders.filter((o) => ["cancelled", "refunded", "disputed"].includes(o.status));
     }
     return orders.filter((o) => o.status === filter);
   }, [orders, filter]);

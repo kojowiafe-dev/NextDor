@@ -26,6 +26,41 @@ export class ProductService {
   constructor(private readonly productRepo: ProductRepository) {}
 
   /**
+   * Resolves a category name, slug, or UUID to a database Category ID,
+   * creating the category with a canonical slug if it does not yet exist.
+   */
+  static async resolveOrUpsertCategoryId(categoryInput?: string): Promise<string | null> {
+    const cleanCat = categoryInput?.trim();
+    if (!cleanCat) return null;
+
+    const catSlug = slugify(cleanCat);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanCat);
+
+    const existing = await prisma.category.findFirst({
+      where: {
+        OR: [
+          ...(isUuid ? [{ id: cleanCat }] : []),
+          { slug: { equals: cleanCat, mode: "insensitive" } },
+          { slug: { equals: catSlug, mode: "insensitive" } },
+          { name: { equals: cleanCat, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (existing) return existing.id;
+
+    const created = await prisma.category.upsert({
+      where: { slug: catSlug },
+      update: {},
+      create: { name: cleanCat, slug: catSlug },
+      select: { id: true },
+    });
+
+    return created.id;
+  }
+
+  /**
    * Lists catalog products with sanitized pagination and business sorting rules.
    *
    * IMPORTANT LINES EXPLAINED:
@@ -189,32 +224,10 @@ export class ProductService {
       }
     }
 
-    // Resolve category
-    let categoryConnect: Prisma.CategoryCreateNestedManyWithoutProductsInput | undefined;
-    if (input.category) {
-      const cleanCat = input.category.trim();
-      const existingCats = await this.productRepo.listCategoriesWithCounts();
-      const match = existingCats.find(
-        (c) =>
-          c.name.toLowerCase() === cleanCat.toLowerCase() ||
-          c.slug.toLowerCase() === cleanCat.toLowerCase() ||
-          c.id === cleanCat
-      );
-
-      if (match) {
-        categoryConnect = { connect: [{ id: match.id }] };
-      } else {
-        const catSlug = slugify(cleanCat);
-        categoryConnect = {
-          connectOrCreate: [
-            {
-              where: { slug: catSlug },
-              create: { name: cleanCat, slug: catSlug },
-            },
-          ],
-        };
-      }
-    }
+    // Resolve category (matches by ID, slug, or name, or creates a canonical category)
+    const categoryId = await ProductService.resolveOrUpsertCategoryId(input.category);
+    const categoryConnect: Prisma.CategoryCreateNestedManyWithoutProductsInput | undefined =
+      categoryId ? { connect: [{ id: categoryId }] } : undefined;
 
     const stockStatus =
       input.stockStatus ||
@@ -324,14 +337,11 @@ export class ProductService {
     if (input.stockStatus !== undefined) data.stockStatus = input.stockStatus;
     if (input.stockQty !== undefined) data.stockQty = input.stockQty;
 
-    if (input.category) {
-      const categories = await this.productRepo.listCategoriesWithCounts();
-      const match = categories.find(
-        (c) => c.name.toLowerCase() === input.category!.toLowerCase() || c.slug === input.category
-      );
-      if (match) {
+    if (input.category !== undefined) {
+      const categoryId = await ProductService.resolveOrUpsertCategoryId(input.category);
+      if (categoryId) {
         data.categories = {
-          set: [{ id: match.id }],
+          set: [{ id: categoryId }],
         };
       }
     }
@@ -347,6 +357,8 @@ export class ProductService {
 
     await Promise.allSettled([
       cacheDel(CacheKey.product(existing.slug)),
+      cacheDel(CacheKey.product(id)),
+      cacheDel(CacheKey.categories()),
       cacheDel(CacheKey.trendingProducts()),
       cacheDel(CacheKey.groupedByMerchant()),
       flushPattern("products:list:*"),

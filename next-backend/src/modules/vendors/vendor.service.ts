@@ -25,11 +25,12 @@ import { logger } from "../../lib/logger.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
 import type { OrderStatus } from "@prisma/client";
-import { flushPattern } from "../../lib/redis.js";
+import { cacheDel, CacheKey, flushPattern } from "../../lib/redis.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { slugify } from "../../lib/slugify.js";
 import { assertSafePublicUrl } from "../../lib/urlSafety.js";
+import { ProductService } from "../products/product.service.js";
 import type { UserRole, VendorOrderStatus, PayoutStatus } from "@prisma/client";
 
 export interface RegisterVendorDto {
@@ -50,6 +51,7 @@ export interface CreateVendorProductDto {
   price: number;
   salePrice?: number;
   stockQty?: number;
+  category?: string;
   categoryIds?: string[];
   imageUrl?: string;
 }
@@ -62,6 +64,7 @@ export interface UpdateVendorProductDto {
   salePrice?: number | null;
   stockQty?: number | null;
   stockStatus?: "IN_STOCK" | "OUT_OF_STOCK" | "LOW_STOCK";
+  category?: string;
   categoryIds?: string[];
   imageUrl?: string;
 }
@@ -259,7 +262,15 @@ export class VendorService {
         ? "LOW_STOCK"
         : "IN_STOCK";
 
-    return this.vendorRepo.createProduct({
+    let resolvedCategoryIds = dto.categoryIds ? [...dto.categoryIds] : [];
+    if (dto.category) {
+      const catId = await ProductService.resolveOrUpsertCategoryId(dto.category);
+      if (catId && !resolvedCategoryIds.includes(catId)) {
+        resolvedCategoryIds.push(catId);
+      }
+    }
+
+    const created = await this.vendorRepo.createProduct({
       name: dto.name.trim(),
       slug,
       description: dto.description.trim(),
@@ -271,9 +282,9 @@ export class VendorService {
       version: 1,
       vendor: { connect: { id: vendorId } },
       categories:
-        dto.categoryIds && dto.categoryIds.length > 0
+        resolvedCategoryIds.length > 0
           ? {
-              connect: dto.categoryIds.map((id) => ({ id })),
+              connect: resolvedCategoryIds.map((id) => ({ id })),
             }
           : undefined,
       images: dto.imageUrl?.trim()
@@ -288,6 +299,15 @@ export class VendorService {
           }
         : undefined,
     });
+
+    await Promise.allSettled([
+      cacheDel(CacheKey.categories()),
+      cacheDel(CacheKey.trendingProducts()),
+      cacheDel(CacheKey.groupedByMerchant()),
+      flushPattern("products:list:*"),
+    ]);
+
+    return created;
   }
 
   /**
@@ -331,6 +351,14 @@ export class VendorService {
           : "IN_STOCK";
     }
 
+    let resolvedCategoryIds = dto.categoryIds ? [...dto.categoryIds] : undefined;
+    if (dto.category) {
+      const catId = await ProductService.resolveOrUpsertCategoryId(dto.category);
+      if (catId) {
+        resolvedCategoryIds = [catId];
+      }
+    }
+
     // 4. Atomic update incrementing version
     const updated = await this.vendorRepo.updateProductWithOcc(productId, {
       name: dto.name?.trim(),
@@ -341,9 +369,9 @@ export class VendorService {
       stockQty: dto.stockQty,
       stockStatus,
       categories:
-        dto.categoryIds && dto.categoryIds.length > 0
+        resolvedCategoryIds && resolvedCategoryIds.length > 0
           ? {
-              set: dto.categoryIds.map((id) => ({ id })),
+              set: resolvedCategoryIds.map((id) => ({ id })),
             }
           : undefined,
       images: dto.imageUrl?.trim()
@@ -359,6 +387,15 @@ export class VendorService {
           }
         : undefined,
     });
+
+    await Promise.allSettled([
+      cacheDel(CacheKey.product(product.slug)),
+      cacheDel(CacheKey.product(productId)),
+      cacheDel(CacheKey.categories()),
+      cacheDel(CacheKey.trendingProducts()),
+      cacheDel(CacheKey.groupedByMerchant()),
+      flushPattern("products:list:*"),
+    ]);
 
     logger.info(
       { productId, vendorId, newVersion: updated.version },
@@ -633,28 +670,18 @@ export class VendorService {
             ? "LOW_STOCK"
             : "IN_STOCK";
 
-        // Category resolution
+        // Category resolution via shared canonical helper
         let categoryId: string | null = null;
-        const catName = item.categoryName?.trim();
+        const catName = (item.categoryName || item.category)?.trim();
         if (catName) {
           const lowerCat = catName.toLowerCase();
           if (categoryCache.has(lowerCat)) {
             categoryId = categoryCache.get(lowerCat)!;
           } else {
-            let cat = await prisma.category.findFirst({
-              where: { name: { equals: catName, mode: "insensitive" } },
-            });
-            if (!cat) {
-              const catSlug = slugify(catName);
-              cat = await prisma.category.create({
-                data: {
-                  name: catName,
-                  slug: `${catSlug}-${Math.floor(100 + Math.random() * 900)}`,
-                },
-              });
+            categoryId = await ProductService.resolveOrUpsertCategoryId(catName);
+            if (categoryId) {
+              categoryCache.set(lowerCat, categoryId);
             }
-            categoryId = cat.id;
-            categoryCache.set(lowerCat, cat.id);
           }
         }
 
@@ -759,6 +786,7 @@ export interface BulkProductItemDto {
   price: number;
   salePrice?: number | null;
   stockQty?: number | null;
+  category?: string;
   categoryName?: string;
   imageUrl?: string;
   sku?: string;

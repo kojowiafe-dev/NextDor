@@ -19,7 +19,7 @@ export class MerchantAnalyticsService {
 
     const dateFilter: Prisma.DateTimeFilter = startDate ? { gte: startDate } : {};
 
-    // 1. Vendor sub-orders within time range
+    // 1. Vendor sub-orders within time range (excluding refunded parent orders)
     const orders = await prisma.vendorOrder.findMany({
       where: {
         vendorId,
@@ -31,6 +31,8 @@ export class MerchantAnalyticsService {
             id: true,
             userId: true,
             guestEmail: true,
+            status: true,
+            paymentStatus: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -38,8 +40,15 @@ export class MerchantAnalyticsService {
       },
     });
 
-    const nonCancelledOrders = orders.filter((o) => o.status !== "CANCELLED");
-    const deliveredOrders = orders.filter((o) => o.status === "DELIVERED");
+    const nonCancelledOrders = orders.filter(
+      (o) =>
+        o.status !== "CANCELLED" &&
+        o.order.status !== "CANCELLED" &&
+        o.order.status !== "REFUNDED" &&
+        o.order.paymentStatus !== "REFUNDED" &&
+        o.order.paymentStatus !== "FAILED"
+    );
+    const deliveredOrders = nonCancelledOrders.filter((o) => o.status === "DELIVERED");
 
     // GMV & Net Earnings
     const gmv = nonCancelledOrders.reduce((sum, o) => sum + Number(o.subtotal), 0);
@@ -93,32 +102,46 @@ export class MerchantAnalyticsService {
     const avgFulfillmentHours =
       fulfilledWithTimeCount > 0
         ? Number((totalFulfillmentHours / fulfilledWithTimeCount).toFixed(1))
-        : 24.0; // Benchmark default 24h
+        : 0;
 
     // 2. Top products sold by this vendor
     const orderItems = await prisma.orderItem.findMany({
       where: {
         vendorId,
         order: {
-          status: { not: "CANCELLED" },
+          status: { notIn: ["CANCELLED", "REFUNDED"] },
+          paymentStatus: { notIn: ["REFUNDED", "FAILED"] },
           createdAt: dateFilter,
         },
       },
       select: {
+        productId: true,
         productName: true,
         quantity: true,
         subtotal: true,
         productImage: true,
+        product: {
+          select: { slug: true },
+        },
       },
     });
 
     const productAggMap = new Map<
       string,
-      { name: string; quantity: number; revenue: number; image?: string | null }
+      {
+        productId: string;
+        name: string;
+        slug: string;
+        quantity: number;
+        revenue: number;
+        image?: string | null;
+      }
     >();
     for (const item of orderItems) {
       const existing = productAggMap.get(item.productName) || {
+        productId: item.productId,
         name: item.productName,
+        slug: item.product?.slug || "",
         quantity: 0,
         revenue: 0,
         image: item.productImage,
@@ -131,10 +154,19 @@ export class MerchantAnalyticsService {
     const topProducts = Array.from(productAggMap.values())
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5)
-      .map((p) => ({
-        ...p,
-        revenue: Number(p.revenue.toFixed(2)),
-      }));
+      .map((p) => {
+        const rev = Number(p.revenue.toFixed(2));
+        return {
+          productId: p.productId,
+          name: p.name,
+          slug: p.slug,
+          quantity: p.quantity,
+          totalQuantitySold: p.quantity,
+          revenue: rev,
+          totalRevenue: rev,
+          image: p.image,
+        };
+      });
 
     // 3. Status distribution
     const statusCounts = {
@@ -183,21 +215,33 @@ export class MerchantAnalyticsService {
       vendors.map(async (v) => {
         const metrics = await this.getVendorMetrics(v.id, "30d");
         return {
-          id: v.id,
-          name: v.name,
+          vendorId: v.id,
+          vendorName: v.name,
           slug: v.slug,
           logoUrl: v.logoUrl,
           commissionRate: Number(v.commissionRate),
-          gmv: metrics.kpis.grossMerchandiseValue,
-          netEarnings: metrics.kpis.netMerchantEarnings,
-          orders: metrics.kpis.totalOrders,
-          aov: metrics.kpis.averageOrderValue,
-          returnRate: metrics.kpis.returnRatePercent,
-          fulfillmentSpeedHours: metrics.kpis.avgFulfillmentHours,
+          kpis: metrics.kpis,
+          topProduct: metrics.topProducts[0]
+            ? {
+                productId: metrics.topProducts[0].productId,
+                name: metrics.topProducts[0].name,
+                slug: metrics.topProducts[0].slug,
+                totalQuantitySold: metrics.topProducts[0].totalQuantitySold,
+                totalRevenue: metrics.topProducts[0].totalRevenue,
+              }
+            : null,
         };
       })
     );
 
-    return benchmark.sort((a, b) => b.gmv - a.gmv);
+    const leaderboard = benchmark.sort(
+      (a, b) => b.kpis.grossMerchandiseValue - a.kpis.grossMerchandiseValue
+    );
+
+    return {
+      asOf: new Date().toISOString(),
+      merchantsCount: leaderboard.length,
+      leaderboard,
+    };
   }
 }

@@ -37,15 +37,18 @@ export class ReconciliationService {
       customerPaymentsAgg,
       customerPaymentsCount,
 
-      // 2. Platform Commission & Delivery Fees
-      commissionsAgg,
-      deliveryFeesAgg,
+      // 2. Platform Commission & Delivery Fees (Earned vs In-Flight)
+      earnedCommissionsAgg,
+      inFlightCommissionsAgg,
+      earnedDeliveryFeesAgg,
+      inFlightDeliveryFeesAgg,
+      discountsAgg,
 
       // 3. Disbursed Payouts to Merchants
       disbursedAgg,
       disbursedCount,
 
-      // 4. In-Escrow Funds (Delivered and paid, but within 48-hour buyer protection window)
+      // 4. In-Escrow Funds (Delivered and paid, within 48-hour buyer protection window)
       inEscrowAgg,
 
       // 5. Unclaimed Available Balance (Delivered and paid, escrow elapsed, not yet disbursed)
@@ -73,7 +76,15 @@ export class ReconciliationService {
 
       prisma.vendorOrder.aggregate({
         where: {
-          status: { not: "CANCELLED" },
+          status: "DELIVERED",
+          order: { paymentStatus: "PAID" },
+        },
+        _sum: { commissionAmount: true },
+      }),
+
+      prisma.vendorOrder.aggregate({
+        where: {
+          status: { in: ["PENDING", "PROCESSING", "SHIPPED"] },
           order: { paymentStatus: "PAID" },
         },
         _sum: { commissionAmount: true },
@@ -82,9 +93,25 @@ export class ReconciliationService {
       prisma.order.aggregate({
         where: {
           paymentStatus: "PAID",
-          status: { not: "CANCELLED" },
+          status: { in: ["DELIVERED", "DELIVERED_VERIFIED", "COMPLETED"] },
         },
         _sum: { deliveryFee: true },
+      }),
+
+      prisma.order.aggregate({
+        where: {
+          paymentStatus: "PAID",
+          status: { in: ["PLACED", "PENDING", "CONFIRMED", "ACCEPTED", "PROCESSING", "SHIPPED", "DISPATCHED"] },
+        },
+        _sum: { deliveryFee: true },
+      }),
+
+      prisma.order.aggregate({
+        where: {
+          paymentStatus: "PAID",
+          status: { notIn: ["CANCELLED", "REFUNDED"] },
+        },
+        _sum: { discount: true },
       }),
 
       prisma.vendorPayout.aggregate({
@@ -95,10 +122,17 @@ export class ReconciliationService {
 
       prisma.vendorOrder.aggregate({
         where: {
-          status: "DELIVERED",
-          clearedAt: { gt: now },
+          status: { not: "CANCELLED" },
           payoutId: null,
           order: { paymentStatus: "PAID" },
+          OR: [
+            { fundsStatus: "ESCROW" },
+            {
+              status: "DELIVERED",
+              fundsStatus: "PENDING_FULFILLMENT",
+              clearedAt: { gt: now },
+            },
+          ],
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },
@@ -106,17 +140,24 @@ export class ReconciliationService {
 
       prisma.vendorOrder.aggregate({
         where: {
-          status: "DELIVERED",
-          clearedAt: { lte: now },
+          status: { not: "CANCELLED" },
           payoutId: null,
           order: { paymentStatus: "PAID" },
+          OR: [
+            { fundsStatus: "AVAILABLE" },
+            {
+              status: "DELIVERED",
+              fundsStatus: "PENDING_FULFILLMENT",
+              clearedAt: { lte: now },
+            },
+          ],
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },
       }),
 
       prisma.vendorPayout.aggregate({
-        where: { status: "PROCESSING" },
+        where: { status: { in: ["DRAFT", "APPROVED", "PROCESSING"] } },
         _sum: { amount: true },
       }),
 
@@ -129,7 +170,7 @@ export class ReconciliationService {
       prisma.order.aggregate({
         where: {
           paymentStatus: "PAID",
-          status: { in: ["DELIVERED_VERIFIED", "COMPLETED"] },
+          status: { in: ["DELIVERED", "DELIVERED_VERIFIED", "COMPLETED"] },
           payments: { none: { status: "SUCCESS" } },
           ...(startDate || endDate ? { updatedAt: { gte: startDate, lte: endDate } } : {}),
         },
@@ -138,7 +179,7 @@ export class ReconciliationService {
       prisma.order.count({
         where: {
           paymentStatus: "PAID",
-          status: { in: ["DELIVERED_VERIFIED", "COMPLETED"] },
+          status: { in: ["DELIVERED", "DELIVERED_VERIFIED", "COMPLETED"] },
           payments: { none: { status: "SUCCESS" } },
           ...(startDate || endDate ? { updatedAt: { gte: startDate, lte: endDate } } : {}),
         },
@@ -146,6 +187,7 @@ export class ReconciliationService {
       prisma.vendorOrder.aggregate({
         where: {
           status: { in: ["PENDING", "PROCESSING", "SHIPPED"] },
+          fundsStatus: "PENDING_FULFILLMENT",
           payoutId: null,
           order: { paymentStatus: "PAID" },
         },
@@ -160,14 +202,23 @@ export class ReconciliationService {
     const totalDisbursed = Number(disbursedAgg._sum.amount || 0);
     const totalInEscrow = Number(inEscrowAgg._sum.vendorEarnings || 0);
     const totalAvailable = Number(availableAgg._sum.vendorEarnings || 0);
-    const totalProcessing = Number(processingPayoutsAgg._sum.amount || 0);
+    const totalProcessing = Number(processingPayoutsAgg._sum?.amount || 0);
     const totalPendingFulfillment = Number(pendingFulfillmentAgg._sum.vendorEarnings || 0);
-    const totalCommissions = Number(commissionsAgg._sum.commissionAmount || 0);
-    const totalDeliveryFees = Number(deliveryFeesAgg._sum?.deliveryFee || 0);
+
+    const earnedCommissions = Number(earnedCommissionsAgg._sum.commissionAmount || 0);
+    const inFlightCommissions = Number(inFlightCommissionsAgg._sum.commissionAmount || 0);
+    const totalCommissions = earnedCommissions + inFlightCommissions;
+
+    const earnedDeliveryFees = Number(earnedDeliveryFeesAgg._sum?.deliveryFee || 0);
+    const inFlightDeliveryFees = Number(inFlightDeliveryFeesAgg._sum?.deliveryFee || 0);
+    const totalDeliveryFees = earnedDeliveryFees + inFlightDeliveryFees;
+    const totalDiscounts = Number(discountsAgg._sum?.discount || 0);
     const totalRefunds = Number(refundsAgg._sum.amount || 0);
 
-    // Platform Net Profit = Commissions + Delivery Fees
-    const platformRevenue = totalCommissions + totalDeliveryFees;
+    // Earned vs In-Flight Platform Equity (net of promotional coupon discounts absorbed by platform)
+    const earnedPlatformEquity = earnedCommissions + earnedDeliveryFees;
+    const inFlightPlatformEquity = inFlightCommissions + inFlightDeliveryFees;
+    const platformRevenue = Math.max(0, totalCommissions + totalDeliveryFees - totalDiscounts);
 
     // Total Merchant Liabilities = Disbursed + In-Flight + In-Escrow + Available + Pre-Delivery In-Flight
     const totalMerchantLiabilities =
@@ -240,10 +291,10 @@ export class ReconciliationService {
         totalMerchantLiabilityPesewas: Math.round(totalMerchantLiabilities * 100),
       },
       equity: {
-        earnedPlatformCommissionGhs: totalCommissions,
-        earnedPlatformCommissionPesewas: Math.round(totalCommissions * 100),
-        potentialPlatformCommissionGhs: 0,
-        potentialPlatformCommissionPesewas: 0,
+        earnedPlatformCommissionGhs: earnedPlatformEquity,
+        earnedPlatformCommissionPesewas: Math.round(earnedPlatformEquity * 100),
+        potentialPlatformCommissionGhs: inFlightPlatformEquity,
+        potentialPlatformCommissionPesewas: Math.round(inFlightPlatformEquity * 100),
         totalCommissionGhs: platformRevenue,
         totalCommissionPesewas: Math.round(platformRevenue * 100),
       },

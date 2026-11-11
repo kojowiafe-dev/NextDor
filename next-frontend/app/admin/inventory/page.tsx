@@ -100,59 +100,10 @@ export default function AdminInventoryPage() {
       setMovements(movementsData?.movements || []);
     } catch (err: any) {
       console.error("Error loading inventory data:", err);
-      // Fallback demo hubs if backend is starting or offline
-      if (warehouses.length === 0) {
-        setWarehouses([
-          {
-            id: "wh-acc-01",
-            name: "Accra Central Fulfillment Hub",
-            code: "WH-ACC-01",
-            address: "Graphic Road, South Industrial Area",
-            city: "Accra",
-            region: "Greater Accra",
-            contactName: "Kwame Mensah",
-            contactPhone: "0244123456",
-            contactEmail: "accra.hub@nextdor.online",
-            isDefault: true,
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            _count: { stocks: 142, alerts: 2 },
-          },
-          {
-            id: "wh-ksi-01",
-            name: "Kumasi Regional Depot",
-            code: "WH-KSI-01",
-            address: "Asokwa Commercial Boulevard",
-            city: "Kumasi",
-            region: "Ashanti",
-            contactName: "Akua Osei",
-            contactPhone: "0209876543",
-            contactEmail: "kumasi.depot@nextdor.online",
-            isDefault: false,
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            _count: { stocks: 86, alerts: 1 },
-          },
-          {
-            id: "wh-tkr-01",
-            name: "Western Port & Logistics Facility",
-            code: "WH-TKR-01",
-            address: "Harbour Road",
-            city: "Takoradi",
-            region: "Western",
-            contactName: "Yaw Boateng",
-            contactPhone: "0277654321",
-            contactEmail: "takoradi@nextdor.online",
-            isDefault: false,
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            _count: { stocks: 38, alerts: 0 },
-          },
-        ]);
-      }
+      setStatusMessage({
+        type: "error",
+        text: err?.message || "Failed to load inventory warehouses from backend.",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);

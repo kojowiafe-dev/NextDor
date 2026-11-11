@@ -120,10 +120,16 @@ function RevenueChart({ data }: { data: number[] }) {
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
   delivered: { label: "Delivered", classes: "bg-green-100 text-green-700" },
+  delivered_verified: { label: "Delivered", classes: "bg-green-100 text-green-700" },
+  completed: { label: "Completed", classes: "bg-emerald-100 text-emerald-800" },
   processing: { label: "Processing", classes: "bg-blue-100 text-blue-700" },
+  accepted: { label: "Accepted", classes: "bg-blue-100 text-blue-700" },
   pending: { label: "Pending", classes: "bg-amber-100 text-amber-700" },
+  placed: { label: "Placed", classes: "bg-amber-100 text-amber-700" },
   confirmed: { label: "Confirmed", classes: "bg-blue-100 text-blue-700" },
   shipped: { label: "Shipped", classes: "bg-amber-100 text-amber-700" },
+  dispatched: { label: "Dispatched", classes: "bg-indigo-100 text-indigo-700" },
+  disputed: { label: "Disputed", classes: "bg-red-100 text-red-700" },
   cancelled: { label: "Cancelled", classes: "bg-red-100 text-red-700" },
   refunded: { label: "Refunded", classes: "bg-zinc-100 text-zinc-700" },
 };
@@ -142,6 +148,13 @@ export default function AdminDashboardPage() {
   });
   const [customerCount, setCustomerCount] = useState<number>(0);
   const [productCount, setProductCount] = useState<number>(0);
+  const [financialMetrics, setFinancialMetrics] = useState<{
+    grossMerchandiseValue: number;
+    platformRevenue: number;
+    escrowPool: number;
+    weeklyRevenue: number[];
+    weeklyGrowthPercent: number;
+  } | null>(null);
   const [isApproving, setIsApproving] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -153,37 +166,17 @@ export default function AdminDashboardPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        if (json.success && json.data?.metrics) {
-          if (typeof json.data.metrics.totalCustomers === "number") {
-            setCustomerCount(json.data.metrics.totalCustomers);
-          }
-          if (typeof json.data.metrics.totalProducts === "number") {
-            setProductCount(json.data.metrics.totalProducts);
-          }
-          return;
-        }
-      }
-    } catch {}
-
-    // Secondary fallback directly to customer list count if analytics endpoint fails
-    try {
-      const custRes = await fetch(`${API_BASE}/admin/customers?limit=1`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (custRes.ok) {
-        const custJson = await custRes.json();
-        if (custJson.meta?.total !== undefined) {
-          setCustomerCount(custJson.meta.total);
-        }
-      }
-    } catch {}
-
-    try {
-      const prodRes = await fetch(`${API_BASE}/products?limit=1`);
-      if (prodRes.ok) {
-        const prodJson = await prodRes.json();
-        if (prodJson.data?.pagination?.total !== undefined) {
-          setProductCount(prodJson.data.pagination.total);
+        const m = json.data?.metrics;
+        if (json.success && m) {
+          if (typeof m.totalCustomers === "number") setCustomerCount(m.totalCustomers);
+          if (typeof m.totalProducts === "number") setProductCount(m.totalProducts);
+          setFinancialMetrics({
+            grossMerchandiseValue: Number(m.grossMerchandiseValue ?? m.totalRevenue ?? 0),
+            platformRevenue: Number(m.platformRevenue ?? 0),
+            escrowPool: Number(m.escrowPool ?? 0),
+            weeklyRevenue: Array.isArray(m.weeklyRevenue) && m.weeklyRevenue.length === 7 ? m.weeklyRevenue : [0, 0, 0, 0, 0, 0, 0],
+            weeklyGrowthPercent: Number(m.weeklyGrowthPercent ?? 0),
+          });
         }
       }
     } catch {}
@@ -303,39 +296,23 @@ export default function AdminDashboardPage() {
   }
 
   const recentOrders = orders.slice(0, 5);
-  // Exclude cancelled and refunded orders from revenue, platform fees, and escrow calculations
+  // Exclude cancelled and refunded orders from fallback order calculations
   const activeRevenueOrders = orders.filter((o) => {
     const st = String(o.status || "").toLowerCase().trim();
     return st !== "cancelled" && st !== "refunded";
   });
-  const totalRevenue = activeRevenueOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const fallbackRevenue = activeRevenueOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const totalRevenue = financialMetrics?.grossMerchandiseValue ?? fallbackRevenue;
+  const platformFee = financialMetrics?.platformRevenue ?? 0;
+  const escrowHold = financialMetrics?.escrowPool ?? 0;
+
   const pipelineOrders = orders.filter((o) => {
     const st = String(o.status || "").toLowerCase().trim();
-    return st === "processing" || st === "pending" || st === "confirmed" || st === "shipped";
+    return ["placed", "pending", "confirmed", "accepted", "processing", "shipped", "dispatched"].includes(st);
   });
-  const platformFee = totalRevenue * 0.10; // 10% platform cut
-  const escrowHold = totalRevenue * 0.90; // 90% escrow reserve held for merchants
 
-  const [currentTimestamp, setCurrentTimestamp] = useState<number>(0);
-  useEffect(() => {
-    setCurrentTimestamp(Date.now());
-  }, []);
-
-  const weeklyRevenue = useMemo(() => {
-    const buckets = [0, 0, 0, 0, 0, 0, 0];
-    if (!currentTimestamp) return buckets;
-    for (const order of orders) {
-      const st = String(order.status || "").toLowerCase().trim();
-      if (st !== "cancelled" && st !== "refunded") {
-        const orderTime = new Date(order.date).getTime();
-        const diffDays = Math.floor((currentTimestamp - orderTime) / (24 * 60 * 60 * 1000));
-        if (diffDays >= 0 && diffDays < 7) {
-          buckets[6 - diffDays] += (Number(order.total) || 0);
-        }
-      }
-    }
-    return buckets;
-  }, [orders, currentTimestamp]);
+  const weeklyRevenue = financialMetrics?.weeklyRevenue ?? [0, 0, 0, 0, 0, 0, 0];
+  const weeklyGrowthPercent = financialMetrics?.weeklyGrowthPercent ?? 0;
 
   return (
     <AdminLayout
@@ -514,9 +491,9 @@ export default function AdminDashboardPage() {
               iconColor="text-green-600"
             />
             <StatCard
-              title="Platform Revenue (10%)"
+              title="Platform Revenue"
               value={formatPrice(platformFee, "GHS")}
-              trend="10% platform share"
+              trend="Actual commissions & delivery fees"
               trendDirection="up"
               icon={Percent}
               iconBg="bg-amber-50"
@@ -525,7 +502,7 @@ export default function AdminDashboardPage() {
             <StatCard
               title="MoMo Escrow Pool"
               value={formatPrice(escrowHold, "GHS")}
-              trend="Merchant escrow balance"
+              trend="Live merchant escrow & pending balance"
               trendDirection="neutral"
               icon={Lock}
               iconBg="bg-indigo-50"
@@ -690,7 +667,7 @@ export default function AdminDashboardPage() {
                 <span className="rounded-full bg-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-800">Priority</span>
               </div>
               <p className="mt-2 text-2xl font-bold text-blue-900">
-                {orders.filter((o) => o.status === "processing").length} Orders
+                {orders.filter((o) => ["placed", "pending", "confirmed", "accepted", "processing"].includes(o.status)).length} Orders
               </p>
               <p className="mt-1 text-xs text-blue-700">Orders ready for warehouse packing and courier dispatch.</p>
             </div>
@@ -701,7 +678,7 @@ export default function AdminDashboardPage() {
                 <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Active</span>
               </div>
               <p className="mt-2 text-2xl font-bold text-amber-900">
-                {orders.filter((o) => o.status === "shipped").length} Orders
+                {orders.filter((o) => ["shipped", "dispatched"].includes(o.status)).length} Orders
               </p>
               <p className="mt-1 text-xs text-amber-700">Dispatched with delivery riders across Greater Accra & regions.</p>
             </div>
@@ -712,7 +689,7 @@ export default function AdminDashboardPage() {
                 <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Settled</span>
               </div>
               <p className="mt-2 text-2xl font-bold text-emerald-900">
-                {orders.filter((o) => o.status === "delivered").length} Orders
+                {orders.filter((o) => ["delivered", "delivered_verified", "completed"].includes(o.status)).length} Orders
               </p>
               <p className="mt-1 text-xs text-emerald-700">Successfully received by customers; awaiting 48h settlement.</p>
             </div>
@@ -733,8 +710,16 @@ export default function AdminDashboardPage() {
                 {isSuperAdmin ? "Total sales processed across all multi-tenant stores (GHS)" : "Daily marketplace sales in GHS"}
               </p>
             </div>
-            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
-              ↑ 12% vs last week
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                weeklyGrowthPercent > 0
+                  ? "bg-green-100 text-green-700"
+                  : weeklyGrowthPercent < 0
+                  ? "bg-red-100 text-red-700"
+                  : "bg-zinc-100 text-zinc-600"
+              }`}
+            >
+              {weeklyGrowthPercent > 0 ? `↑ ${weeklyGrowthPercent}%` : weeklyGrowthPercent < 0 ? `↓ ${Math.abs(weeklyGrowthPercent)}%` : "0%"} vs prior 7d
             </span>
           </div>
           <RevenueChart data={weeklyRevenue} />
