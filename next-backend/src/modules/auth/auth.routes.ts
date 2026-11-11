@@ -408,17 +408,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           role: true,
           vendorId: true,
           status: true,
+          deletedAt: true,
         },
       });
 
-      if (!user) {
+      if (!user || user.deletedAt || user.status === "SUSPENDED") {
         return reply.status(401).send({
           success: false,
-          error: { code: "UNAUTHORIZED", message: "User not found" },
+          error: { code: "UNAUTHORIZED", message: "Account is inactive or suspended" },
         });
       }
 
-      return reply.send({ success: true, data: { user } });
+      const { deletedAt: _deletedAt, ...safeUser } = user;
+      return reply.send({ success: true, data: { user: safeUser } });
     },
   );
 
@@ -591,6 +593,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           updatedAt: true,
         },
       });
+
+      // SECURITY: When suspending an administrator, immediately revoke all active refresh tokens
+      if (body.status === "SUSPENDED") {
+        await prisma.refreshToken.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
 
       await AuditService.log({
         userId: req.authUser!.userId,

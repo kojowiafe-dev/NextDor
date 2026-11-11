@@ -1,7 +1,11 @@
+import crypto from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { LogisticsService } from "./logistics.service.js";
 import { LogisticsRepository } from "./logistics.repository.js";
-import { requireAdmin, requireAuth } from "../../lib/auth.guards.js";
+import { requireAdmin, requireAuth, extractUser, ADMIN_ROLES, resolveVendorId } from "../../lib/auth.guards.js";
+import { config } from "../../config/env.js";
+import { prisma } from "../../lib/prisma.js";
+import { logger } from "../../lib/logger.js";
 import {
   DeliveryQuoteRequestSchema,
   CreateDeliveryZoneSchema,
@@ -12,6 +16,44 @@ import {
 
 export const logisticsRepo = new LogisticsRepository();
 export const logisticsService = new LogisticsService(logisticsRepo);
+
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
+/**
+ * SECURITY: Courier webhooks mutate shipment state and trigger customer SMS/WhatsApp/email.
+ * Accept only (a) a valid HMAC-SHA256 signature / shared secret from the courier, or
+ * (b) an authenticated platform administrator (internal dispatch tooling).
+ */
+async function requireCourierAuth(req: FastifyRequest, reply: FastifyReply) {
+  const secret = config.COURIER_WEBHOOK_SECRET;
+  if (secret) {
+    const rawBody = ((req as any).rawBody as string | undefined) ?? "";
+    const signature = req.headers["x-courier-signature"] as string | undefined;
+    const sharedSecret = req.headers["x-webhook-secret"] as string | undefined;
+
+    if (signature) {
+      const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+      if (safeEqual(signature.toLowerCase(), expected)) return;
+    }
+    if (sharedSecret && safeEqual(sharedSecret, secret)) return;
+  }
+
+  const user = extractUser(req);
+  if (user && ADMIN_ROLES.includes(user.role as any)) {
+    req.authUser = user;
+    return;
+  }
+
+  logger.warn({ ip: req.ip, url: req.url }, "security: rejected unauthenticated courier webhook");
+  return reply.status(401).send({
+    success: false,
+    error: { code: "UNAUTHORIZED", message: "Invalid courier webhook credentials" },
+  });
+}
 
 export const logisticsRoutes: FastifyPluginAsync = async (app) => {
   // ─── Public Delivery Quote ──────────────────────────────────────────────────
@@ -84,6 +126,31 @@ export const logisticsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { orderId } = req.params as { orderId: string };
+      const caller = req.authUser!;
+
+      // SECURITY (IDOR): only the order owner, a vendor on the order, or an admin may list shipments
+      if (!ADMIN_ROLES.includes(caller.role as any)) {
+        const order = await prisma.order.findUnique({
+          where: { id: orderId },
+          select: { userId: true, vendorOrders: { select: { vendorId: true } } },
+        });
+        if (!order) {
+          return reply.status(404).send({ success: false, error: { code: "NOT_FOUND", message: "Order not found" } });
+        }
+        const isOwner = order.userId === caller.userId;
+        let isVendor = false;
+        if (!isOwner && (caller.role === "VENDOR_OWNER" || caller.role === "VENDOR_STAFF")) {
+          const vendorId = await resolveVendorId(caller);
+          isVendor = Boolean(vendorId && order.vendorOrders.some((vo) => vo.vendorId === vendorId));
+        }
+        if (!isOwner && !isVendor) {
+          return reply.status(403).send({
+            success: false,
+            error: { code: "FORBIDDEN", message: "You do not have access to this order's shipments" },
+          });
+        }
+      }
+
       const shipments = await logisticsService.getOrderShipments(orderId);
       return reply.send({ success: true, data: shipments });
     }
@@ -93,6 +160,7 @@ export const logisticsRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/webhooks/courier",
     {
+      preHandler: requireCourierAuth,
       schema: {
         description: "Inbound webhook for real-time courier milestone updates",
         tags: ["Logistics & Delivery"],
@@ -108,6 +176,7 @@ export const logisticsRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/webhooks/:carrier",
     {
+      preHandler: requireCourierAuth,
       schema: {
         description: "Carrier-specific webhook endpoint for courier milestone updates",
         tags: ["Logistics & Delivery"],

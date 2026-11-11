@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { EscrowService } from "./escrow.service.js";
 import { EscrowScheduler } from "./escrow.scheduler.js";
-import { requireAuth, requireAdmin } from "../../lib/auth.guards.js";
+import { requireAuth, requireAdmin, ADMIN_ROLES } from "../../lib/auth.guards.js";
 import { DisputeReason, DisputeResolution } from "@prisma/client";
 
 const escrowService = new EscrowService();
@@ -29,10 +29,12 @@ export const escrowRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const body = req.body as any;
+      const isAdmin = ADMIN_ROLES.includes(req.authUser?.role as any);
       await escrowService.verifyDelivery({
         vendorOrderId: body.vendorOrderId,
         confirmedBy: body.confirmedBy,
         actorId: req.authUser?.userId,
+        isAdmin,
         note: body.note,
       });
       return reply.send({ success: true, message: "Delivery verified and 48-hour escrow inspection window started." });

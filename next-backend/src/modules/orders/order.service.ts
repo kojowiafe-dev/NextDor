@@ -27,6 +27,7 @@ import { SmsService } from "../../lib/sms.js";
 import { WhatsAppService } from "../../lib/whatsapp.js";
 import { LogisticsService } from "../logistics/logistics.service.js";
 import { LogisticsRepository } from "../logistics/logistics.repository.js";
+import { escrowService } from "./escrow.service.js";
 import {
   NotFoundError,
   BadRequestError,
@@ -80,13 +81,19 @@ export const DELIVERY_FEES: Record<DeliveryMethod, number> = {
 // Guards against illegal state jumps (e.g. DELIVERED → PENDING is nonsensical).
 
 export const ALLOWED_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
-  PLACED:             ["ACCEPTED", "CANCELLED", "DISPUTED"],
-  ACCEPTED:           ["DISPATCHED", "CANCELLED", "DISPUTED"],
-  DISPATCHED:         ["DELIVERED_VERIFIED", "CANCELLED", "DISPUTED"],
+  PLACED:             ["ACCEPTED", "PROCESSING", "CONFIRMED", "DISPATCHED", "SHIPPED", "CANCELLED", "DISPUTED"],
+  ACCEPTED:           ["DISPATCHED", "SHIPPED", "DELIVERED_VERIFIED", "DELIVERED", "CANCELLED", "DISPUTED"],
+  DISPATCHED:         ["DELIVERED_VERIFIED", "DELIVERED", "CANCELLED", "DISPUTED"],
   DELIVERED_VERIFIED: ["COMPLETED", "DISPUTED"],
   COMPLETED:          ["DISPUTED"],
   CANCELLED:          [],
   DISPUTED:           ["COMPLETED", "CANCELLED"],
+  // Legacy status transitions
+  PENDING:            ["CONFIRMED", "PROCESSING", "ACCEPTED", "SHIPPED", "DISPATCHED", "CANCELLED", "DISPUTED"],
+  CONFIRMED:          ["PROCESSING", "ACCEPTED", "SHIPPED", "DISPATCHED", "CANCELLED", "DISPUTED"],
+  PROCESSING:         ["SHIPPED", "DISPATCHED", "DELIVERED", "DELIVERED_VERIFIED", "CANCELLED", "DISPUTED"],
+  SHIPPED:            ["DELIVERED", "DELIVERED_VERIFIED", "CANCELLED", "DISPUTED"],
+  DELIVERED:          ["COMPLETED", "DISPUTED"],
 };
 
 export const ALLOWED_VENDOR_TRANSITIONS: Partial<Record<VendorOrderStatus, VendorOrderStatus[]>> = {
@@ -399,7 +406,7 @@ export class OrderService {
 
     if (!order) throw new NotFoundError(`Order ${number}`);
 
-    if (!["PENDING", "CONFIRMED"].includes(order.status)) {
+    if (!["PLACED", "PENDING", "CONFIRMED"].includes(order.status)) {
       throw new UnprocessableError(
         `Cannot cancel an order in ${order.status} status`,
       );
@@ -458,6 +465,28 @@ export class OrderService {
     }
 
     const updated = await this.repo.updateStatus(order.id, newStatus, note, adminId, order.status);
+
+    // When an Admin marks an order DELIVERED / DELIVERED_VERIFIED, trigger
+    // EscrowService.verifyDelivery on all SHIPPED vendor sub-orders so the
+    // 48-hour escrow clock and Ledger Entry C are properly initialized.
+    if (newStatus === "DELIVERED" || newStatus === "DELIVERED_VERIFIED") {
+      const subOrders = await prisma.vendorOrder.findMany({
+        where: { orderId: order.id, status: "SHIPPED" },
+        select: { id: true },
+      });
+      for (const vo of subOrders) {
+        try {
+          await escrowService.verifyDelivery({
+            vendorOrderId: vo.id,
+            confirmedBy: "DELIVERY_AGENT",
+            actorId: adminId,
+            isAdmin: true,
+          });
+        } catch (err) {
+          logger.warn({ err, vendorOrderId: vo.id }, "Admin delivery verification escrow trigger warning");
+        }
+      }
+    }
 
     const shipAddr = order.shippingAddress as any;
     this.dispatchStatusUpdateEmail(

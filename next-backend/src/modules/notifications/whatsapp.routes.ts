@@ -19,7 +19,12 @@ import { requireAuth, requireSuperAdmin } from "../../lib/auth.guards.js";
  */
 function verifyMetaSignature(rawBody: string | undefined, signatureHeader: string | undefined): boolean {
   if (!config.WHATSAPP_APP_SECRET || config.WHATSAPP_APP_SECRET.includes("placeholder")) {
-    // If app secret is not yet configured in development, bypass HMAC validation
+    // SECURITY: Fail CLOSED in production — an unconfigured secret must never mean
+    // "accept any unsigned payload". Bypass is allowed only in local development.
+    if (config.NODE_ENV === "production") {
+      logger.error("security: WHATSAPP_APP_SECRET not configured — rejecting WhatsApp webhook");
+      return false;
+    }
     return true;
   }
 
@@ -82,12 +87,16 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
         "Meta WhatsApp Webhook verification handshake received"
       );
 
-      if (mode === "subscribe" && token === config.WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
+      if (
+        mode === "subscribe" &&
+        config.WHATSAPP_WEBHOOK_VERIFY_TOKEN &&
+        token === config.WHATSAPP_WEBHOOK_VERIFY_TOKEN
+      ) {
         logger.info("Meta WhatsApp Webhook handshake successfully verified");
         return reply.status(200).type("text/plain").send(challenge || "");
       }
 
-      logger.warn({ mode, token }, "Meta WhatsApp Webhook verification failed: token mismatch");
+      logger.warn({ mode }, "Meta WhatsApp Webhook verification failed: token mismatch");
       return reply.status(403).send("Forbidden");
     }
   );

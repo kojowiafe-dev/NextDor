@@ -15,10 +15,19 @@ import {
   ShoppingBag,
   RotateCcw,
   ArrowLeft,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { useAuth } from "@/context/AuthContext";
-import { fetchOrderByNumber, cancelOrder, type Order, type StatusHistoryEntry } from "@/lib/orders/api";
+import {
+  fetchOrderByNumber,
+  cancelOrder,
+  confirmOrderDelivery,
+  confirmSatisfiedReleaseEscrow,
+  type Order,
+  type StatusHistoryEntry,
+} from "@/lib/orders/api";
 import { createSWRCache } from "@/lib/cache/clientCache";
 import { ordersCache } from "@/app/account/orders/page";
 import { ReturnRequestModal } from "@/components/returns/ReturnRequestModal";
@@ -30,6 +39,12 @@ const orderDetailCache = createSWRCache<Order>("nextdor_order_detail", 2 * 60_00
 // ─── Status config ────────────────────────────────────────────────────────────
 
 type StatusKey =
+  | "PLACED"
+  | "ACCEPTED"
+  | "DISPATCHED"
+  | "DELIVERED_VERIFIED"
+  | "COMPLETED"
+  | "DISPUTED"
   | "PENDING"
   | "CONFIRMED"
   | "PROCESSING"
@@ -39,13 +54,19 @@ type StatusKey =
   | "REFUNDED";
 
 const STATUS_META: Record<StatusKey, { label: string; color: string; icon: React.ElementType }> = {
-  PENDING:    { label: "Order Placed",  color: "text-amber-500",  icon: Clock       },
-  CONFIRMED:  { label: "Confirmed",     color: "text-blue-500",   icon: CheckCircle2 },
-  PROCESSING: { label: "Processing",    color: "text-purple-500", icon: Package     },
-  SHIPPED:    { label: "Shipped",       color: "text-indigo-500", icon: Truck       },
-  DELIVERED:  { label: "Delivered",     color: "text-green-500",  icon: CheckCircle2 },
-  CANCELLED:  { label: "Cancelled",     color: "text-red-500",    icon: XCircle     },
-  REFUNDED:   { label: "Refunded",      color: "text-zinc-500",   icon: RefreshCcw  },
+  PLACED:             { label: "Order Placed",                  color: "text-amber-500",   icon: Clock        },
+  ACCEPTED:           { label: "Accepted by Store",             color: "text-blue-500",    icon: CheckCircle2 },
+  DISPATCHED:         { label: "Dispatched / In Transit",       color: "text-indigo-500",  icon: Truck        },
+  DELIVERED_VERIFIED: { label: "Delivered (48h Escrow Active)", color: "text-emerald-500", icon: ShieldCheck  },
+  COMPLETED:          { label: "Completed",                     color: "text-green-600",   icon: CheckCircle2 },
+  DISPUTED:           { label: "Disputed (Escrow Frozen)",      color: "text-red-500",     icon: XCircle      },
+  PENDING:            { label: "Order Placed",                  color: "text-amber-500",   icon: Clock        },
+  CONFIRMED:          { label: "Confirmed",                     color: "text-blue-500",    icon: CheckCircle2 },
+  PROCESSING:         { label: "Processing",                    color: "text-purple-500",  icon: Package      },
+  SHIPPED:            { label: "Shipped",                       color: "text-indigo-500",  icon: Truck        },
+  DELIVERED:          { label: "Delivered",                     color: "text-green-500",   icon: CheckCircle2 },
+  CANCELLED:          { label: "Cancelled",                     color: "text-red-500",     icon: XCircle      },
+  REFUNDED:           { label: "Refunded",                      color: "text-zinc-500",    icon: RefreshCcw   },
 };
 
 // ─── Tracking timeline ────────────────────────────────────────────────────────
@@ -188,13 +209,17 @@ export default function OrderDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [actingVendorOrderId, setActingVendorOrderId] = useState<string | null>(null);
+  const [escrowBanner, setEscrowBanner] = useState<string | null>(null);
+
+  const getEffectiveToken = () =>
+    token ||
+    (typeof window !== "undefined"
+      ? localStorage.getItem("nextdor-token") || localStorage.getItem("vendor_token")
+      : null);
 
   const load = async (forceRefresh = false) => {
-    const effectiveToken =
-      token ||
-      (typeof window !== "undefined"
-        ? localStorage.getItem("nextdor-token") || localStorage.getItem("vendor_token")
-        : null);
+    const effectiveToken = getEffectiveToken();
 
     if (!effectiveToken) {
       if (!authLoading) setLoading(false);
@@ -245,8 +270,65 @@ export default function OrderDetailPage({
     }
   };
 
+  const handleConfirmDelivery = async (vendorOrderId: string) => {
+    const effectiveToken = getEffectiveToken();
+    if (!effectiveToken) return;
+    if (
+      !confirm(
+        "Confirm that you have received this package? This starts your 48-hour Buyer Protection inspection window before funds are released to the seller."
+      )
+    ) {
+      return;
+    }
+    setActingVendorOrderId(vendorOrderId);
+    setEscrowBanner(null);
+    try {
+      await confirmOrderDelivery(vendorOrderId, effectiveToken);
+      orderDetailCache.invalidate(number);
+      ordersCache.invalidateAll();
+      setEscrowBanner(
+        "Delivery confirmed! Your 48-hour Buyer Protection window has started. You have 48 hours to inspect your items before payment is released to the seller."
+      );
+      await load(true);
+    } catch (e: any) {
+      alert(e.message ?? "Failed to confirm delivery");
+    } finally {
+      setActingVendorOrderId(null);
+    }
+  };
+
+  const handleReleaseEscrow = async (vendorOrderId: string) => {
+    const effectiveToken = getEffectiveToken();
+    if (!effectiveToken) return;
+    if (
+      !confirm(
+        "Are you satisfied with your items? Confirming early will immediately release the escrow payment to the merchant."
+      )
+    ) {
+      return;
+    }
+    setActingVendorOrderId(vendorOrderId);
+    setEscrowBanner(null);
+    try {
+      await confirmSatisfiedReleaseEscrow(vendorOrderId, effectiveToken);
+      orderDetailCache.invalidate(number);
+      ordersCache.invalidateAll();
+      setEscrowBanner("Thank you! Your satisfaction has been recorded and payment has been released to the merchant.");
+      await load(true);
+    } catch (e: any) {
+      alert(e.message ?? "Failed to release escrow funds");
+    } finally {
+      setActingVendorOrderId(null);
+    }
+  };
+
   const canCancel =
-    order && ["PENDING", "CONFIRMED"].includes(order.status);
+    order && ["PLACED", "PENDING", "CONFIRMED"].includes(order.status);
+
+  const hasDeliveredSubOrder =
+    order &&
+    (["DELIVERED", "DELIVERED_VERIFIED"].includes(order.status) ||
+      order.vendorOrders?.some((vo) => vo.status === "DELIVERED"));
 
   return (
     <AccountLayout>
@@ -329,7 +411,7 @@ export default function OrderDetailPage({
                 Live Storefront Tracker
               </Link>
 
-              {order.status === "DELIVERED" && (
+              {hasDeliveredSubOrder && (
                 <button
                   type="button"
                   onClick={() => setShowReturnModal(true)}
@@ -351,6 +433,17 @@ export default function OrderDetailPage({
               )}
             </div>
           </div>
+
+          {/* Escrow notification banner */}
+          {escrowBanner && (
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-2xs">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              <div className="flex-1">
+                <p className="font-semibold">Escrow Protection Updated</p>
+                <p className="mt-0.5 text-xs text-emerald-800">{escrowBanner}</p>
+              </div>
+            </div>
+          )}
 
           {/* Active Return Claim Cards */}
           {order.returnRequests && order.returnRequests.length > 0 && (
@@ -414,31 +507,149 @@ export default function OrderDetailPage({
                 <ShippingCard address={order.shippingAddress} />
               </div>
 
-              {/* Vendor sub-orders */}
+              {/* Vendor sub-orders & 48-Hour Buyer Protection Controls */}
               {order.vendorOrders && order.vendorOrders.length > 0 && (
                 <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
-                  <h3 className="mb-3 font-semibold text-zinc-900">
-                    Fulfillment by Store
-                  </h3>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-semibold text-zinc-900">
+                      Fulfillment by Store &amp; Buyer Protection
+                    </h3>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      48h Escrow Protected
+                    </span>
+                  </div>
                   <div className="space-y-3">
-                    {order.vendorOrders.map((vo) => (
-                      <div
-                        key={vo.id}
-                        className="flex items-center justify-between rounded-lg bg-zinc-50 px-4 py-3"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-zinc-800">
-                            {vo.vendor.name}
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            GH₵ {Number(vo.subtotal).toFixed(2)}
-                          </p>
+                    {order.vendorOrders.map((vo) => {
+                      const isActing = actingVendorOrderId === vo.id;
+                      const inEscrow =
+                        vo.status === "DELIVERED" && vo.fundsStatus === "ESCROW";
+                      const isCleared =
+                        vo.fundsStatus === "AVAILABLE" ||
+                        vo.fundsStatus === "IN_PAYOUT" ||
+                        vo.fundsStatus === "PAID_OUT";
+
+                      return (
+                        <div
+                          key={vo.id}
+                          className="rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-900">
+                                {vo.vendor.name}
+                              </p>
+                              <p className="text-xs text-zinc-500">
+                                Store Subtotal: GH₵ {Number(vo.subtotal).toFixed(2)}
+                              </p>
+                            </div>
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${
+                                vo.status === "DELIVERED"
+                                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                  : vo.status === "SHIPPED"
+                                  ? "bg-indigo-50 text-indigo-700 ring-indigo-200"
+                                  : vo.status === "PROCESSING"
+                                  ? "bg-blue-50 text-blue-700 ring-blue-200"
+                                  : "bg-white text-zinc-600 ring-zinc-200"
+                              }`}
+                            >
+                              {vo.status}
+                            </span>
+                          </div>
+
+                          {/* Customer Action: Confirm Delivery when SHIPPED */}
+                          {vo.status === "SHIPPED" && (
+                            <div className="rounded-lg border border-indigo-200 bg-indigo-50/70 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="text-xs text-indigo-950">
+                                <p className="font-semibold">
+                                  Package Dispatched — Have you received it?
+                                </p>
+                                <p className="text-indigo-800 mt-0.5">
+                                  Your payment is safely held in escrow. Confirm once your package arrives to start your 48-hour inspection window.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmDelivery(vo.id)}
+                                disabled={isActing}
+                                className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                                {isActing
+                                  ? "Confirming…"
+                                  : "I've Received My Order"}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Customer Action: 48-Hour Inspection Window Active */}
+                          {inEscrow && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 space-y-2.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="text-xs text-amber-950">
+                                  <p className="font-bold flex items-center gap-1.5">
+                                    <Clock className="h-3.5 w-3.5 text-amber-600" />
+                                    48-Hour Buyer Protection Window Active
+                                  </p>
+                                  <p className="text-amber-800 mt-0.5">
+                                    Inspect your items. Funds automatically release to {vo.vendor.name}{" "}
+                                    {vo.escrowExpiresAt
+                                      ? `on ${new Date(vo.escrowExpiresAt).toLocaleString("en-GH", {
+                                          dateStyle: "medium",
+                                          timeStyle: "short",
+                                        })}`
+                                      : "after 48 hours"}{" "}
+                                    unless you report an issue.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleReleaseEscrow(vo.id)}
+                                  disabled={isActing}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-2xs transition hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  {isActing
+                                    ? "Releasing…"
+                                    : "Satisfied — Release Funds Now"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowReturnModal(true)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 cursor-pointer"
+                                >
+                                  <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                                  Report Issue / Request Return
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Escrow Cleared / Completed */}
+                          {vo.status === "DELIVERED" && isCleared && (
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                              <span>
+                                Delivery verified &amp; 48h buyer protection completed.
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Disputed */}
+                          {vo.fundsStatus === "DISPUTED" && (
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
+                              <AlertTriangle className="h-4 w-4 text-red-600" />
+                              <span>
+                                Escrow frozen while your return/dispute is under review.
+                              </span>
+                            </div>
+                          )}
                         </div>
-                        <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-zinc-600 ring-1 ring-zinc-200">
-                          {vo.status}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

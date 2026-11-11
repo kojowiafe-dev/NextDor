@@ -164,8 +164,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Base64 Data URI check
+      // Base64 Data URI check (enforce ~10MB decoded limit = ~14MB base64 chars)
       if (target.startsWith("data:")) {
+        if (target.length > 14 * 1024 * 1024) {
+          return NextResponse.json(
+            { success: false, error: "Image exceeds the 10MB maximum upload size." },
+            { status: 413 }
+          );
+        }
         const isSafeDataUri = /^data:image\/(jpeg|png|webp|gif|avif);base64,/i.test(target);
         if (!isSafeDataUri) {
           return NextResponse.json(
@@ -226,7 +232,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: err.message || "Failed to upload image to Cloudinary.",
+        error: "Failed to upload image. Please verify the file and try again.",
       },
       { status: 500 }
     );

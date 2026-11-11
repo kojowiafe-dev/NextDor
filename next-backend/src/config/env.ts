@@ -103,6 +103,12 @@ const envSchema = z.object({
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
 
+  // ── Courier webhooks ─────────────────────────────────────────────────────
+  // Shared secret couriers must send in the `x-courier-signature` header
+  // (HMAC-SHA256 of the raw body) or `x-webhook-secret` header. Unset → only
+  // admin-authenticated calls are accepted.
+  COURIER_WEBHOOK_SECRET: z.string().min(16).optional(),
+
   // ── CORS ─────────────────────────────────────────────────────────────────
   CORS_ORIGINS: z
     .string()

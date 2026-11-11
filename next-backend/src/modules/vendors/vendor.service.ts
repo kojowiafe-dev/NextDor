@@ -19,6 +19,7 @@ import {
   ConflictError,
   NotFoundError,
   BadRequestError,
+  ForbiddenError,
 } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { AuditService } from "../audit/audit.service.js";
@@ -415,9 +416,10 @@ export class VendorService {
   }
 
   /**
-   * Update sub-order dispatch status (e.g. PROCESSING -> SHIPPED -> DELIVERED).
-   * Automatically initiates 48h escrow clearance timer when marked DELIVERED.
-   * Emits an immutable audit log entry.
+   * Update sub-order dispatch status (PROCESSING -> SHIPPED).
+   * SECURITY (Spec §4.3): Vendors CANNOT mark orders as DELIVERED themselves.
+   * Delivery verification and the 48h escrow timer are exclusively triggered by
+   * the customer ("I've Received My Order") or by an authenticated courier/admin.
    */
   async updateVendorOrderStatus(
     vendorId: string,
@@ -431,6 +433,12 @@ export class VendorService {
       userAgent?: string;
     }
   ) {
+    if (status === "DELIVERED") {
+      throw new ForbiddenError(
+        "Vendors cannot mark orders as DELIVERED directly. The 48-hour escrow timer starts once the customer or courier confirms delivery."
+      );
+    }
+
     const existing = await this.vendorRepo.findVendorOrderById(vendorId, vendorOrderId);
     if (!existing) {
       throw new NotFoundError("Sub-order not found or does not belong to your store.");
@@ -499,18 +507,6 @@ export class VendorService {
           },
         }).catch((err) => {
           logger.warn({ err, orderNumber: orderObj.number }, "Failed to queue processing update email");
-        });
-      } else if (status === "DELIVERED") {
-        dispatchEmailAsync({
-          type: "delivery_confirmation",
-          params: {
-            email: customerEmail,
-            customerName,
-            orderNumber: orderObj.number,
-            deliveryAddress: `${shipAddr.street || "Direct Delivery"}, ${destinationCity}`,
-          },
-        }).catch((err) => {
-          logger.warn({ err, orderNumber: orderObj.number }, "Failed to queue delivery confirmation email");
         });
       }
     }

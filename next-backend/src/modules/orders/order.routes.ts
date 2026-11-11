@@ -459,7 +459,7 @@ export const vendorOrderRoutes: FastifyPluginAsync = async (app) => {
           type: "object",
           required: ["status"],
           properties: {
-            status: { type: "string", enum: ["PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"] },
+            status: { type: "string", enum: ["PROCESSING", "SHIPPED", "CANCELLED"] },
             notes: { type: "string" },
           },
         },

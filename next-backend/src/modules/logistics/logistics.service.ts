@@ -1,6 +1,8 @@
 import { LogisticsRepository } from "./logistics.repository.js";
 import { Money } from "../../domain/Money.js";
 import { logger } from "../../lib/logger.js";
+import { prisma } from "../../lib/prisma.js";
+import { EscrowService } from "../orders/escrow.service.js";
 import { SmsService } from "../../lib/sms.js";
 import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
@@ -227,6 +229,29 @@ export class LogisticsService {
         ).catch((err) => logger.warn({ err }, "Failed to dispatch WhatsApp out-for-delivery alert"));
       }
     } else if (payload.status === "DELIVERED") {
+      // Automatically verify delivery & start 48-hour escrow clock for any SHIPPED sub-orders
+      try {
+        const escrowService = new EscrowService();
+        const pendingSubOrders = await prisma.vendorOrder.findMany({
+          where: {
+            orderId: shipment.orderId,
+            status: "SHIPPED",
+            fundsStatus: "PENDING_FULFILLMENT",
+          },
+          select: { id: true },
+        });
+        for (const vo of pendingSubOrders) {
+          await escrowService.verifyDelivery({
+            vendorOrderId: vo.id,
+            confirmedBy: "TRACKING_SYSTEM",
+            isAdmin: true,
+            note: `Courier ${payload.carrier || shipment.carrier} confirmed delivery (${shipment.trackingNumber})`,
+          });
+        }
+      } catch (escrowErr) {
+        logger.warn({ err: escrowErr, orderId: shipment.orderId }, "Courier webhook: could not auto-start escrow on sub-orders");
+      }
+
       if (recipientPhone) {
         SmsService.sendSms(
           recipientPhone,

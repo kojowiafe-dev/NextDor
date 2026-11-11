@@ -6,7 +6,10 @@ import {
   requireAdmin,
   requireVendor,
   resolveVendorId,
+  ADMIN_ROLES,
+  type AuthUser,
 } from "../../lib/auth.guards.js";
+import { ForbiddenError } from "../../lib/errors.js";
 import {
   CreateWarehouseSchema,
   UpdateWarehouseSchema,
@@ -19,6 +22,21 @@ import {
   WarehouseQuerySchema,
   ResolveAlertSchema,
 } from "@nextdor/shared";
+
+/**
+ * SECURITY: Resolves the tenant scope for inventory operations.
+ *  - Admins → undefined (platform-wide access)
+ *  - Vendors → their own vendorId
+ *  - Vendor-role users without a store → 403 (previously they silently got admin scope)
+ */
+async function resolveInventoryScope(user: AuthUser): Promise<string | undefined> {
+  if (ADMIN_ROLES.includes(user.role as any)) return undefined;
+  const vendorId = await resolveVendorId(user);
+  if (!vendorId) {
+    throw new ForbiddenError("You are not associated with any active vendor store.");
+  }
+  return vendorId;
+}
 
 export const inventoryRoutes: FastifyPluginAsync = async (app) => {
   const repo = new InventoryRepository();
@@ -35,6 +53,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/warehouses",
     {
+      preHandler: [requireAuth, requireVendor],
       schema: {
         description: "List fulfillment warehouses and depots",
         tags: ["Inventory"],
@@ -42,10 +61,9 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const query = WarehouseQuerySchema.parse(req.query);
-      const authUser = req.authUser;
-      const vendorId = authUser ? await resolveVendorId(authUser) : undefined;
+      const vendorId = await resolveInventoryScope(req.authUser!);
 
-      const warehouses = await service.listWarehouses(query, vendorId ?? undefined);
+      const warehouses = await service.listWarehouses(query, vendorId);
       return reply.send({ success: true, data: { warehouses } });
     }
   );
@@ -57,6 +75,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/warehouses/:id",
     {
+      preHandler: [requireAuth, requireVendor],
       schema: {
         description: "Get single warehouse details and stored inventory",
         tags: ["Inventory"],
@@ -64,11 +83,18 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
-      const authUser = req.authUser;
-      const vendorId = authUser ? await resolveVendorId(authUser) : undefined;
+      const vendorId = await resolveInventoryScope(req.authUser!);
 
-      const warehouse = await service.getWarehouse(id, vendorId ?? undefined);
+      const warehouse = await service.getWarehouse(id, vendorId);
       const stockSummary = await service.getWarehouseStockList(id);
+
+      // Vendors only see their own SKUs inside shared warehouses
+      if (vendorId) {
+        const ownItems = (stockSummary.items as any[]).filter((i) => i.product?.vendorId === vendorId);
+        stockSummary.items = ownItems as any;
+        stockSummary.totalItems = ownItems.length;
+        stockSummary.totalUnits = ownItems.reduce((sum, i) => sum + (i.quantity ?? 0), 0);
+      }
 
       return reply.send({
         success: true,
@@ -92,10 +118,9 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const body = CreateWarehouseSchema.parse(req.body);
-      const authUser = req.authUser!;
-      const vendorId = await resolveVendorId(authUser);
+      const vendorId = await resolveInventoryScope(req.authUser!);
 
-      const warehouse = await service.createWarehouse(body, vendorId ?? undefined);
+      const warehouse = await service.createWarehouse(body, vendorId);
       return reply.status(201).send({ success: true, data: { warehouse } });
     }
   );
@@ -116,10 +141,10 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const body = UpdateWarehouseSchema.parse(req.body);
-      const authUser = req.authUser!;
-      const vendorId = await resolveVendorId(authUser);
+      const vendorId = await resolveInventoryScope(req.authUser!);
+      if (vendorId) await service.getWarehouse(id, vendorId);
 
-      const warehouse = await service.updateWarehouse(id, body, vendorId ?? undefined);
+      const warehouse = await service.updateWarehouse(id, body, vendorId);
       return reply.send({ success: true, data: { warehouse } });
     }
   );
@@ -183,6 +208,8 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = SetWarehouseStockSchema.parse(req.body);
       const authUser = req.authUser!;
+      const vendorId = await resolveInventoryScope(authUser);
+      await service.assertStockAccess(vendorId, body.productId, [body.warehouseId]);
 
       const stock = await service.setWarehouseStock(body, authUser.userId);
       return reply.send({ success: true, data: { stock } });
@@ -205,6 +232,8 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = AdjustStockSchema.parse(req.body);
       const authUser = req.authUser!;
+      const vendorId = await resolveInventoryScope(authUser);
+      await service.assertStockAccess(vendorId, body.productId, [body.warehouseId]);
 
       const stock = await service.adjustStock(body, authUser.userId);
       return reply.send({ success: true, data: { stock } });
@@ -227,6 +256,11 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = StockTransferSchema.parse(req.body);
       const authUser = req.authUser!;
+      const vendorId = await resolveInventoryScope(authUser);
+      await service.assertStockAccess(vendorId, body.productId, [
+        body.sourceWarehouseId,
+        body.destinationWarehouseId,
+      ]);
 
       const result = await service.transferStock(body, authUser.userId);
       return reply.send({ success: true, data: result });
@@ -252,10 +286,10 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
         ...req.body as Record<string, unknown>,
         productId,
       });
-      const authUser = req.authUser!;
-      const vendorId = await resolveVendorId(authUser);
+      const vendorId = await resolveInventoryScope(req.authUser!);
+      if (vendorId) await service.assertStockAccess(vendorId, productId, []);
 
-      const product = await service.configureBackorders(body, vendorId ?? undefined);
+      const product = await service.configureBackorders(body, vendorId);
       return reply.send({ success: true, data: { product } });
     }
   );
@@ -275,6 +309,14 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const query = StockMovementQuerySchema.parse(req.query);
+      const vendorId = await resolveInventoryScope(req.authUser!);
+      // Vendors may only read the ledger for one of their own products
+      if (vendorId) {
+        if (!query.productId) {
+          throw new ForbiddenError("Vendors must filter the stock ledger by one of their own products (productId).");
+        }
+        await service.assertStockAccess(vendorId, query.productId, []);
+      }
       const result = await service.listMovements(query);
       return reply.send({ success: true, data: result });
     }
@@ -299,10 +341,9 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const query = StockAlertQuerySchema.parse(req.query);
-      const authUser = req.authUser!;
-      const vendorId = await resolveVendorId(authUser);
+      const vendorId = await resolveInventoryScope(req.authUser!);
 
-      const result = await service.listAlerts(query, vendorId ?? undefined);
+      const result = await service.listAlerts(vendorId ? { ...query, vendorId } : query, vendorId);
       return reply.send({ success: true, data: result });
     }
   );
@@ -323,10 +364,9 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const body = ResolveAlertSchema.parse(req.body);
-      const authUser = req.authUser!;
-      const vendorId = await resolveVendorId(authUser);
+      const vendorId = await resolveInventoryScope(req.authUser!);
 
-      const alert = await service.resolveAlert(id, body.notes, vendorId ?? undefined);
+      const alert = await service.resolveAlert(id, body.notes, vendorId);
       return reply.send({ success: true, data: { alert } });
     }
   );

@@ -419,8 +419,8 @@ export class AuthService {
     const normalizedEmail = input.email.toLowerCase().trim();
     const user = await this.userRepo.findByEmail(normalizedEmail);
 
-    // Constant-time comparison padding against timing attacks
-    const passwordToCheck = user?.passwordHash ?? "$2b$12$invalidhashpadding";
+    // Constant-time comparison padding against timing attacks (valid 60-char cost-12 bcrypt hash)
+    const passwordToCheck = user?.passwordHash ?? "$2a$12$8WtnNy3cNGbh/vIwVh67VeNXnvpd7zLWoVD7m2pJe//GiYs0ZkYAG";
     const valid = await bcrypt.compare(input.password, passwordToCheck);
 
     if (!user || !valid || user.deletedAt) {
@@ -577,28 +577,14 @@ export class AuthService {
       throw new UnauthorizedError("Session invalidated due to suspicious activity. Please log in again.");
     }
 
-    // Check if this family has any older revoked tokens that were revoked outside grace period
-    const revokedTokensInFamily = await prisma.refreshToken.findMany({
-      where: {
-        family: matched.family,
-        revokedAt: { not: null },
-      },
-    });
-
-    const isActualReplay = revokedTokensInFamily.some(
-      (t) => t.revokedAt && Date.now() - t.revokedAt.getTime() > 30_000
-    );
-
-    if (isActualReplay) {
-      await this.userRepo.revokeTokenFamily(matched.family);
-      logger.warn(
-        { userId: matched.userId, family: matched.family },
-        "auth: refresh token replay detected — entire family revoked"
-      );
-      throw new UnauthorizedError("Session invalidated due to suspicious activity. Please log in again.");
+    // Verify user is still active (not suspended or soft-deleted since token was issued)
+    const activeUser = await this.userRepo.findById(matched.userId);
+    if (!activeUser || activeUser.deletedAt || activeUser.status === "SUSPENDED") {
+      await this.userRepo.revokeAllUserTokens(matched.userId);
+      throw new UnauthorizedError("Account is inactive or suspended.");
     }
 
-    // Revoke current token
+    // Revoke current token (rotation)
     await this.userRepo.revokeTokenById(matched.id);
 
     // Issue new token pair in the same family

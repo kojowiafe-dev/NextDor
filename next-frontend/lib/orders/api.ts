@@ -49,6 +49,11 @@ export type VendorOrder = {
   vendorEarnings: string;
   commissionAmount: string;
   status: string;
+  fundsStatus?: "PENDING_FULFILLMENT" | "ESCROW" | "AVAILABLE" | "DISPUTED" | "IN_PAYOUT" | "PAID_OUT" | "REFUNDED";
+  deliveryVerifiedAt?: string | null;
+  escrowStartedAt?: string | null;
+  escrowExpiresAt?: string | null;
+  clearedAt?: string | null;
   vendor: { name: string; slug: string; logoUrl: string | null };
 };
 
@@ -56,7 +61,7 @@ export type Order = {
   id: string;
   number: string;
   status: OrderStatus;
-  paymentStatus: "UNPAID" | "PAID" | "PARTIAL" | "REFUNDED";
+  paymentStatus: "PENDING" | "UNPAID" | "PAID" | "PARTIAL" | "FAILED" | "PARTIALLY_REFUNDED" | "REFUNDED";
   deliveryMethod: "STANDARD" | "EXPRESS" | "PICKUP";
   subtotal: string;
   deliveryFee: string;
@@ -211,6 +216,49 @@ export async function cancelOrder(
   if (!res.ok || !data.success) {
     throw new Error(data?.error?.message ?? "Failed to cancel order");
   }
+}
+
+/**
+ * Customer confirms they have physically received a dispatched vendor package.
+ * Starts the 48-hour buyer protection escrow inspection window.
+ */
+export async function confirmOrderDelivery(
+  vendorOrderId: string,
+  token?: string | null,
+  note?: string,
+): Promise<{ message: string }> {
+  const res = await authFetch(`/orders/escrow/verify-delivery`, token, {
+    method: "POST",
+    body: JSON.stringify({
+      vendorOrderId,
+      confirmedBy: "CUSTOMER",
+      ...(note ? { note } : {}),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data?.error?.message ?? "Failed to confirm package delivery");
+  }
+  return { message: data.message };
+}
+
+/**
+ * Customer early-confirms satisfaction during the 48-hour escrow window,
+ * immediately releasing vendor funds to available balance.
+ */
+export async function confirmSatisfiedReleaseEscrow(
+  vendorOrderId: string,
+  token?: string | null,
+): Promise<{ message: string }> {
+  const res = await authFetch(`/orders/escrow/confirm-receipt`, token, {
+    method: "POST",
+    body: JSON.stringify({ vendorOrderId }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data?.error?.message ?? "Failed to release escrow funds");
+  }
+  return { message: data.message };
 }
 
 /**

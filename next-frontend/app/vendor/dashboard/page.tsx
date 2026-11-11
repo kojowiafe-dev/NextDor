@@ -115,6 +115,10 @@ interface VendorOrder {
   commissionAmount: number | string;
   vendorEarnings: number | string;
   status: "PENDING" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+  fundsStatus?: "PENDING_FULFILLMENT" | "ESCROW" | "AVAILABLE" | "IN_PAYOUT" | "PAID_OUT" | "DISPUTED" | "REFUNDED";
+  deliveryVerifiedAt?: string | null;
+  escrowStartedAt?: string | null;
+  escrowExpiresAt?: string | null;
   notes?: string | null;
   clearedAt?: string | null;
   createdAt: string;
@@ -1704,7 +1708,12 @@ export default function VendorDashboardPage() {
                 {filteredOrders.map((vo) => {
                   const isUpdating = updatingOrderId === vo.id;
                   const addr = vo.order.shippingAddress || {};
-                  const isCleared = vo.clearedAt && new Date(vo.clearedAt) <= new Date();
+                  const isCleared =
+                    vo.fundsStatus === "AVAILABLE" ||
+                    vo.fundsStatus === "IN_PAYOUT" ||
+                    vo.fundsStatus === "PAID_OUT" ||
+                    Boolean(vo.clearedAt && new Date(vo.clearedAt) <= new Date());
+                  const escrowEndDate = vo.escrowExpiresAt || vo.clearedAt;
 
                   return (
                     <div
@@ -1861,14 +1870,12 @@ export default function VendorDashboardPage() {
                           )}
 
                           {vo.status === "SHIPPED" && (
-                            <button
-                              onClick={() => handleUpdateOrderStatus(vo.id, "DELIVERED", "Confirmed delivered to customer")}
-                              disabled={isUpdating}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition shadow-xs"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              <span>Confirm Delivery (Start 48h Escrow)</span>
-                            </button>
+                            <div className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800 border border-indigo-200">
+                              <Truck className="h-3.5 w-3.5 text-indigo-600" />
+                              <span>
+                                In Transit • Awaiting Customer / Courier Delivery Confirmation
+                              </span>
+                            </div>
                           )}
 
                           {vo.status === "DELIVERED" && (
@@ -1877,7 +1884,7 @@ export default function VendorDashboardPage() {
                               <span>
                                 {isCleared
                                   ? "48h Escrow Cleared • Ready for MoMo Payout"
-                                  : `In 48h Escrow (Clears ${vo.clearedAt ? new Date(vo.clearedAt).toLocaleDateString() : "in 48h"})`}
+                                  : `In 48h Escrow (Clears ${escrowEndDate ? new Date(escrowEndDate).toLocaleString("en-GH", { dateStyle: "short", timeStyle: "short" }) : "in 48h"})`}
                               </span>
                             </div>
                           )}
@@ -1992,9 +1999,9 @@ export default function VendorDashboardPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                     <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-2xs">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Step 1</span>
-                      <p className="font-semibold text-xs text-zinc-900 mt-1">Delivery Confirmation</p>
+                      <p className="font-semibold text-xs text-zinc-900 mt-1">Customer / Courier Delivery Verification</p>
                       <p className="text-[11px] text-zinc-500 mt-0.5">
-                        You dispatch and deliver the item. Marking the order as DELIVERED initiates the 48-hour escrow safety clock.
+                        You dispatch the item with a courier. Once the customer clicks "I've Received My Order" (or the courier confirms delivery), the 48-hour escrow safety clock begins.
                       </p>
                     </div>
 

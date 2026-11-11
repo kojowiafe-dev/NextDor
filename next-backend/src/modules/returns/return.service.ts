@@ -12,7 +12,7 @@ import {
 import { ReturnRepository } from "./return.repository.js";
 import { Money } from "../../domain/Money.js";
 import { toPesewas } from "../payments/paystack.js";
-import type { AuthUser } from "../../lib/auth.guards.js";
+import { ADMIN_ROLES, type AuthUser } from "../../lib/auth.guards.js";
 import type {
   CreateReturnRequestInput,
   ReviewReturnRequestInput,
@@ -33,8 +33,10 @@ export class ReturnService {
     const order = await this.repo.findOrderForReturn(orderNumber);
     if (!order) throw new NotFoundError(`Order ${orderNumber}`);
 
-    // Must be customer who owns order or admin
-    if (caller.role === "CUSTOMER" && order.userId && order.userId !== caller.userId) {
+    // Must be the customer who owns the order or a platform administrator
+    const isOrderOwner = Boolean(order.userId && order.userId === caller.userId);
+    const isAdmin = ADMIN_ROLES.includes(caller.role as any);
+    if (!isOrderOwner && !isAdmin) {
       throw new ForbiddenError("You can only request returns for your own orders.");
     }
 
@@ -177,11 +179,16 @@ export class ReturnService {
     const returnRequest = await this.repo.findReturnRequestById(returnId);
     if (!returnRequest) throw new NotFoundError(`Return request ${returnId}`);
 
-    if (caller.role === "CUSTOMER" && returnRequest.userId !== caller.userId) {
-      throw new ForbiddenError("You can only dispute your own return requests.");
-    }
-    if ((caller.role === "VENDOR_OWNER" || caller.role === "VENDOR_STAFF") && returnRequest.vendorId !== caller.vendorId) {
-      throw new ForbiddenError("You can only dispute return requests for your store.");
+    const isCustomerOwner = Boolean(returnRequest.userId && returnRequest.userId === caller.userId);
+    const isStoreVendor = Boolean(
+      (caller.role === "VENDOR_OWNER" || caller.role === "VENDOR_STAFF") &&
+        caller.vendorId &&
+        returnRequest.vendorId === caller.vendorId,
+    );
+    const isAdmin = ADMIN_ROLES.includes(caller.role as any);
+
+    if (!isCustomerOwner && !isStoreVendor && !isAdmin) {
+      throw new ForbiddenError("You do not have permission to dispute this return request.");
     }
 
     const disputed = await this.repo.disputeReturnRequest(returnId, input.disputeNotes);
@@ -371,11 +378,16 @@ export class ReturnService {
     const ret = await this.repo.findReturnRequestById(id);
     if (!ret) throw new NotFoundError(`Return request ${id}`);
 
-    if (caller.role === "CUSTOMER" && ret.userId !== caller.userId) {
+    const isCustomerOwner = Boolean(ret.userId && ret.userId === caller.userId);
+    const isStoreVendor = Boolean(
+      (caller.role === "VENDOR_OWNER" || caller.role === "VENDOR_STAFF") &&
+        caller.vendorId &&
+        ret.vendorId === caller.vendorId,
+    );
+    const isAdmin = ADMIN_ROLES.includes(caller.role as any);
+
+    if (!isCustomerOwner && !isStoreVendor && !isAdmin) {
       throw new ForbiddenError("You cannot view this return request.");
-    }
-    if ((caller.role === "VENDOR_OWNER" || caller.role === "VENDOR_STAFF") && ret.vendorId !== caller.vendorId) {
-      throw new ForbiddenError("You cannot view returns for other vendors.");
     }
 
     return ret;

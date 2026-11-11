@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
 import { PayoutService } from "./payout.service.js";
 import { requireAdmin, requireSuperAdmin } from "../../lib/auth.guards.js";
+import { verifyWebhookSignature } from "../payments/paystack.js";
+import { config } from "../../config/env.js";
+import { logger } from "../../lib/logger.js";
 import {
   CreatePayoutBatchSchema,
   ExecutePayoutBatchSchema,
@@ -118,17 +121,31 @@ export const payoutRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  // ─── Paystack Transfer Webhooks ─────────────────────────────────────────────
+  // ─── Paystack Transfer Webhooks (HMAC-SHA512 Verified) ─────────────────────
 
   app.post(
     "/webhooks/transfers",
     {
+      config: { rateLimit: false },
       schema: {
-        description: "Inbound webhook for Paystack Transfer success and failure events",
+        description: "Inbound webhook for Paystack Transfer success and failure events (HMAC-SHA512 verified)",
         tags: ["Admin Payouts"],
       },
     },
     async (req, reply) => {
+      const signature = req.headers["x-paystack-signature"] as string | undefined;
+      const rawBody = (req as any).rawBody as string | undefined;
+
+      if (!signature) {
+        logger.warn({ ip: req.ip }, "security: missing x-paystack-signature on transfer webhook");
+        return reply.status(400).send({ success: false, message: "Missing x-paystack-signature header" });
+      }
+
+      if (!verifyWebhookSignature(rawBody, signature, config.PAYSTACK_SECRET_KEY)) {
+        logger.warn({ ip: req.ip }, "security: invalid Paystack transfer webhook signature");
+        return reply.status(401).send({ success: false, message: "Invalid webhook signature" });
+      }
+
       const parsed = PaystackTransferWebhookSchema.safeParse(req.body);
       if (parsed.success) {
         await payoutService.handleTransferWebhook(parsed.data);

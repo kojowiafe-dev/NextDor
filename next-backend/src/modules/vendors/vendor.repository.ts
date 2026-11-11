@@ -331,7 +331,9 @@ export class VendorRepository {
   }
 
   /**
-   * Updates sub-order fulfillment/dispatch status and initiates 48h escrow clearance upon delivery.
+   * Updates sub-order fulfillment/dispatch status (PROCESSING / SHIPPED / CANCELLED).
+   * NOTE: Delivery verification and the 48-hour escrow clock are exclusively initiated
+   * by EscrowService.verifyDelivery (triggered by customer confirmation or courier/admin).
    */
   async updateVendorOrderStatus(
     vendorId: string,
@@ -343,18 +345,6 @@ export class VendorRepository {
       status,
       notes: notes !== undefined ? notes : undefined,
     };
-
-    // If status is DELIVERED and clearedAt is not yet set, initiate 48h escrow clearance timer
-    if (status === "DELIVERED") {
-      const existing = await prisma.vendorOrder.findUnique({
-        where: { id: vendorOrderId },
-        select: { clearedAt: true },
-      });
-      if (!existing?.clearedAt) {
-        data.clearedAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48-hour escrow window
-        data.fundsStatus = "ESCROW";
-      }
-    }
 
     return prisma.vendorOrder.update({
       where: { id: vendorOrderId },
@@ -423,35 +413,34 @@ export class VendorRepository {
         },
         _sum: { vendorEarnings: true, subtotal: true },
       }),
-      // Pre-delivery fulfillment (paid, pending dispatch or transit, payoutId is null)
+      // Pre-delivery fulfillment (paid, pending dispatch or in transit, not yet delivery-verified)
       prisma.vendorOrder.aggregate({
         where: {
           vendorId,
           status: { in: ["PENDING", "PROCESSING", "SHIPPED"] },
+          fundsStatus: "PENDING_FULFILLMENT",
           payoutId: null,
           order: { paymentStatus: "PAID" },
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },
       }),
-      // In 48h escrow (delivered and paid but clearedAt > now)
+      // In 48h escrow (delivery verified by customer/courier, 48h buyer inspection window active)
       prisma.vendorOrder.aggregate({
         where: {
           vendorId,
-          status: "DELIVERED",
-          clearedAt: { gt: now },
+          fundsStatus: "ESCROW",
           payoutId: null,
           order: { paymentStatus: "PAID" },
         },
         _sum: { vendorEarnings: true },
         _count: { id: true },
       }),
-      // Available for payout (delivered and paid, clearedAt <= now and payoutId is null)
+      // Available for payout (48h escrow cleared or early-confirmed by customer, awaiting batch)
       prisma.vendorOrder.aggregate({
         where: {
           vendorId,
-          status: "DELIVERED",
-          clearedAt: { lte: now },
+          fundsStatus: "AVAILABLE",
           payoutId: null,
           order: { paymentStatus: "PAID" },
         },

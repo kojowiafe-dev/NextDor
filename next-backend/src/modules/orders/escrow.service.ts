@@ -15,6 +15,7 @@ import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
 import { LedgerService } from "../payments/ledger.service.js";
 import { Money } from "../../domain/Money.js";
+import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import {
   NotFoundError,
   BadRequestError,
@@ -33,6 +34,7 @@ export type DeliveryVerifyInput = {
   /** Actor confirming delivery: "DELIVERY_AGENT" | "CUSTOMER" | "TRACKING_SYSTEM" */
   confirmedBy: "DELIVERY_AGENT" | "CUSTOMER" | "TRACKING_SYSTEM";
   actorId?: string;
+  isAdmin?: boolean;
   note?: string;
 };
 
@@ -64,12 +66,42 @@ export class EscrowService {
    * Starts the 48-hour inspection window (ledger entry C).
    */
   async verifyDelivery(input: DeliveryVerifyInput): Promise<void> {
+    let emailNotification: {
+      email: string;
+      customerName: string;
+      orderNumber: string;
+      deliveryAddress: string;
+    } | null = null;
+
     await prisma.$transaction(async (tx) => {
       const vo = await tx.vendorOrder.findUnique({
         where: { id: input.vendorOrderId },
-        include: { vendor: { select: { id: true, commissionRate: true } } },
+        include: {
+          vendor: { select: { id: true, name: true, commissionRate: true } },
+          order: {
+            select: {
+              id: true,
+              number: true,
+              userId: true,
+              guestEmail: true,
+              shippingAddress: true,
+              paymentStatus: true,
+              notes: true,
+              user: { select: { name: true, email: true } },
+            },
+          },
+        },
       });
       if (!vo) throw new NotFoundError(`VendorOrder ${input.vendorOrderId}`);
+
+      // Authorization guard: Customer must own the order; agent/system verification requires admin privilege
+      if (input.confirmedBy === "CUSTOMER") {
+        if (!input.actorId || input.actorId !== vo.order.userId) {
+          throw new ForbiddenError("You can only verify delivery for your own orders.");
+        }
+      } else if (!input.isAdmin) {
+        throw new ForbiddenError("Only authorized logistics dispatchers or administrators may verify third-party delivery.");
+      }
 
       if (vo.fundsStatus !== "PENDING_FULFILLMENT") {
         throw new BadRequestError(
@@ -100,7 +132,7 @@ export class EscrowService {
         data: {
           orderId: vo.orderId,
           status: "DELIVERED_VERIFIED",
-          note: `Delivery verified by ${input.confirmedBy}${input.actorId ? ` (actor: ${input.actorId})` : ""}. Escrow window: ${ESCROW_WINDOW_HOURS}h until ${escrowExpiry.toISOString()}`,
+          note: `Delivery verified by ${input.confirmedBy === "CUSTOMER" ? "Customer" : input.confirmedBy}${input.note ? ` — ${input.note}` : ""}. 48-hour Buyer Protection Escrow active until ${escrowExpiry.toLocaleString("en-GH")}.`,
           createdBy: input.actorId ?? null,
         },
       });
@@ -115,9 +147,18 @@ export class EscrowService {
         (v) => v.fundsStatus === "ESCROW" || v.fundsStatus === "AVAILABLE" || v.fundsStatus === "PAID_OUT",
       );
       if (allVerified) {
+        const notesLower = (vo.order.notes || "").toLowerCase();
+        const isCod =
+          notesLower.includes("payment method: cod") ||
+          notesLower.includes("cash on delivery") ||
+          notesLower.includes("cod");
+
         await tx.order.update({
           where: { id: vo.orderId },
-          data: { status: "DELIVERED_VERIFIED" },
+          data: {
+            status: "DELIVERED_VERIFIED",
+            ...(isCod && vo.order.paymentStatus === "PENDING" ? { paymentStatus: "PAID" } : {}),
+          },
         });
       }
 
@@ -130,11 +171,37 @@ export class EscrowService {
         vendorId: vo.vendor.id,
       });
 
+      const shipAddr = (vo.order.shippingAddress as any) || {};
+      const customerEmail = vo.order.guestEmail || vo.order.user?.email;
+      if (customerEmail) {
+        emailNotification = {
+          email: customerEmail,
+          customerName: shipAddr.recipientName || vo.order.user?.name || "Valued Customer",
+          orderNumber: vo.order.number,
+          deliveryAddress: `${shipAddr.street || "Direct Delivery"}, ${shipAddr.city || "Accra"}, ${shipAddr.region || "Greater Accra"}`,
+        };
+      }
+
       logger.info(
         { vendorOrderId: vo.id, escrowExpiry, confirmedBy: input.confirmedBy },
         "escrow: delivery verified, 48h window started",
       );
     });
+
+    if (emailNotification) {
+      const n = emailNotification as {
+        email: string;
+        customerName: string;
+        orderNumber: string;
+        deliveryAddress: string;
+      };
+      dispatchEmailAsync({
+        type: "delivery_confirmation",
+        params: n,
+      }).catch((err) => {
+        logger.warn({ err, orderNumber: n.orderNumber }, "Failed to queue delivery confirmation email");
+      });
+    }
   }
 
   /**
@@ -220,9 +287,17 @@ export class EscrowService {
     return prisma.$transaction(async (tx) => {
       const vo = await tx.vendorOrder.findUnique({
         where: { id: input.vendorOrderId },
-        include: { vendor: { select: { id: true } } },
+        include: {
+          vendor: { select: { id: true } },
+          order: { select: { id: true, userId: true } },
+        },
       });
       if (!vo) throw new NotFoundError(`VendorOrder ${input.vendorOrderId}`);
+
+      // Authorization guard: Customer must own the order to open a dispute
+      if (!input.customerId || input.customerId !== vo.order.userId) {
+        throw new ForbiddenError("You can only open disputes for your own orders.");
+      }
 
       const disputeableFundStatuses = ["ESCROW", "AVAILABLE"] as const;
       if (!disputeableFundStatuses.includes(vo.fundsStatus as any)) {
@@ -439,9 +514,18 @@ export class EscrowService {
     await prisma.$transaction(async (tx) => {
       const vo = await tx.vendorOrder.findUnique({
         where: { id: vendorOrderId },
-        include: { vendor: { select: { id: true, commissionRate: true } } },
+        include: {
+          vendor: { select: { id: true, commissionRate: true } },
+          order: { select: { id: true, userId: true } },
+        },
       });
       if (!vo) throw new NotFoundError(`VendorOrder ${vendorOrderId}`);
+
+      if (trigger === "CUSTOMER_CONFIRMED") {
+        if (!actorId || actorId !== vo.order.userId) {
+          throw new ForbiddenError("You can only confirm receipt for your own orders.");
+        }
+      }
 
       if (vo.fundsStatus !== "ESCROW") {
         logger.warn(

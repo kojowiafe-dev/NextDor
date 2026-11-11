@@ -2,10 +2,10 @@
  * WooCommerce Sync Routes.
  */
 
+import crypto from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { SyncService } from "./sync.service.js";
 import { AuthService } from "../auth/auth.service.js";
-import { config } from "../../config/env.js";
 import { ForbiddenError } from "../../lib/errors.js";
 
 export const syncRoutes: FastifyPluginAsync = async (app) => {
@@ -47,11 +47,21 @@ export const syncRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      // Check for x-sync-secret header or Admin bearer token
+      // Check for x-sync-secret header or Admin bearer token.
+      // SECURITY: JWT_SECRET is NEVER accepted here (secret reuse would let anyone who
+      // obtains it forge tokens AND trigger syncs). Only a dedicated SYNC_SECRET (>= 32 chars)
+      // compared in constant time.
       const syncSecret = req.headers["x-sync-secret"];
+      const configuredSecret = process.env.SYNC_SECRET;
       let isAuthorized = false;
 
-      if (syncSecret && (syncSecret === config.JWT_SECRET || syncSecret === process.env.SYNC_SECRET)) {
+      if (
+        typeof syncSecret === "string" &&
+        configuredSecret &&
+        configuredSecret.length >= 32 &&
+        syncSecret.length === configuredSecret.length &&
+        crypto.timingSafeEqual(Buffer.from(syncSecret), Buffer.from(configuredSecret))
+      ) {
         isAuthorized = true;
       } else {
         const authHeader = req.headers.authorization;

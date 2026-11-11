@@ -98,6 +98,30 @@ export class InventoryService {
   // ═══════════════════════════════════════════════════════════════════
 
   /**
+   * SECURITY: Tenant isolation for stock mutations.
+   * `vendorId === undefined` means a platform admin (unscoped).
+   * Vendors may only touch their OWN products, in their own or platform-shared warehouses.
+   */
+  async assertStockAccess(vendorId: string | undefined, productId: string, warehouseIds: string[]) {
+    if (vendorId === undefined) return;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { vendorId: true },
+    });
+    if (!product || product.vendorId !== vendorId) {
+      throw new NotFoundError("Product not found for this vendor");
+    }
+
+    for (const warehouseId of warehouseIds) {
+      const warehouse = await this.repo.findWarehouseById(warehouseId);
+      if (!warehouse || (warehouse.vendorId && warehouse.vendorId !== vendorId)) {
+        throw new NotFoundError("Warehouse not found for this vendor");
+      }
+    }
+  }
+
+  /**
    * Set or update stock quantity at a specific warehouse.
    */
   async setWarehouseStock(input: SetWarehouseStockInput, performedBy?: string) {
