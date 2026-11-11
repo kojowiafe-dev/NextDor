@@ -9,12 +9,20 @@ export const ordersCache = createSWRCache<OrdersPageCache>("nextdor_my_orders", 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type OrderStatus =
+  // Current lifecycle values
+  | "PLACED"
+  | "ACCEPTED"
+  | "DISPATCHED"
+  | "DELIVERED_VERIFIED"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "DISPUTED"
+  // Legacy values (existing orders in DB — kept for backward compat)
   | "PENDING"
   | "CONFIRMED"
   | "PROCESSING"
   | "SHIPPED"
   | "DELIVERED"
-  | "CANCELLED"
   | "REFUNDED";
 
 export type OrderItem = {

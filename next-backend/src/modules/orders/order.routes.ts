@@ -24,7 +24,12 @@ import { vendorService } from "../vendors/vendor.routes.js";
 import { optionalAuth, requireAdmin, requireAuth, requireVendor, resolveVendorId } from "../../lib/auth.guards.js";
 import type { OrderStatus, VendorOrderStatus } from "@prisma/client";
 
-const ORDER_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"];
+const ORDER_STATUSES = [
+  // Current lifecycle values
+  "PLACED", "ACCEPTED", "DISPATCHED", "DELIVERED_VERIFIED", "COMPLETED", "CANCELLED", "DISPUTED",
+  // Legacy values (existing orders — backward compat)
+  "PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "REFUNDED",
+];
 
 // ─── Customer Order Routes ────────────────────────────────────────────────────
 

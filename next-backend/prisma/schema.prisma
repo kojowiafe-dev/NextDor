@@ -390,6 +390,16 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
   DISPUTED
+
+  // ── Legacy values kept for backward-compat (existing DB rows) ──────────
+  // These were used before the order lifecycle was redesigned.
+  // New orders will NOT use these; they are preserved so Prisma can read old rows.
+  PENDING     /// @deprecated Use PLACED
+  CONFIRMED   /// @deprecated Use ACCEPTED
+  PROCESSING  /// @deprecated Use ACCEPTED
+  SHIPPED     /// @deprecated Use DISPATCHED
+  DELIVERED   /// @deprecated Use DELIVERED_VERIFIED
+  REFUNDED    /// @deprecated Use COMPLETED + refund record
 }
 
 /// Spec §3: Payment lifecycle — did the customer pay?

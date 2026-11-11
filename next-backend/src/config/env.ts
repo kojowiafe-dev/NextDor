@@ -70,6 +70,7 @@ const envSchema = z.object({
   // ── Paystack ─────────────────────────────────────────────────────────────
   PAYSTACK_SECRET_KEY: z.string().min(10),
   PAYSTACK_PUBLIC_KEY: z.string().min(10),
+  PAYSTACK_LIVE_KEY: z.string().optional(),
   // DEPRECATED + IGNORED: Paystack signs webhooks (x-paystack-signature) with the
   // account SECRET KEY — there is no separate webhook secret. Kept optional so
   // existing deployments that still define it keep booting.
@@ -175,7 +176,13 @@ function parseEnv(): Config {
     process.exit(1);
   }
 
-  return result.data;
+  const data = result.data;
+  // If PAYSTACK_LIVE_KEY is supplied, automatically prioritize it as the active secret key
+  if (data.PAYSTACK_LIVE_KEY && data.PAYSTACK_LIVE_KEY.startsWith("sk_live_")) {
+    data.PAYSTACK_SECRET_KEY = data.PAYSTACK_LIVE_KEY;
+  }
+
+  return data;
 }
 
 // Singleton — parsed once at module load
