@@ -58,6 +58,15 @@ const CARRIER_OPTIONS = [
   },
 ];
 
+function generateTrackingCode(prefix: string): string {
+  const array = new Uint32Array(1);
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(array);
+    return `${prefix}-${100000 + (array[0] % 900000)}`;
+  }
+  return `${prefix}-100000`;
+}
+
 export function CourierDispatchModal({
   isOpen,
   onClose,
@@ -68,9 +77,7 @@ export function CourierDispatchModal({
   onDispatch,
 }: CourierDispatchModalProps) {
   const [carrier, setCarrier] = useState<"FEZ" | "KWIK" | "DHL" | "INTERNAL">("FEZ");
-  const [trackingNumber, setTrackingNumber] = useState(
-    `ND-FEZ-${Math.floor(100000 + Math.random() * 900000)}`
-  );
+  const [trackingNumber, setTrackingNumber] = useState(() => generateTrackingCode("ND-FEZ"));
   const [driverName, setDriverName] = useState("");
   const [driverPhone, setDriverPhone] = useState("");
   const [estimatedDelivery, setEstimatedDelivery] = useState("");
@@ -84,13 +91,13 @@ export function CourierDispatchModal({
     setCarrier(newCarrier);
     const selected = CARRIER_OPTIONS.find((c) => c.id === newCarrier);
     const prefix = selected ? selected.prefix : "ND";
-    setTrackingNumber(`${prefix}-${Math.floor(100000 + Math.random() * 900000)}`);
+    setTrackingNumber(generateTrackingCode(prefix));
   };
 
   const handleGenerateTracking = () => {
     const selected = CARRIER_OPTIONS.find((c) => c.id === carrier);
     const prefix = selected ? selected.prefix : "ND";
-    setTrackingNumber(`${prefix}-${Math.floor(100000 + Math.random() * 900000)}`);
+    setTrackingNumber(generateTrackingCode(prefix));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

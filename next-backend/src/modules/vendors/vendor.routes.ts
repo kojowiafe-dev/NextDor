@@ -21,6 +21,7 @@ import { prisma } from "../../lib/prisma.js";
 import { SyncService } from "../sync/sync.service.js";
 import { MerchantAnalyticsService } from "./merchant.analytics.service.js";
 import { requireAdmin, requireVendor, resolveVendorId } from "../../lib/auth.guards.js";
+import { AuthService } from "../auth/auth.service.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 
 const merchantAnalyticsService = new MerchantAnalyticsService();
@@ -144,21 +145,21 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
 
   /**
    * POST /vendors/register
-   * Self-serve onboarding for new merchants.
+   * Self-serve onboarding for new merchants or existing Customer account upgrade.
    */
   app.post(
     "/register",
     {
       schema: {
-        description: "Register a new vendor store and owner account",
+        description: "Register a new vendor store (or upgrade an existing customer account)",
         tags: ["Vendors"],
         body: {
           type: "object",
-          required: ["ownerName", "email", "password", "storeName"],
+          required: ["ownerName", "email", "storeName"],
           properties: {
             ownerName: { type: "string", minLength: 2 },
             email: { type: "string", format: "email" },
-            password: { type: "string", minLength: 8 },
+            password: { type: "string" },
             phone: { type: "string" },
             storeName: { type: "string", minLength: 2 },
             storeDescription: { type: "string" },
@@ -170,7 +171,19 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const body = req.body as any;
-      const result = await vendorService.registerVendor(body);
+
+      let authenticatedUserId: string | undefined;
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        try {
+          const payload = AuthService.verifyAccessToken(authHeader.slice(7));
+          authenticatedUserId = payload.sub;
+        } catch {
+          // Optional token on public route: ignore expired/invalid token and fall back to password check
+        }
+      }
+
+      const result = await vendorService.registerVendor(body, authenticatedUserId);
 
       req.log.info(
         { ip: req.ip, storeName: body.storeName, email: body.email, userAgent: req.headers["user-agent"] },

@@ -13,6 +13,7 @@ describe("Phase 9: Dynamic Delivery Zones, Geo-Pricing & Logistics Invariants", 
     const quotes = await service.calculateQuote({
       region: "Volta",
       district: "Ho",
+      weightKg: 1.0,
     });
 
     expect(quotes).toHaveLength(3);

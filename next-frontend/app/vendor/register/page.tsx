@@ -21,7 +21,8 @@ import {
 
 export default function VendorRegisterPage() {
   const router = useRouter();
-  const { user, isAuthenticated, isVendor, isAdmin, isLoading } = useAuth();
+  const { user, token, isAuthenticated, isVendor, isAdmin, isLoading, setSession } = useAuth();
+  const isCustomerUpgrade = Boolean(isAuthenticated && user && !isVendor && !isAdmin);
 
   // If already authenticated as vendor or admin, redirect immediately
   useEffect(() => {
@@ -44,6 +45,17 @@ export default function VendorRegisterPage() {
   const [momoNetwork, setMomoNetwork] = useState("MTN");
   const [momoNumber, setMomoNumber] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
+
+  // Pre-fill existing customer details when signed in as a shopper
+  useEffect(() => {
+    if (isCustomerUpgrade && user) {
+      setOwnerName((prev) => prev || user.name || "");
+      setEmail((prev) => prev || user.email || "");
+      if (user.phone) {
+        setPhone((prev) => prev || user.phone || "");
+      }
+    }
+  }, [isCustomerUpgrade, user]);
 
   // Status State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,13 +80,24 @@ export default function VendorRegisterPage() {
     setErrorMsg(null);
 
     try {
+      const effectiveToken =
+        token ||
+        (typeof window !== "undefined" ? localStorage.getItem("nextdor-token") : null);
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (effectiveToken) {
+        headers.Authorization = `Bearer ${effectiveToken}`;
+      }
+
       const res = await fetch(`${API_BASE}/vendors/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           ownerName: ownerName.trim(),
           email: email.toLowerCase().trim(),
-          password,
+          ...(password ? { password } : {}),
           phone: phone.trim(),
           storeName: storeName.trim(),
           storeDescription: storeDescription.trim() || undefined,
@@ -97,31 +120,30 @@ export default function VendorRegisterPage() {
         return;
       }
 
-      // Save tokens and session
-      const { tokens, user, vendor } = json.data;
-      if (typeof window !== "undefined") {
-        if (tokens?.accessToken) {
-          localStorage.setItem("nextdor-token", tokens.accessToken);
-          localStorage.setItem("vendor_token", tokens.accessToken);
-        }
-        if (user) {
-          localStorage.setItem(
-            "nextdor-auth",
-            JSON.stringify({
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              role: "vendor_owner",
-              vendorId: vendor?.id || user.vendorId,
-              avatarInitials: user.name
-                .split(" ")
-                .map((n: string) => n[0])
-                .join("")
-                .toUpperCase()
-                .slice(0, 2),
-            })
-          );
-        }
+      // Save tokens and update live AuthContext session (e.g. upgraded Customer -> Vendor Owner)
+      const { tokens, user: updatedUser, vendor } = json.data;
+      if (tokens?.accessToken && updatedUser) {
+        const initials = (updatedUser.name || "ND")
+          .split(" ")
+          .filter(Boolean)
+          .map((n: string) => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2);
+
+        setSession(
+          {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            name: updatedUser.name,
+            phone: updatedUser.phone ?? undefined,
+            role: "vendor_owner",
+            vendorId: vendor?.id || updatedUser.vendorId,
+            avatarInitials: initials,
+          },
+          tokens.accessToken,
+          tokens.refreshToken
+        );
       }
 
       // Direct redirection into the merchant portal
@@ -215,6 +237,20 @@ export default function VendorRegisterPage() {
       {/* Main Form Container */}
       <div className="mx-auto max-w-2xl px-4 pt-10 sm:px-6">
         <div className="rounded-2xl border border-white/10 bg-[#161b22] p-6 sm:p-8 shadow-xl">
+          {isCustomerUpgrade && user && (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-200">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-white">
+                  Upgrading Your NextDor Shopper Account ({user.email})
+                </p>
+                <p className="mt-0.5 text-emerald-200/80 leading-relaxed">
+                  Your existing customer orders, saved addresses, and wishlist will stay connected to this account while we link your new Merchant Store.
+                </p>
+              </div>
+            </div>
+          )}
+
           {errorMsg && (
             <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-xs text-red-300">
               <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
@@ -303,32 +339,38 @@ export default function VendorRegisterPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     className="mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                   />
-                  <p className="mt-1 text-[11px] text-zinc-500">
-                    This will be used to log in to your merchant portal.
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    {isCustomerUpgrade
+                      ? "Linked to your signed-in NextDor account."
+                      : "Already have a NextDor customer account? Enter your existing email and current password below to upgrade it into a Seller store."}
                   </p>
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="font-semibold text-zinc-300">Portal Password *</label>
-                  <div className="relative mt-1.5">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      minLength={8}
-                      placeholder="Minimum 8 characters"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                {!(isCustomerUpgrade && user && email.toLowerCase().trim() === user.email.toLowerCase().trim()) && (
+                  <div className="sm:col-span-2">
+                    <label className="font-semibold text-zinc-300">
+                      Portal Password (or Existing Account Password) *
+                    </label>
+                    <div className="relative mt-1.5">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        minLength={8}
+                        placeholder="Minimum 8 characters (or your existing NextDor password)"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 

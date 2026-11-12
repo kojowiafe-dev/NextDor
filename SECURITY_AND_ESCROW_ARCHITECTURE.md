@@ -285,4 +285,37 @@ stateDiagram-v2
 - **Why This Choice Was Made:**
   - **Data Trustworthiness:** If an API call fails or a merchant has zero deliveries, the UI must show `0` or an explicit error state — never fabricated numbers.
 
+---
+
+## Part 6: Customer-to-Vendor Account Transition (Unified Identity)
+
+### 6.1 Seamless & Secure Shopper-to-Merchant Account Upgrade
+- **Files:** [`next-backend/src/modules/vendors/vendor.service.ts`](next-backend/src/modules/vendors/vendor.service.ts), [`next-backend/src/modules/vendors/vendor.repository.ts`](next-backend/src/modules/vendors/vendor.repository.ts), [`next-backend/src/modules/vendors/vendor.routes.ts`](next-backend/src/modules/vendors/vendor.routes.ts), [`next-frontend/app/vendor/register/page.tsx`](next-frontend/app/vendor/register/page.tsx), [`next-frontend/context/AuthContext.tsx`](next-frontend/context/AuthContext.tsx), [`next-frontend/components/account/AccountSidebar.tsx`](next-frontend/components/account/AccountSidebar.tsx), [`next-frontend/app/account/page.tsx`](next-frontend/app/account/page.tsx)
+- **The Problem:**
+  - When an existing NextDor shopper wanted to open a store on `/vendor/register` using their existing account email, `VendorService.registerVendor()` unconditionally threw `ConflictError("An account with this email address already exists.")`, forcing customers to create a separate email address just to sell on the platform.
+- **The Choice:**
+  1. **Unified Identity Upgrade (`VendorRepository.upgradeUserToVendor`):** When `POST /api/v1/vendors/register` receives an email belonging to an existing `CUSTOMER` account, the system upgrades that user in an ACID transaction — creating the `Vendor` record (`status: "PENDING_APPROVAL"`), linking `user.vendorId`, and promoting `user.role` to `VENDOR_OWNER` — while preserving all existing customer orders, saved addresses, and wishlist items.
+  2. **Cryptographic Ownership Verification (Anti-Hijacking Guard):** Before upgrading an existing account, `VendorService.registerVendor()` verifies that the caller owns the customer account via **either**:
+     - A valid JWT `Authorization: Bearer <token>` header matching `existingUser.id` (when signed in), **OR**
+     - A valid password matching `bcrypt.compare(dto.password, existingUser.passwordHash)` (when logged out).
+  3. **Immediate JWT Re-Issuance for Verified Accounts:** If `existingUser.emailVerified` is already `true`, the backend immediately mints fresh JWT tokens (`authService._issueTokens(updatedUser.id)`) carrying the new `VENDOR_OWNER` role and `vendorId`, and the frontend updates `AuthContext` via `setSession()` and routes directly to `/vendor/dashboard` without forcing a redundant OTP step.
+  4. **Customer Dashboard Entry Points:** Added **"Sell on NextDor • Open Store"** CTAs in `AccountSidebar.tsx` and `app/account/page.tsx`, and pre-filled customer details on `/vendor/register` when signed in.
+- **Why This Choice Was Made:**
+  - **Frictionless Conversion Without Compromising Security:** Customers can become sellers in 60 seconds under a single identity while keeping their shopping history, and requiring JWT or current-password verification prevents any third party from attaching a store to someone else's email address.
+
+### 6.2 Bulk Product Import — Device Photo Upload, Auto-Matching & Inline Photo Editing
+- **Files:** [`next-frontend/components/vendor/BulkUploadModal.tsx`](next-frontend/components/vendor/BulkUploadModal.tsx), [`next-frontend/app/vendor/dashboard/page.tsx`](next-frontend/app/vendor/dashboard/page.tsx), [`next-backend/src/modules/vendors/vendor.service.ts`](next-backend/src/modules/vendors/vendor.service.ts)
+- **The Problem:**
+  - The CSV/Excel bulk upload template previously required an `ImageUrl` (`https://...`), which real-world sellers do not have when their product photos are stored on their phone or computer (`tshirt.jpg`). Furthermore, if a seller left `ImageUrl` blank in the spreadsheet, the Vendor Inventory table's inline editor had no way to upload or change a product's photo after import.
+- **The Choice:**
+  1. **Step 3 Interactive Photo Assignment in `BulkUploadModal.tsx`:** Once the seller selects their CSV file, Step 3 displays an interactive review table where they can:
+     - **Upload Multiple Photos at Once (Auto-Match):** Select a batch of photos from their phone/PC (`<input type="file" multiple accept="image/*" />`), upload them to Cloudinary via `/api/upload`, and automatically match each photo to the right row by filename hint (`ImageFileOrUrl` column, e.g. `tshirt.jpg`), product `Name`, or in order for rows without photos.
+     - **Per-Row `"Upload Photo"` Button:** Click **"Upload Photo"** (or **"Change Photo"**) on any individual row inside the preview list before importing.
+  2. **Post-Import Inline Photo Upload (`app/vendor/dashboard/page.tsx`):** Added an **"Upload Photo / Change Photo"** button directly inside the Vendor Inventory inline OCC editor (both desktop table and mobile cards) so sellers can attach or update product photos at any time after importing.
+  3. **Backend URL Sanitization (`vendor.service.ts`):** Validated that `item.imageUrl` in `bulkCreateVendorProducts` begins with `https://`, `http://`, or `/uploads/` so local filenames left in spreadsheets never create broken `<img src="tshirt.jpg">` records.
+- **Why This Choice Was Made:**
+  - **Zero Technical Barrier for Merchants:** Sellers never need to know how to host images externally or copy web URLs into Excel — they can upload photos straight from their phone or laptop either during the bulk import preview or afterward in their inventory table.
+
+
+
 

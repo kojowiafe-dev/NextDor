@@ -215,6 +215,8 @@ export default function VendorDashboardPage() {
   const [editPreviousPrice, setEditPreviousPrice] = useState<string>("");
   const [editStock, setEditStock] = useState<string>("");
   const [editCategory, setEditCategory] = useState<string>("");
+  const [editImageUrl, setEditImageUrl] = useState<string>("");
+  const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   // Add product modal & Bulk Ingestion Modals
@@ -523,8 +525,43 @@ export default function VendorDashboardPage() {
     }
     setEditStock(String(product.stockQty ?? 0));
     setEditCategory(product.categories?.[0]?.name || "");
+    setEditImageUrl(product.images?.[0]?.url || "");
     setErrorNotice(null);
     setSuccessNotice(null);
+  }
+
+  async function handleEditImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setErrorNotice("Please select a valid image file (JPG, PNG, WebP).");
+      return;
+    }
+    setIsUploadingEditImage(true);
+    setErrorNotice(null);
+    try {
+      const token = getValidToken();
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "nextdor/products");
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.url) {
+        throw new Error(data.error || "Failed to upload image.");
+      }
+      setEditImageUrl(data.url);
+    } catch (err: any) {
+      setErrorNotice(err.message || "Failed to upload product image.");
+    } finally {
+      setIsUploadingEditImage(false);
+      e.target.value = "";
+    }
   }
 
   async function saveProductChanges(product: VendorProduct) {
@@ -557,6 +594,7 @@ export default function VendorDashboardPage() {
           salePrice: payloadSalePrice,
           stockQty: parseInt(editStock, 10),
           category: editCategory || undefined,
+          imageUrl: editImageUrl || undefined,
         }),
       });
 
@@ -1343,7 +1381,7 @@ export default function VendorDashboardPage() {
                     ) : (
                       filteredProducts.map((prod) => {
                         const isEditing = editingId === prod.id;
-                        const primaryImg = prod.images?.[0]?.url;
+                        const primaryImg = isEditing && editImageUrl ? editImageUrl : prod.images?.[0]?.url;
 
                         return (
                           <tr key={prod.id} className="hover:bg-zinc-50/70 transition">
@@ -1360,18 +1398,37 @@ export default function VendorDashboardPage() {
                                   <p className="font-semibold text-zinc-900 truncate">{prod.name}</p>
                                   <p className="text-xs text-zinc-400 line-clamp-1">{prod.description}</p>
                                   {isEditing ? (
-                                    <select
-                                      value={editCategory}
-                                      onChange={(e) => setEditCategory(e.target.value)}
-                                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 focus:border-purple-600 focus:outline-none"
-                                    >
-                                      <option value="">Select Category</option>
-                                      {availableCategories.map((c) => (
-                                        <option key={c} value={c}>
-                                          {c}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    <div className="mt-1.5 space-y-1.5">
+                                      <select
+                                        value={editCategory}
+                                        onChange={(e) => setEditCategory(e.target.value)}
+                                        className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 focus:border-purple-600 focus:outline-none"
+                                      >
+                                        <option value="">Select Category</option>
+                                        {availableCategories.map((c) => (
+                                          <option key={c} value={c}>
+                                            {c}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-100 transition">
+                                        <UploadCloud className="h-3 w-3" />
+                                        <span>
+                                          {isUploadingEditImage
+                                            ? "Uploading..."
+                                            : primaryImg
+                                            ? "Change Photo"
+                                            : "Upload Photo"}
+                                        </span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          disabled={isUploadingEditImage}
+                                          onChange={handleEditImageFileChange}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                    </div>
                                   ) : (
                                     <span className="mt-1 inline-block rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
                                       {prod.categories?.[0]?.name || "Uncategorized"}
@@ -1556,7 +1613,7 @@ export default function VendorDashboardPage() {
                 ) : (
                   filteredProducts.map((prod) => {
                     const isEditing = editingId === prod.id;
-                    const primaryImg = prod.images?.[0]?.url;
+                    const primaryImg = isEditing && editImageUrl ? editImageUrl : prod.images?.[0]?.url;
 
                     return (
                       <div key={prod.id} className="p-4 space-y-3 bg-white">
@@ -1599,6 +1656,10 @@ export default function VendorDashboardPage() {
 
                         {/* Status & Visibility Badges */}
                         <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          <span className="inline-flex items-center rounded bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+                            {prod.categories?.[0]?.name || "Uncategorized"}
+                          </span>
+
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                               prod.stockStatus === "IN_STOCK"
@@ -1627,8 +1688,42 @@ export default function VendorDashboardPage() {
                         {/* In-place OCC Edit Drawer */}
                         {isEditing ? (
                           <div className="mt-3 rounded-xl border border-purple-200 bg-purple-50/50 p-3 space-y-3">
-                            <p className="text-xs font-semibold text-purple-900">Update Stock & Price (OCC Protected)</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-semibold text-purple-900">Update Product (OCC Protected)</p>
+                              <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-50 transition">
+                                <UploadCloud className="h-3.5 w-3.5" />
+                                <span>
+                                  {isUploadingEditImage
+                                    ? "Uploading..."
+                                    : primaryImg
+                                    ? "Change Photo"
+                                    : "Upload Photo"}
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={isUploadingEditImage}
+                                  onChange={handleEditImageFileChange}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <div>
+                                <label className="block text-[11px] font-semibold text-zinc-600">Category</label>
+                                <select
+                                  value={editCategory}
+                                  onChange={(e) => setEditCategory(e.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
+                                >
+                                  <option value="">Select Category</option>
+                                  {availableCategories.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                               <div>
                                 <label className="block text-[11px] font-semibold text-zinc-600">Current Price (GHS) *</label>
                                 <input

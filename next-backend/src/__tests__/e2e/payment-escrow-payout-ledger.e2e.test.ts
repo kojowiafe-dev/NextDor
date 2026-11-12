@@ -265,28 +265,43 @@ describe("E2E: Payment Lifecycle, 48-Hour Escrow, MoMo Payouts & Financial Ledge
   });
 
   it("Step 3: Delivering order initiates 48-hour escrow — funds lock into inEscrowAmount", async () => {
-    // Merchant marks sub-order DELIVERED
-    const patchRes = await app.inject({
+    // 3a. Merchant marks sub-order SHIPPED (dispatched)
+    const shipRes = await app.inject({
       method: "PATCH",
       url: `/api/v1/vendors/portal/orders/${vendorOrderId}/status`,
       headers: {
         authorization: `Bearer ${vendorToken}`,
       },
       payload: {
-        status: "DELIVERED",
-        notes: "Package delivered to customer via Fez courier",
+        status: "SHIPPED",
+        notes: "Package dispatched via Fez courier",
       },
     });
+    expect(shipRes.statusCode).toBe(200);
 
-    expect(patchRes.statusCode).toBe(200);
+    // 3b. Customer verifies delivery — starts 48-hour escrow window
+    const verifyRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/orders/escrow/verify-delivery",
+      headers: {
+        authorization: `Bearer ${customerToken}`,
+      },
+      payload: {
+        vendorOrderId,
+        confirmedBy: "CUSTOMER",
+        note: "Received package in good condition",
+      },
+    });
+    expect(verifyRes.statusCode).toBe(200);
 
-    // Verify in database that clearedAt is set to ~48 hours in the future
+    // Verify in database that escrowExpiresAt is set to ~48 hours in the future
     const updatedVo = await prisma.vendorOrder.findUnique({
       where: { id: vendorOrderId },
     });
     expect(updatedVo?.status).toBe("DELIVERED");
-    expect(updatedVo?.clearedAt).not.toBeNull();
-    const hoursFromNow = (updatedVo!.clearedAt!.getTime() - Date.now()) / (1000 * 60 * 60);
+    expect(updatedVo?.fundsStatus).toBe("ESCROW");
+    expect(updatedVo?.escrowExpiresAt).not.toBeNull();
+    const hoursFromNow = (updatedVo!.escrowExpiresAt!.getTime() - Date.now()) / (1000 * 60 * 60);
     expect(hoursFromNow).toBeGreaterThan(47);
     expect(hoursFromNow).toBeLessThanOrEqual(48.1);
 

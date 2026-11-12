@@ -77,6 +77,23 @@ export function AccountSidebar() {
         </div>
       )}
 
+      {!isVendor && !isAdmin && (
+        <div className="border-b border-zinc-100 bg-purple-50/40 p-3">
+          <Link
+            href="/vendor/register"
+            className="flex items-center justify-between rounded-lg bg-purple-500/10 border border-purple-300/50 px-3 py-2 text-xs font-bold text-purple-900 hover:bg-purple-500/20 transition"
+          >
+            <div className="flex items-center gap-2">
+              <Store className="h-4 w-4 text-purple-600" />
+              <span>Sell on NextDor</span>
+            </div>
+            <span className="rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
+              Open Store
+            </span>
+          </Link>
+        </div>
+      )}
+
       {/* Nav links */}
       <nav className="flex flex-col gap-0.5 p-3">
         {navItems.map(({ label, href, icon: Icon }) => {

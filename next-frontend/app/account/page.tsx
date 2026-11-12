@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Package, User, MapPin, Heart, ArrowRight, Loader2 } from "lucide-react";
+import { Package, User, MapPin, Heart, ArrowRight, Loader2, Store } from "lucide-react";
 import { AccountLayout } from "@/components/account/AccountLayout";
 import { OrderCard, type AccountOrderSummary } from "@/components/account/OrderCard";
 import { useAuth } from "@/context/AuthContext";
@@ -16,7 +16,7 @@ const quickLinks = [
 ];
 
 export default function AccountPage() {
-  const { user, token, isLoading: authLoading } = useAuth();
+  const { user, token, isVendor, isAdmin, isLoading: authLoading } = useAuth();
   const [recentOrders, setRecentOrders] = useState<AccountOrderSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -100,6 +100,32 @@ export default function AccountPage() {
           </Link>
         ))}
       </div>
+
+      {/* Become a Seller Banner for Customers */}
+      {!isVendor && !isAdmin && (
+        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 to-white p-5 shadow-sm">
+          <div className="flex items-start gap-3.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm">
+              <Store className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-zinc-900">
+                Want to sell your products on NextDor?
+              </h2>
+              <p className="mt-0.5 text-xs text-zinc-600">
+                Upgrade this customer account into a Merchant Store in 60 seconds — keep your order history while receiving 48-hour Mobile Money payouts.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/vendor/register"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-purple-700 transition"
+          >
+            <span>Open Your Store</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Recent orders */}
       <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">

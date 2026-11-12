@@ -40,11 +40,11 @@ import { whatsappWebhookRoutes, adminNotificationRoutes } from "./modules/notifi
 
 const isProduction = config.NODE_ENV === "production";
 
-export async function buildApp() {
+export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     // Use our Pino instance so Fastify's built-in request logging
     // (req.log.info / req.log.error) flows through the same logger.
-    loggerInstance: logger,
+    loggerInstance: logger as any,
 
     // Automatically generate a unique requestId for every request.
     // This ID is attached to every log line via req.log — so you can

@@ -20,6 +20,7 @@ import {
   NotFoundError,
   BadRequestError,
   ForbiddenError,
+  UnauthorizedError,
 } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { AuditService } from "../audit/audit.service.js";
@@ -36,7 +37,7 @@ import type { UserRole, VendorOrderStatus, PayoutStatus } from "@prisma/client";
 export interface RegisterVendorDto {
   ownerName: string;
   email: string;
-  password: string;
+  password?: string;
   phone?: string;
   storeName: string;
   storeDescription?: string;
@@ -113,15 +114,14 @@ export class VendorService {
   }
 
   /**
-   * Self-serve registration for new marketplace merchants.
+   * Self-serve registration for new marketplace merchants, or seamless upgrade
+   * of an existing verified Customer account into a Vendor Owner account.
    */
-  async registerVendor(dto: RegisterVendorDto) {
+  async registerVendor(dto: RegisterVendorDto, authenticatedUserId?: string) {
+    const normalizedEmail = dto.email.toLowerCase().trim();
     const existingUser = await prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
     });
-    if (existingUser) {
-      throw new ConflictError("An account with this email address already exists.");
-    }
 
     let slug = slugify(dto.storeName);
     const existingSlug = await this.vendorRepo.findBySlug(slug);
@@ -129,11 +129,137 @@ export class VendorService {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
+    // ─── PATH A: UPGRADE EXISTING CUSTOMER ACCOUNT TO VENDOR ───────────────
+    if (existingUser) {
+      if (existingUser.deletedAt || existingUser.status === "SUSPENDED") {
+        throw new ForbiddenError("This account is suspended or inactive.");
+      }
+
+      const existingVendor =
+        existingUser.vendorId
+          ? await this.vendorRepo.findById(existingUser.vendorId)
+          : await this.vendorRepo.findByOwnerId(existingUser.id);
+
+      if (existingVendor) {
+        throw new ConflictError(
+          "This account already owns a merchant store. Please sign in to access your Vendor Dashboard."
+        );
+      }
+
+      // Verify rightful ownership of the existing customer account via active JWT OR password match
+      const isJwtOwner = Boolean(authenticatedUserId && authenticatedUserId === existingUser.id);
+      let isPasswordValid = false;
+      if (!isJwtOwner && dto.password) {
+        isPasswordValid = await bcrypt.compare(dto.password, existingUser.passwordHash);
+      }
+
+      if (!isJwtOwner && !isPasswordValid) {
+        throw new UnauthorizedError(
+          "An account with this email already exists. Please enter your current NextDor account password (or sign in first) to upgrade your shopper account into a merchant store."
+        );
+      }
+
+      const newRole: UserRole =
+        existingUser.role === "ADMIN" || existingUser.role === "SUPER_ADMIN"
+          ? existingUser.role
+          : ("VENDOR_OWNER" as UserRole);
+
+      const { user: updatedUser, vendor } = await this.vendorRepo.upgradeUserToVendor({
+        userId: existingUser.id,
+        newRole,
+        name: dto.ownerName?.trim() || existingUser.name,
+        phone: dto.phone?.trim() || existingUser.phone || null,
+        vendor: {
+          name: dto.storeName.trim(),
+          slug,
+          description: dto.storeDescription?.trim() || null,
+          email: normalizedEmail,
+          phone: dto.phone?.trim() || existingUser.phone || null,
+          status: "PENDING_APPROVAL",
+          commissionRate: 10.0,
+          payoutMethod: "MOMO",
+          momoNumber: dto.momoNumber?.trim() || null,
+          momoNetwork: dto.momoNetwork?.trim() || "MTN",
+        },
+      });
+
+      logger.info(
+        { vendorId: vendor.id, userId: updatedUser.id, slug: vendor.slug },
+        "Existing customer account upgraded to marketplace vendor (pending admin approval)"
+      );
+
+      await AuditService.log({
+        userId: updatedUser.id,
+        userEmail: updatedUser.email,
+        action: "CUSTOMER_UPGRADED_TO_VENDOR",
+        entity: "Vendor",
+        entityId: vendor.id,
+        details: {
+          storeName: vendor.name,
+          slug: vendor.slug,
+          ownerEmail: updatedUser.email,
+          phone: updatedUser.phone,
+          momoNetwork: vendor.momoNetwork,
+          momoNumber: vendor.momoNumber,
+          status: "PENDING_APPROVAL",
+        },
+        ipAddress: "Self-Serve Customer Upgrade",
+      });
+
+      // If the customer already verified their email when they registered as a shopper,
+      // immediately mint new JWT tokens containing their updated VENDOR_OWNER role & vendorId.
+      if (updatedUser.emailVerified) {
+        const tokens = await authService._issueTokens(updatedUser.id);
+        return {
+          vendor,
+          user: authService._safeUser(updatedUser),
+          tokens,
+          requiresVerification: false,
+          upgradedExistingAccount: true,
+          email: updatedUser.email,
+        };
+      }
+
+      // Otherwise, dispatch a 6-digit verification code
+      const code = crypto.randomInt(100000, 999999).toString();
+      const codeHash = await bcrypt.hash(code, 10);
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      await prisma.authCode.create({
+        data: {
+          email: updatedUser.email,
+          codeHash,
+          type: "VERIFY_EMAIL",
+          expiresAt,
+        },
+      });
+
+      await dispatchEmailAsync({
+        type: "verification",
+        email: updatedUser.email,
+        name: updatedUser.name,
+        code,
+      });
+
+      return {
+        vendor,
+        user: authService._safeUser(updatedUser),
+        requiresVerification: true,
+        upgradedExistingAccount: true,
+        email: updatedUser.email,
+      };
+    }
+
+    // ─── PATH B: BRAND-NEW USER + VENDOR REGISTRATION ──────────────────────
+    if (!dto.password || dto.password.length < 8) {
+      throw new BadRequestError("Password must be at least 8 characters.");
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     const { user, vendor } = await this.vendorRepo.createVendorWithUser({
       user: {
-        email: dto.email.toLowerCase().trim(),
+        email: normalizedEmail,
         name: dto.ownerName.trim(),
         passwordHash,
         phone: dto.phone?.trim() || null,
@@ -144,7 +270,7 @@ export class VendorService {
         name: dto.storeName.trim(),
         slug,
         description: dto.storeDescription?.trim() || null,
-        email: dto.email.toLowerCase().trim(),
+        email: normalizedEmail,
         phone: dto.phone?.trim() || null,
         status: "PENDING_APPROVAL",
         commissionRate: 10.0,
@@ -685,6 +811,13 @@ export class VendorService {
           }
         }
 
+        const rawImageUrl = item.imageUrl?.trim();
+        const isValidImageUrl =
+          rawImageUrl &&
+          (rawImageUrl.startsWith("https://") ||
+            rawImageUrl.startsWith("http://") ||
+            rawImageUrl.startsWith("/uploads/"));
+
         const product = await this.vendorRepo.createProduct({
           name: item.name.trim(),
           slug,
@@ -697,11 +830,11 @@ export class VendorService {
           version: 1,
           vendor: { connect: { id: vendorId } },
           categories: categoryId ? { connect: [{ id: categoryId }] } : undefined,
-          images: item.imageUrl?.trim()
+          images: isValidImageUrl
             ? {
                 create: [
                   {
-                    url: item.imageUrl.trim(),
+                    url: rawImageUrl,
                     alt: item.name.trim(),
                     sortOrder: 0,
                   },

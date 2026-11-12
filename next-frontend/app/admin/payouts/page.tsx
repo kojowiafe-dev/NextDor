@@ -238,7 +238,9 @@ export default function AdminPayoutsPage() {
               <div className="rounded-lg bg-zinc-50 px-3 py-1.5 border border-zinc-200">
                 <span className="text-zinc-500 block text-[10px] uppercase font-bold">As of Timestamp</span>
                 <span className="font-semibold text-zinc-800">
-                  {new Date(ledger.asOf || Date.now()).toLocaleTimeString()} · {new Date(ledger.asOf || Date.now()).toLocaleDateString()}
+                  {ledger.asOf
+                    ? `${new Date(ledger.asOf).toLocaleTimeString()} · ${new Date(ledger.asOf).toLocaleDateString()}`
+                    : "Live"}
                 </span>
               </div>
             </div>

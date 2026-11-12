@@ -50,7 +50,8 @@ describe("E2E: Multi-Warehouse Inventory, Stock Transfers & Audit Sweep", { time
           slug: `logistics-vendor-${testId}`,
           email: `log_vendor_${testId}@nextdor.test`,
           phone: "+233209998877",
-          status: "APPROVED",
+          status: "ACTIVE",
+          ownerId: adminUserId,
         },
       });
 

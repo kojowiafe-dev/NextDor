@@ -21,6 +21,8 @@ describe("Phase 11: Enterprise Multi-Warehouse Inventory & Low-Stock Alerts", ()
           address: "Graphic Road, South Industrial Area",
           city: "Accra",
           region: "Greater Accra",
+          isDefault: false,
+          isActive: true,
         })
       ).rejects.toThrow(BadRequestError);
     });
@@ -45,6 +47,7 @@ describe("Phase 11: Enterprise Multi-Warehouse Inventory & Low-Stock Alerts", ()
         city: "Kumasi",
         region: "Ashanti",
         isDefault: true,
+        isActive: true,
       });
 
       expect(result.id).toBe("wh-new");

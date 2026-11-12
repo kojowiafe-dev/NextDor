@@ -62,6 +62,15 @@ export class VendorRepository {
   }
 
   /**
+   * Finds a vendor by its owner user ID.
+   */
+  async findByOwnerId(ownerId: string): Promise<Vendor | null> {
+    return prisma.vendor.findUnique({
+      where: { ownerId },
+    });
+  }
+
+  /**
    * Atomic merchant onboarding: creates User, Vendor, and links primary vendorId.
    *
    * IMPORTANT LINES EXPLAINED:
@@ -90,6 +99,39 @@ export class VendorRepository {
       });
 
       return { user: newUser, vendor: newVendor };
+    });
+  }
+
+  /**
+   * Atomic customer-to-merchant upgrade: creates Vendor and links it to an existing User
+   * while preserving the user's customer history, saved addresses, and orders.
+   */
+  async upgradeUserToVendor(params: {
+    userId: string;
+    newRole: Prisma.EnumUserRoleFieldUpdateOperationsInput["set"];
+    name?: string;
+    phone?: string | null;
+    vendor: Omit<Prisma.VendorCreateInput, "owner">;
+  }) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const newVendor = await tx.vendor.create({
+        data: {
+          ...params.vendor,
+          owner: { connect: { id: params.userId } },
+        },
+      });
+
+      const updatedUser = await tx.user.update({
+        where: { id: params.userId },
+        data: {
+          vendorId: newVendor.id,
+          role: params.newRole,
+          ...(params.name ? { name: params.name } : {}),
+          ...(params.phone ? { phone: params.phone } : {}),
+        },
+      });
+
+      return { user: updatedUser, vendor: newVendor };
     });
   }
 

@@ -33,6 +33,7 @@ type AuthContextValue = {
   login: (payload: SignInPayload) => Promise<AuthUser>;
   register: (payload: SignUpPayload) => Promise<SignUpResult>;
   verifyEmailSession: (payload: { email: string; code: string }) => Promise<AuthUser>;
+  setSession: (user: AuthUser, accessToken: string, refreshToken?: string) => void;
   logout: () => Promise<void>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
 };
@@ -197,6 +198,26 @@ function clearSessionCookie() {
     [],
   );
 
+  const setSession = useCallback(
+    (authUser: AuthUser, accessToken: string, refreshToken?: string) => {
+      setUser(authUser);
+      setToken(accessToken);
+
+      if (typeof window !== "undefined") {
+        setSessionCookie();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+        localStorage.setItem(TOKEN_KEY, accessToken);
+        if (refreshToken) {
+          localStorage.setItem("nextdor-refresh-token", refreshToken);
+        }
+        if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
+          localStorage.setItem("vendor_token", accessToken);
+        }
+      }
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     setUser(null);
     setToken(null);
@@ -237,10 +258,11 @@ function clearSessionCookie() {
       login,
       register,
       verifyEmailSession,
+      setSession,
       logout,
       updateProfile,
     }),
-    [user, token, hydrated, login, register, verifyEmailSession, logout, updateProfile],
+    [user, token, hydrated, login, register, verifyEmailSession, setSession, logout, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -76,7 +76,8 @@ describe("E2E: Fulfillment, Courier Tracking & 48-Hour Escrow Returns", { timeou
           slug: `test-vendor-${testId}`,
           email: `vendor_${testId}@nextdor.test`,
           phone: "+233201112233",
-          status: "APPROVED",
+          status: "ACTIVE",
+          ownerId: adminUserId,
         },
       });
 
