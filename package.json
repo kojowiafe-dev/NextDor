@@ -16,5 +16,8 @@
     "build:backend": "npm run build -w next-backend",
     "build:frontend": "npm run build -w next-frontend",
     "start:backend": "npm start -w next-backend"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
   }
 }

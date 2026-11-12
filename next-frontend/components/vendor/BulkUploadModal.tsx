@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import * as XLSX from "xlsx";
 import {
   Upload,
   Download,
@@ -83,6 +84,18 @@ export function BulkUploadModal({
   const [uploadingRowIndex, setUploadingRowIndex] = useState<number | null>(null);
   const [isBulkPhotoUploading, setIsBulkPhotoUploading] = useState(false);
   const [bulkPhotoProgress, setBulkPhotoProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // Auto-reset all transient parsing & upload state when modal is opened or closed
+  useEffect(() => {
+    if (!isOpen) {
+      resetState();
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    resetState();
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -203,65 +216,13 @@ export function BulkUploadModal({
     URL.revokeObjectURL(url);
   }
 
-  // Robust RFC 4180 CSV parser
-  function parseCSV(text: string): { items: ParsedItem[]; errors: RowError[] } {
-    const lines: string[] = [];
-    let currentLine = "";
-    let inQuotes = false;
-
-    // Split taking quoted multi-line fields into account
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-        currentLine += char;
-      } else if ((char === "\n" || (char === "\r" && text[i + 1] === "\n")) && !inQuotes) {
-        if (char === "\r") i++; // skip \n
-        if (currentLine.trim()) lines.push(currentLine.trim());
-        currentLine = "";
-      } else {
-        currentLine += char;
-      }
-    }
-    if (currentLine.trim()) lines.push(currentLine.trim());
-
-    if (lines.length < 2) {
-      throw new Error("The CSV file must contain a header row and at least one product row.");
+  // Parse rows (works with raw strings from CSV or 2D array from XLSX)
+  function parseRows(rows: string[][]): { items: ParsedItem[]; errors: RowError[] } {
+    if (rows.length < 2) {
+      throw new Error("The file must contain a header row and at least one product row.");
     }
 
-    // Auto-detect delimiter (comma vs semicolon from Excel regional settings)
-    const headerSample = lines[0];
-    const commaCount = (headerSample.match(/,/g) || []).length;
-    const semiCount = (headerSample.match(/;/g) || []).length;
-    const delimiter = semiCount > commaCount ? ";" : ",";
-
-    // Helper to parse delimiter separated values handling quotes
-    function parseRow(rowStr: string): string[] {
-      const values: string[] = [];
-      let val = "";
-      let inside = false;
-
-      for (let j = 0; j < rowStr.length; j++) {
-        const c = rowStr[j];
-        if (c === '"') {
-          if (inside && rowStr[j + 1] === '"') {
-            val += '"';
-            j++;
-          } else {
-            inside = !inside;
-          }
-        } else if (c === delimiter && !inside) {
-          values.push(val.trim());
-          val = "";
-        } else {
-          val += c;
-        }
-      }
-      values.push(val.trim());
-      return values;
-    }
-
-    const rawHeaders = parseRow(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    const rawHeaders = rows[0].map((h) => String(h || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
     const items: ParsedItem[] = [];
     const errors: RowError[] = [];
 
@@ -281,9 +242,12 @@ export function BulkUploadModal({
       throw new Error('Spreadsheet must contain at least "Name" and "Price" columns.');
     }
 
-    for (let r = 1; r < lines.length; r++) {
+    for (let r = 1; r < rows.length; r++) {
       const rowNum = r + 1;
-      const values = parseRow(lines[r]);
+      const values = rows[r].map((v) => (v !== undefined && v !== null ? String(v).trim() : ""));
+
+      // Skip completely empty rows
+      if (values.every((v) => !v)) continue;
 
       const name = values[nameIdx]?.trim() || "";
       const rawPrice = values[priceIdx]?.replace(/[^0-9.]/g, "") || "";
@@ -348,6 +312,82 @@ export function BulkUploadModal({
     return { items, errors };
   }
 
+  // Robust RFC 4180 CSV parser
+  function parseCSV(text: string): { items: ParsedItem[]; errors: RowError[] } {
+    const lines: string[] = [];
+    let currentLine = "";
+    let inQuotes = false;
+
+    // Split taking quoted multi-line fields into account
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+        currentLine += char;
+      } else if ((char === "\n" || (char === "\r" && text[i + 1] === "\n")) && !inQuotes) {
+        if (char === "\r") i++; // skip \n
+        if (currentLine.trim()) lines.push(currentLine.trim());
+        currentLine = "";
+      } else {
+        currentLine += char;
+      }
+    }
+    if (currentLine.trim()) lines.push(currentLine.trim());
+
+    if (lines.length < 2) {
+      throw new Error("The CSV file must contain a header row and at least one product row.");
+    }
+
+    // Auto-detect delimiter (comma vs semicolon from Excel regional settings)
+    const headerSample = lines[0];
+    const commaCount = (headerSample.match(/,/g) || []).length;
+    const semiCount = (headerSample.match(/;/g) || []).length;
+    const delimiter = semiCount > commaCount ? ";" : ",";
+
+    // Helper to parse delimiter separated values handling quotes
+    function parseRow(rowStr: string): string[] {
+      const values: string[] = [];
+      let val = "";
+      let inside = false;
+
+      for (let j = 0; j < rowStr.length; j++) {
+        const c = rowStr[j];
+        if (c === '"') {
+          if (inside && rowStr[j + 1] === '"') {
+            val += '"';
+            j++;
+          } else {
+            inside = !inside;
+          }
+        } else if (c === delimiter && !inside) {
+          values.push(val.trim());
+          val = "";
+        } else {
+          val += c;
+        }
+      }
+      values.push(val.trim());
+      return values;
+    }
+
+    const rows = lines.map(parseRow);
+    return parseRows(rows);
+  }
+
+  // Parse Excel workbook buffer (.xlsx, .xls)
+  function parseExcel(buffer: ArrayBuffer): { items: ParsedItem[]; errors: RowError[] } {
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      throw new Error("The Excel workbook contains no sheets.");
+    }
+    const worksheet = workbook.Sheets[firstSheetName];
+    // Convert sheet to 2D array with raw strings
+    const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+    const stringRows: string[][] = rows.map((r) => r.map((c) => String(c ?? "").trim()));
+    return parseRows(stringRows);
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -356,23 +396,45 @@ export function BulkUploadModal({
     setServerErrors([]);
     setFileName(file.name);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const { items, errors } = parseCSV(content);
-        setParsedItems(items);
-        setClientErrors(errors);
-      } catch (err: any) {
-        setGeneralError(err.message || "Failed to read CSV file. Please verify format.");
-        setParsedItems([]);
-        setClientErrors([]);
-      }
-    };
-    reader.onerror = () => {
-      setGeneralError("Error reading file.");
-    };
-    reader.readAsText(file);
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const buffer = event.target?.result as ArrayBuffer;
+          const { items, errors } = parseExcel(buffer);
+          setParsedItems(items);
+          setClientErrors(errors);
+        } catch (err: any) {
+          setGeneralError(err.message || "Failed to parse Excel file. Please verify format.");
+          setParsedItems([]);
+          setClientErrors([]);
+        }
+      };
+      reader.onerror = () => {
+        setGeneralError("Error reading Excel file.");
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const content = event.target?.result as string;
+          const { items, errors } = parseCSV(content);
+          setParsedItems(items);
+          setClientErrors(errors);
+        } catch (err: any) {
+          setGeneralError(err.message || "Failed to read CSV file. Please verify format.");
+          setParsedItems([]);
+          setClientErrors([]);
+        }
+      };
+      reader.onerror = () => {
+        setGeneralError("Error reading file.");
+      };
+      reader.readAsText(file);
+    }
   }
 
   async function handleImport() {
@@ -449,7 +511,7 @@ export function BulkUploadModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition"
           >
             <X className="h-5 w-5" />
@@ -538,15 +600,15 @@ export function BulkUploadModal({
                 </button>
               </div>
 
-              {/* Step 2: Upload CSV */}
+              {/* Step 2: Upload Spreadsheet */}
               <div className="space-y-1.5">
                 <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                  Step 2: Choose Your Filled CSV File
+                  Step 2: Choose Your Filled Excel or CSV File
                 </span>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,text/csv,text/plain"
+                  accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -557,10 +619,10 @@ export function BulkUploadModal({
                 >
                   <Upload className="h-7 w-7 text-purple-600 mx-auto mb-1.5" />
                   <p className="text-xs font-semibold text-zinc-800">
-                    {fileName ? fileName : "Tap here to select your CSV spreadsheet"}
+                    {fileName ? fileName : "Tap here to select your Excel (.xlsx / .xls) or CSV spreadsheet"}
                   </p>
                   <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Supports .csv files saved from Excel or Google Sheets (up to 500 products)
+                    Supports Microsoft Excel (.xlsx, .xls) and CSV files saved from Excel or Google Sheets (up to 500 products)
                   </p>
                 </div>
               </div>
@@ -702,7 +764,7 @@ export function BulkUploadModal({
           <div className="border-t border-zinc-200 px-5 py-3.5 bg-zinc-50 flex items-center justify-between gap-3 shrink-0">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
             >
               Cancel
