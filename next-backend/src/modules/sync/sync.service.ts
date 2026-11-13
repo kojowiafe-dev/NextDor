@@ -19,6 +19,7 @@ import { redis, CacheKey, flushPattern } from "../../lib/redis.js";
 import { slugify } from "../../lib/slugify.js";
 import { NotFoundError, BadRequestError } from "../../lib/errors.js";
 import { assertSafePublicUrl } from "../../lib/urlSafety.js";
+import { decryptSecret } from "../../lib/crypto.js";
 
 interface WcImage {
   id: number;
@@ -236,24 +237,20 @@ export class SyncService {
           try {
             this.status.progress = `Saving ${wcProd.name}...`;
 
-            // 1. Process and upsert categories
+            // 1. Match against existing canonical NextDor categories only (never upsert/invent new categories from WooCommerce)
             const categoryIds: string[] = [];
-            if (Array.isArray(wcProd.categories)) {
+            if (Array.isArray(wcProd.categories) && wcProd.categories.length > 0) {
+              const allStoreCats = await prisma.category.findMany({ select: { id: true, slug: true, name: true } });
               for (const cat of wcProd.categories) {
-                const categoryRecord = await prisma.category.upsert({
-                  where: { slug: cat.slug },
-                  update: {
-                    name: cat.name,
-                    wcId: cat.id,
-                  },
-                  create: {
-                    wcId: cat.id,
-                    name: cat.name,
-                    slug: cat.slug,
-                  },
-                });
-                categoryIds.push(categoryRecord.id);
-                syncedCategoryIds.add(categoryRecord.id);
+                const cleanedName = decodeHtmlEntities(cat.name || "").toLowerCase();
+                const catSlug = (cat.slug || slugify(cleanedName)).toLowerCase();
+                const matched = allStoreCats.find(
+                  (sc) => sc.slug === catSlug || sc.name.toLowerCase() === cleanedName
+                );
+                if (matched && !categoryIds.includes(matched.id)) {
+                  categoryIds.push(matched.id);
+                  syncedCategoryIds.add(matched.id);
+                }
               }
             }
 
@@ -431,7 +428,8 @@ export class SyncService {
       logger.error({ err, vendorId, url: vendor.wcStoreUrl }, "SSRF guard blocked unsafe vendor WooCommerce store URL");
       throw new BadRequestError(`Invalid or unsafe WooCommerce store URL: ${err.message}`);
     }
-    const hasKeys = Boolean(vendor.wcConsumerKey && vendor.wcConsumerSecret);
+    const decryptedSecret = decryptSecret(vendor.wcConsumerSecret);
+    const hasKeys = Boolean(vendor.wcConsumerKey && decryptedSecret);
     const endpoint = hasKeys
       ? `${baseUrl}/wp-json/wc/v3/products`
       : `${baseUrl}/wp-json/wc/store/v1/products`;
@@ -452,8 +450,8 @@ export class SyncService {
           "User-Agent": "NextDor-SyncService/1.0",
         };
 
-        if (hasKeys && vendor.wcConsumerKey && vendor.wcConsumerSecret) {
-          const auth = Buffer.from(`${vendor.wcConsumerKey}:${vendor.wcConsumerSecret}`).toString("base64");
+        if (hasKeys && vendor.wcConsumerKey && decryptedSecret) {
+          const auth = Buffer.from(`${vendor.wcConsumerKey}:${decryptedSecret}`).toString("base64");
           headers["Authorization"] = `Basic ${auth}`;
         }
 

@@ -3,6 +3,16 @@
  */
 import { API_BASE } from "@/lib/api-config";
 
+// Keep fallback refresh token strictly in module memory closure — NEVER in localStorage
+let inMemoryRefreshToken: string | null = null;
+
+export function setInMemoryRefreshToken(token: string | null) {
+  inMemoryRefreshToken = token;
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("nextdor-refresh-token");
+  }
+}
+
 export type AuthRole = "customer" | "admin" | "vendor_owner" | "vendor_staff" | "super_admin";
 
 export type AuthUser = {
@@ -85,8 +95,8 @@ export async function signIn(payload: SignInPayload): Promise<AuthResponse> {
   }
 
   const rawUser = json.data.user;
-  if (typeof window !== "undefined" && json.data.refreshToken) {
-    localStorage.setItem("nextdor-refresh-token", json.data.refreshToken);
+  if (json.data.refreshToken) {
+    setInMemoryRefreshToken(json.data.refreshToken);
   }
   return {
     user: {
@@ -159,8 +169,8 @@ export async function verifyEmail(payload: { email: string; code: string }): Pro
   }
 
   const rawUser = json.data.user;
-  if (typeof window !== "undefined" && json.data.refreshToken) {
-    localStorage.setItem("nextdor-refresh-token", json.data.refreshToken);
+  if (json.data.refreshToken) {
+    setInMemoryRefreshToken(json.data.refreshToken);
   }
   return {
     user: {
@@ -268,26 +278,28 @@ export async function fetchCurrentUser(token: string): Promise<AuthUser | null> 
 }
 
 /**
- * Silently refresh the access token using cookie or fallback stored token via POST /api/v1/auth/refresh.
+ * Silently refresh the access token using the httpOnly cookie (or in-memory closure fallback) via POST /api/v1/auth/refresh.
  */
 export async function refreshAccessToken(): Promise<string | null> {
   try {
-    const storedRefresh = typeof window !== "undefined" ? localStorage.getItem("nextdor-refresh-token") : null;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("nextdor-refresh-token");
+    }
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(storedRefresh ? { "x-refresh-token": storedRefresh } : {}),
+        ...(inMemoryRefreshToken ? { "x-refresh-token": inMemoryRefreshToken } : {}),
       },
       credentials: "include",
-      body: JSON.stringify({ refreshToken: storedRefresh || undefined }),
+      body: JSON.stringify({ refreshToken: inMemoryRefreshToken || undefined }),
     });
 
     if (!res.ok) return null;
     const json = await res.json();
     if (json.success && json.data?.accessToken) {
-      if (json.data.refreshToken && typeof window !== "undefined") {
-        localStorage.setItem("nextdor-refresh-token", json.data.refreshToken);
+      if (json.data.refreshToken) {
+        setInMemoryRefreshToken(json.data.refreshToken);
       }
       return json.data.accessToken as string;
     }
@@ -302,18 +314,16 @@ export async function refreshAccessToken(): Promise<string | null> {
  */
 export async function signOutApi(): Promise<void> {
   try {
-    const storedRefresh = typeof window !== "undefined" ? localStorage.getItem("nextdor-refresh-token") : null;
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("nextdor-refresh-token");
-    }
+    const tokenToRevoke = inMemoryRefreshToken;
+    setInMemoryRefreshToken(null);
     await fetch(`${API_BASE}/auth/logout`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(storedRefresh ? { "x-refresh-token": storedRefresh } : {}),
+        ...(tokenToRevoke ? { "x-refresh-token": tokenToRevoke } : {}),
       },
       credentials: "include",
-      body: JSON.stringify({ refreshToken: storedRefresh || undefined }),
+      body: JSON.stringify({ refreshToken: tokenToRevoke || undefined }),
     });
   } catch {
     // Ignore network failures on logout

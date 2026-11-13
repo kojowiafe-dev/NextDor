@@ -40,7 +40,7 @@ import {
 import { prisma } from "../../lib/prisma.js";
 import bcrypt from "bcryptjs";
 import { AuditService } from "../audit/audit.service.js";
-import { requireAuth, requireSuperAdmin } from "../../lib/auth.guards.js";
+import { evictUserAuthCache, requireAuth, requireSuperAdmin } from "../../lib/auth.guards.js";
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 
@@ -308,6 +308,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/refresh",
     {
+      config: { rateLimit: { max: 30, timeWindow: "15 minutes" } },
       schema: {
         description: "Refresh access token using the httpOnly cookie or fallback token",
         tags: ["Auth"],
@@ -594,7 +595,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         },
       });
 
-      // SECURITY: When suspending an administrator, immediately revoke all active refresh tokens
+      // SECURITY: Immediately evict in-memory user state cache and revoke refresh tokens on suspension
+      evictUserAuthCache(id);
       if (body.status === "SUSPENDED") {
         await prisma.refreshToken.updateMany({
           where: { userId: id, revokedAt: null },

@@ -39,12 +39,21 @@ export class VendorRepository {
   }
 
   /**
-   * Finds a vendor by its unique URL slug.
+   * Finds a vendor by its unique URL slug (projects only safe public storefront fields).
    */
   async findBySlug(slug: string): Promise<any | null> {
     return prisma.vendor.findUnique({
       where: { slug },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        logoUrl: true,
+        bannerUrl: true,
+        status: true,
+        createdAt: true,
+        deletedAt: true,
         _count: {
           select: { products: true },
         },

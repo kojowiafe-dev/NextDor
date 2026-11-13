@@ -31,6 +31,7 @@ import { EmailService } from "../../lib/email.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
 import { slugify } from "../../lib/slugify.js";
 import { assertSafePublicUrl } from "../../lib/urlSafety.js";
+import { encryptSecret } from "../../lib/crypto.js";
 import { ProductService } from "../products/product.service.js";
 import type { UserRole, VendorOrderStatus, PayoutStatus } from "@prisma/client";
 
@@ -340,9 +341,10 @@ export class VendorService {
     if (!vendor) throw new NotFoundError("Vendor not found.");
 
     const aggregates = await this.vendorRepo.getDashboardAggregates(vendorId);
+    const { wcConsumerSecret: _secret, wcConsumerKey: _key, ...safeVendor } = vendor;
 
     return {
-      vendor,
+      vendor: safeVendor,
       stats: {
         totalProducts: aggregates.totalProducts,
         inStock: aggregates.inStock,
@@ -375,6 +377,11 @@ export class VendorService {
    * Vendor creates a new product in their store.
    */
   async createVendorProduct(vendorId: string, dto: CreateVendorProductDto) {
+    const vendor = await this.vendorRepo.findById(vendorId);
+    if (!vendor || vendor.deletedAt || vendor.status !== "ACTIVE") {
+      throw new ForbiddenError("Your vendor store must be approved and active to publish products.");
+    }
+
     let slug = slugify(dto.name);
     const existingSlug = await prisma.product.findUnique({ where: { slug } });
     if (existingSlug) {
@@ -898,7 +905,10 @@ export class VendorService {
       }
     }
     if (data.wcConsumerKey !== undefined) updateData.wcConsumerKey = data.wcConsumerKey?.trim() || null;
-    if (data.wcConsumerSecret !== undefined) updateData.wcConsumerSecret = data.wcConsumerSecret?.trim() || null;
+    if (data.wcConsumerSecret !== undefined) {
+      const trimmedSecret = data.wcConsumerSecret?.trim();
+      updateData.wcConsumerSecret = trimmedSecret ? encryptSecret(trimmedSecret) : null;
+    }
 
     const updated = await this.vendorRepo.updateProfile(vendorId, updateData);
 

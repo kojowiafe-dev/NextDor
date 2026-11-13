@@ -61,26 +61,97 @@ function forbidden(reply: FastifyReply, message: string) {
   return reply.status(403).send({ success: false, error: { code: "FORBIDDEN", message } });
 }
 
-/** Requires any valid access token. */
+interface CachedUserState {
+  active: boolean;
+  role: string;
+  vendorId?: string;
+  expiresAt: number;
+}
+
+const USER_STATE_CACHE_TTL_MS = 15_000; // 15s cache to prevent DB spam while ensuring near-instant suspension
+const userStateCache = new Map<string, CachedUserState>();
+
+export function evictUserAuthCache(userId: string) {
+  userStateCache.delete(userId);
+}
+
+async function verifyActiveUserState(user: AuthUser): Promise<AuthUser | null> {
+  const now = Date.now();
+  const cached = userStateCache.get(user.userId);
+  if (cached && cached.expiresAt > now) {
+    if (!cached.active) return null;
+    return {
+      ...user,
+      role: cached.role,
+      vendorId: cached.vendorId ?? user.vendorId,
+    };
+  }
+
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        status: true,
+        deletedAt: true,
+        role: true,
+        vendorId: true,
+        ownedVendor: { select: { id: true } },
+      },
+    });
+
+    const active = Boolean(dbUser && !dbUser.deletedAt && dbUser.status === "ACTIVE");
+    const resolvedVendorId = dbUser?.vendorId ?? dbUser?.ownedVendor?.id ?? user.vendorId;
+    const role = dbUser?.role ?? user.role;
+
+    if (userStateCache.size > 5000) {
+      userStateCache.clear();
+    }
+    userStateCache.set(user.userId, {
+      active,
+      role,
+      vendorId: resolvedVendorId,
+      expiresAt: now + USER_STATE_CACHE_TTL_MS,
+    });
+
+    if (!active) return null;
+    return {
+      ...user,
+      role,
+      vendorId: resolvedVendorId,
+    };
+  } catch {
+    // On transient DB connection blip, fall back to verified JWT claims
+    return user;
+  }
+}
+
+/** Requires any valid access token and an active (non-suspended) user account. */
 export async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
-  const user = extractUser(req);
-  if (!user) return unauthorized(reply);
-  req.authUser = user;
+  const tokenUser = extractUser(req);
+  if (!tokenUser) return unauthorized(reply);
+  const activeUser = await verifyActiveUserState(tokenUser);
+  if (!activeUser) return unauthorized(reply, "Account is inactive or suspended");
+  req.authUser = activeUser;
 }
 
 /** Attaches the user when a valid token is present; never rejects. */
 export async function optionalAuth(req: FastifyRequest) {
-  const user = extractUser(req);
-  if (user) req.authUser = user;
+  const tokenUser = extractUser(req);
+  if (tokenUser) {
+    const activeUser = await verifyActiveUserState(tokenUser);
+    if (activeUser) req.authUser = activeUser;
+  }
 }
 
-/** Requires a valid token whose role is one of `roles`. */
+/** Requires a valid token whose live role is one of `roles` and account is active. */
 export function requireRole(roles: readonly string[], message = "Insufficient permissions") {
   return async function roleGuard(req: FastifyRequest, reply: FastifyReply) {
-    const user = extractUser(req);
-    if (!user) return unauthorized(reply);
-    if (!roles.includes(user.role)) return forbidden(reply, message);
-    req.authUser = user;
+    const tokenUser = extractUser(req);
+    if (!tokenUser) return unauthorized(reply);
+    const activeUser = await verifyActiveUserState(tokenUser);
+    if (!activeUser) return unauthorized(reply, "Account is inactive or suspended");
+    if (!roles.includes(activeUser.role)) return forbidden(reply, message);
+    req.authUser = activeUser;
   };
 }
 

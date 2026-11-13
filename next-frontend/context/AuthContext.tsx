@@ -15,6 +15,7 @@ import {
   signUp as apiSignUp,
   fetchCurrentUser,
   refreshAccessToken,
+  setInMemoryRefreshToken,
   signOutApi,
   updateUserProfile as apiUpdateProfile,
   verifyEmail as apiVerifyEmail,
@@ -74,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function initAuth() {
       try {
+        localStorage.removeItem("nextdor-refresh-token");
         const storedUser = localStorage.getItem(STORAGE_KEY);
         const storedToken = localStorage.getItem(TOKEN_KEY);
 
@@ -208,7 +210,7 @@ function clearSessionCookie() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
         localStorage.setItem(TOKEN_KEY, accessToken);
         if (refreshToken) {
-          localStorage.setItem("nextdor-refresh-token", refreshToken);
+          setInMemoryRefreshToken(refreshToken);
         }
         if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
           localStorage.setItem("vendor_token", accessToken);

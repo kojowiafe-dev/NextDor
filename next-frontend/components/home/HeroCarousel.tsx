@@ -105,8 +105,10 @@ const HERO_BANNERS = [
   {
     id: "groceries-bakery",
     badge: "Fast Doorstep Delivery",
-    title: "Fresh Bakery, Honey & Daily Groceries",
-    highlight: "Delivered Fast",
+    title: "",
+    // title: "Fresh Bakery, Honey & Daily Groceries",
+    highlight: "",
+    // highlight: "Delivered Fast",
     subtitle: "Order fresh cakes, biscuits, organic honey & pantry staples with instant MoMo.",
     ctaText: "Shop Groceries",
     ctaHref: "/category/bakery-groceries",
@@ -298,9 +300,8 @@ export function HeroCarousel(_props: HeroCarouselProps) {
         {HERO_BANNERS.map((slide, idx) => (
           <div
             key={slide.id}
-            className={`pointer-events-none absolute inset-0 transition-opacity duration-700 ${
-              idx === currentSlide ? "opacity-100 z-0" : "opacity-0 -z-10"
-            }`}
+            className={`pointer-events-none absolute inset-0 transition-opacity duration-700 ${idx === currentSlide ? "opacity-100 z-0" : "opacity-0 -z-10"
+              }`}
           >
             <Image
               src={slide.bgImage}
@@ -311,8 +312,9 @@ export function HeroCarousel(_props: HeroCarouselProps) {
               className="object-cover object-center"
             />
             {/* Multi-stop gradient overlay so typography is crisp while imagery shines */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a]/95 via-[#0f172a]/70 to-[#0f172a]/25 sm:via-[#0f172a]/65 sm:to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/90 via-[#0f172a]/20 to-transparent" />
+            {/* Dark covering removed as requested so the banner images display clearly */}
+            {/* <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a]/95 via-[#0f172a]/70 to-[#0f172a]/25 sm:via-[#0f172a]/65 sm:to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/90 via-[#0f172a]/20 to-transparent" /> */}
           </div>
         ))}
 
@@ -321,38 +323,40 @@ export function HeroCarousel(_props: HeroCarouselProps) {
           {/* Left Editorial Content */}
           <div className="flex flex-col justify-center space-y-1.5 sm:space-y-3 max-w-lg">
             <div className="flex items-center gap-2 whitespace-nowrap">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff9900] text-zinc-950 px-2.5 sm:px-3 py-0.5 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-sm">
-                <Flame className="h-3 w-3 fill-current shrink-0" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff9900] text-zinc-950 px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-black uppercase tracking-wider shadow-md border border-[#ff9900]/40">
+                <Flame className="h-3.5 w-3.5 fill-current shrink-0" />
                 {activeBanner.badge}
               </span>
-              <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-black/45 backdrop-blur-md px-2.5 py-0.5 text-xs font-medium text-zinc-200 border border-white/15">
-                <ShieldCheck className="h-3 w-3 text-emerald-400" />
-                48h Escrow
+              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-zinc-950/75 backdrop-blur-md px-3 py-1 text-xs font-semibold text-white border border-white/25 shadow-md">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                48h Escrow Protection
               </span>
             </div>
 
-            <h1 className="text-lg sm:text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight sm:leading-[1.15] drop-shadow-sm">
+            {/* <h1 className="text-lg sm:text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight sm:leading-[1.15] drop-shadow-sm">
               {activeBanner.title}{" "}
               <span className="text-[#ff9900] block sm:inline">
                 — {activeBanner.highlight}
               </span>
-            </h1>
+            </h1> */}
 
-            <p className="text-[11px] sm:text-sm text-zinc-200 line-clamp-2 max-w-md leading-snug sm:leading-relaxed drop-shadow-xs">
-              {activeBanner.subtitle}
-            </p>
+            <div className="max-w-md rounded-xl bg-zinc-950/70 backdrop-blur-md border border-white/20 p-2.5 sm:p-3 shadow-lg">
+              <p className="text-xs sm:text-sm font-medium text-white line-clamp-2 leading-relaxed">
+                {activeBanner.subtitle}
+              </p>
+            </div>
 
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex items-center gap-2.5 pt-1">
               <Link
                 href={activeBanner.ctaHref}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#ff9900] px-3.5 py-1.5 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-bold text-zinc-950 shadow-lg shadow-black/25 transition hover:bg-[#f08804] whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#ff9900] px-4 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-black text-zinc-950 shadow-xl shadow-black/40 transition hover:bg-[#f08804] active:scale-95 whitespace-nowrap"
               >
                 <span>{activeBanner.ctaText}</span>
                 <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Link>
               <Link
                 href={activeBanner.secondaryHref}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 px-3 py-1.5 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-white/25 transition whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-950/80 backdrop-blur-md border border-white/30 px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold text-white hover:bg-zinc-900 transition active:scale-95 shadow-xl shadow-black/40 whitespace-nowrap"
               >
                 <span>{activeBanner.secondaryText}</span>
               </Link>
@@ -434,9 +438,8 @@ export function HeroCarousel(_props: HeroCarouselProps) {
                 setCurrentSlide(idx);
               }}
               aria-label={`Go to slide ${idx + 1}`}
-              className={`h-1.5 rounded-full transition-all duration-300 touch-manipulation cursor-pointer ${
-                currentSlide === idx ? "w-6 bg-[#ff9900]" : "w-1.5 bg-white/50"
-              }`}
+              className={`h-1.5 rounded-full transition-all duration-300 touch-manipulation cursor-pointer ${currentSlide === idx ? "w-6 bg-[#ff9900]" : "w-1.5 bg-white/50"
+                }`}
             />
           ))}
         </div>

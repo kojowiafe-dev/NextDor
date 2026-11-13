@@ -41,6 +41,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/",
     {
+      config: { rateLimit: { max: 15, timeWindow: "15 minutes" } },
       preHandler: optionalAuth,
       schema: {
         description: "Place a new order (checkout - authenticated customers or guests)",

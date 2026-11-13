@@ -64,6 +64,35 @@ async function requireVendorAuth(req: FastifyRequest, reply: FastifyReply) {
 }
 
 /**
+ * Enforces that the vendor's store is approved (ACTIVE) and not soft-deleted
+ * before allowing catalog mutations, bulk uploads, external syncs, or order updates.
+ */
+async function requireActiveVendorAuth(req: FastifyRequest, reply: FastifyReply) {
+  await requireVendorAuth(req, reply);
+  if (reply.sent) return;
+
+  if (req.userRole === "ADMIN" || req.userRole === "SUPER_ADMIN") return;
+
+  const store = await prisma.vendor.findUnique({
+    where: { id: req.vendorId! },
+    select: { status: true, deletedAt: true },
+  });
+
+  if (!store || store.deletedAt || store.status !== "ACTIVE") {
+    return reply.status(403).send({
+      success: false,
+      error: {
+        code: "VENDOR_NOT_ACTIVE",
+        message:
+          store?.status === "PENDING_APPROVAL"
+            ? "Your vendor store is pending administrator approval. You can publish products and fulfill orders once approved."
+            : "Your vendor store is currently suspended or inactive.",
+      },
+    });
+  }
+}
+
+/**
  * Pre-handler hook enforcing platform administrator access via shared guards.
  */
 async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
@@ -150,6 +179,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/register",
     {
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
       schema: {
         description: "Register a new vendor store (or upgrade an existing customer account)",
         tags: ["Vendors"],
@@ -323,7 +353,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/portal/products",
     {
-      preHandler: [requireVendorAuth],
+      preHandler: [requireActiveVendorAuth],
       schema: {
         description: "Create a new product under authenticated vendor",
         tags: ["Vendor Portal"],
@@ -362,7 +392,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/portal/products/bulk",
     {
-      preHandler: [requireVendorAuth],
+      preHandler: [requireActiveVendorAuth],
       schema: {
         description: "Bulk upload products for authenticated vendor",
         tags: ["Vendor Portal"],
@@ -430,7 +460,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.patch(
     "/portal/sync",
     {
-      preHandler: [requireVendorAuth],
+      preHandler: [requireActiveVendorAuth],
       schema: {
         description: "Save WooCommerce store URL and API credentials",
         tags: ["Vendor Portal"],
@@ -459,7 +489,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/portal/sync/trigger",
     {
-      preHandler: [requireVendorAuth],
+      preHandler: [requireActiveVendorAuth],
       schema: {
         description: "Trigger manual WooCommerce catalog sync for vendor",
         tags: ["Vendor Portal"],
@@ -485,7 +515,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.patch(
     "/portal/products/:id",
     {
-      preHandler: [requireVendorAuth],
+      preHandler: [requireActiveVendorAuth],
       schema: {
         description: "Update product price/stock with OCC version verification",
         tags: ["Vendor Portal"],
@@ -547,7 +577,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.delete(
     "/portal/products/:id",
     {
-      preHandler: [requireVendorAuth],
+      preHandler: [requireActiveVendorAuth],
       schema: {
         description: "Soft-delete a product owned by authenticated vendor",
         tags: ["Vendor Portal"],
@@ -617,7 +647,7 @@ export const vendorRoutes: FastifyPluginAsync = async (app) => {
   app.patch(
     "/portal/orders/:id/status",
     {
-      preHandler: [requireVendorAuth],
+      preHandler: [requireActiveVendorAuth],
       schema: {
         description: "Update fulfillment dispatch status of a merchant sub-order",
         tags: ["Vendor Portal"],
