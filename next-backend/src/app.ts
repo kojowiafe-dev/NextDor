@@ -32,6 +32,7 @@ import { returnRoutes, vendorReturnRoutes, adminReturnRoutes } from "./modules/r
 import { logisticsRoutes } from "./modules/logistics/logistics.routes.js";
 import { payoutRoutes } from "./modules/payouts/payout.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
+import { bannerRoutes } from "./modules/banners/banner.routes.js";
 import { inventoryRoutes } from "./modules/inventory/inventory.routes.js";
 import { redis } from "./lib/redis.js";
 import { ResilientRateLimitStore } from "./lib/rateLimitStore.js";
@@ -261,6 +262,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(adminOrderRoutes,  { prefix: "/api/v1/admin/orders" });
   await app.register(adminReturnRoutes, { prefix: "/api/v1/admin/returns" });
   await app.register(adminRoutes,       { prefix: "/api/v1/admin" });
+  await app.register(bannerRoutes,      { prefix: "/api/v1/banners" });
   await app.register(vendorOrderRoutes, { prefix: "/api/v1/vendors" });
   await app.register(vendorReturnRoutes, { prefix: "/api/v1/vendors" });
   await app.register(whatsappWebhookRoutes, { prefix: "/api/v1/webhooks" });

@@ -19,6 +19,7 @@ import {
   Wallet,
   Warehouse,
   X,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -26,6 +27,7 @@ const coreNavItems = [
   { label: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Products", href: "/admin/products", icon: Package },
+  { label: "Hero Banners", href: "/admin/banners", icon: ImageIcon },
   { label: "Inventory & Hubs", href: "/admin/inventory", icon: Warehouse },
   { label: "Customers", href: "/admin/customers", icon: Users },
   { label: "Merchants", href: "/admin/merchants", icon: Store },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -12,11 +12,14 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import type { Category, Product } from "@/lib/catalog/types";
+import type { HeroBannerData, HeroBannerProduct } from "@/lib/catalog";
 
 interface HeroCarouselProps {
   products?: Product[];
   categories?: Category[];
   dealProduct?: Product | null;
+  banners?: HeroBannerData[];
+  featuredProducts?: HeroBannerProduct[];
 }
 
 // Curated high-resolution commercial e-commerce banners (Amazon-style editorial photography)
@@ -126,7 +129,7 @@ const HERO_BANNERS = [
       {
         label: "Organic Pantry",
         image:
-          "https://images.unsplash.com/photo-1587049352847-4a222e784d38?auto=format&fit=crop&w=600&q=80",
+          "https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?auto=format&fit=crop&w=600&q=80",
         href: "/category/bakery-groceries",
       },
     ],
@@ -193,14 +196,78 @@ const VISUAL_DEPARTMENT_CARDS = [
   },
 ];
 
-export function HeroCarousel(_props: HeroCarouselProps) {
+export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarouselProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const scrollRowRef = useRef<HTMLDivElement>(null);
   const touchStartXRef = useRef<number | null>(null);
   const lastTriggerRef = useRef<number>(0);
 
-  const totalSlides = HERO_BANNERS.length;
+  // Hero Banner Carousel contains Admin-created Hero Banners + curated fallback banners
+  const slides = useMemo(() => {
+    const customSlides = banners.map((b) => {
+      const prodImg = b.product?.images?.[0]?.url;
+      const fallbackCards = b.product
+        ? [
+            {
+              label: b.product.name,
+              image: prodImg || b.bgImageUrl,
+              href: `/product/${b.product.slug}`,
+            },
+            {
+              label: "View All Deals",
+              image: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=600&q=80",
+              href: "/deals",
+            },
+          ]
+        : [
+            {
+              label: "Shop Trending",
+              image: b.bgImageUrl,
+              href: b.ctaHref || "/shop",
+            },
+            {
+              label: "Today's Deals",
+              image: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=600&q=80",
+              href: "/deals",
+            },
+          ];
+
+      return {
+        id: `custom-${b.id}`,
+        badge: b.badge || "Featured",
+        title: b.product?.name || b.badge || "Featured Showcase",
+        highlight: "",
+        subtitle: b.subtitle,
+        ctaText: b.ctaText || "Shop Now",
+        ctaHref: b.ctaHref || (b.product ? `/product/${b.product.slug}` : "/shop"),
+        secondaryText: b.secondaryText || "View Deals",
+        secondaryHref: b.secondaryHref || "/deals",
+        bgImage: b.bgImageUrl,
+        accentCards:
+          Array.isArray(b.accentCards) && b.accentCards.length > 0
+            ? b.accentCards
+            : fallbackCards,
+      };
+    });
+
+    return customSlides.length > 0 ? customSlides : HERO_BANNERS;
+  }, [banners]);
+
+  // Swipeable Showcase Card Strip combines starred products (Option 2) + department cards
+  const showcaseCards = useMemo(() => {
+    const productCards = featuredProducts
+      .filter((fp) => fp.images?.[0]?.url)
+      .map((fp) => ({
+        title: fp.name,
+        tag: "Featured Product",
+        href: `/product/${fp.slug}`,
+        image: fp.images![0].url,
+      }));
+    return [...productCards, ...VISUAL_DEPARTMENT_CARDS];
+  }, [featuredProducts]);
+
+  const totalSlides = slides.length;
 
   const nextSlide = useCallback(() => {
     const now = Date.now();
@@ -280,7 +347,7 @@ export function HeroCarousel(_props: HeroCarouselProps) {
     });
   };
 
-  const activeBanner = HERO_BANNERS[currentSlide];
+  const activeBanner = slides[currentSlide] ?? slides[0];
 
   return (
     <section
@@ -297,7 +364,7 @@ export function HeroCarousel(_props: HeroCarouselProps) {
         className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-[#131921] text-white shadow-xl ring-1 ring-black/10 h-[410px] sm:h-[360px] lg:h-[400px]"
       >
         {/* Full-Bleed Background Lifestyle Image with Smooth Transition */}
-        {HERO_BANNERS.map((slide, idx) => (
+        {slides.map((slide, idx) => (
           <div
             key={slide.id}
             className={`pointer-events-none absolute inset-0 transition-opacity duration-700 ${idx === currentSlide ? "opacity-100 z-0" : "opacity-0 -z-10"
@@ -305,8 +372,9 @@ export function HeroCarousel(_props: HeroCarouselProps) {
           >
             <Image
               src={slide.bgImage}
-              alt={slide.title}
+              alt={slide.title || slide.badge}
               fill
+              unoptimized
               priority={idx === 0}
               sizes="(max-width: 768px) 100vw, 1280px"
               className="object-cover object-center"
@@ -375,6 +443,7 @@ export function HeroCarousel(_props: HeroCarouselProps) {
                   src={card.image}
                   alt={card.label}
                   fill
+                  unoptimized
                   sizes="180px"
                   className="object-cover transition duration-500 group-hover:scale-110"
                 />
@@ -427,7 +496,7 @@ export function HeroCarousel(_props: HeroCarouselProps) {
 
         {/* Slide Indicator Dots */}
         <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 backdrop-blur-md border border-white/15">
-          {HERO_BANNERS.map((slide, idx) => (
+          {slides.map((slide, idx) => (
             <button
               key={slide.id}
               type="button"
@@ -498,9 +567,9 @@ export function HeroCarousel(_props: HeroCarouselProps) {
           ref={scrollRowRef}
           className="mt-3 flex items-stretch gap-3 sm:gap-3.5 overflow-x-auto no-scrollbar scroll-smooth pb-0.5"
         >
-          {VISUAL_DEPARTMENT_CARDS.map((card) => (
+          {showcaseCards.map((card) => (
             <Link
-              key={card.title}
+              key={`${card.href}-${card.title}`}
               href={card.href}
               className="group relative flex w-40 sm:w-52 shrink-0 flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50 transition hover:-translate-y-0.5 hover:border-[#ff9900] hover:bg-white hover:shadow-md"
             >
@@ -509,6 +578,7 @@ export function HeroCarousel(_props: HeroCarouselProps) {
                   src={card.image}
                   alt={card.title}
                   fill
+                  unoptimized
                   sizes="220px"
                   className="object-cover transition duration-500 group-hover:scale-105"
                 />

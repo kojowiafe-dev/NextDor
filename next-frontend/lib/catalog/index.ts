@@ -230,6 +230,58 @@ function decodeHtmlEntities(str: string): string {
 /**
  * Fetches all product categories from NextDor catalog.
  */
+export interface HeroBannerProduct {
+  id: string;
+  name: string;
+  slug: string;
+  shortDesc?: string | null;
+  price: string | number;
+  salePrice?: string | number | null;
+  currency?: string;
+  images?: { url: string; alt?: string }[];
+  categories?: { name: string; slug: string }[];
+}
+
+export interface HeroBannerData {
+  id: string;
+  badge: string;
+  subtitle: string;
+  bgImageUrl: string;
+  ctaText: string;
+  ctaHref: string;
+  secondaryText?: string | null;
+  secondaryHref?: string | null;
+  productId?: string | null;
+  product?: HeroBannerProduct | null;
+  accentCards?: { label: string; image: string; href: string }[] | null;
+}
+
+/**
+ * Fetches active admin-curated hero banners and banner-featured products.
+ */
+export async function getHeroBanners(): Promise<{
+  banners: HeroBannerData[];
+  featuredProducts: HeroBannerProduct[];
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/banners`, {
+      next: { revalidate: 30 },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        return {
+          banners: Array.isArray(json.data.banners) ? json.data.banners : [],
+          featuredProducts: Array.isArray(json.data.featuredProducts) ? json.data.featuredProducts : [],
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch hero banners from backend:", err);
+  }
+  return { banners: [], featuredProducts: [] };
+}
+
 export async function getCategories(): Promise<Category[]> {
   try {
     const res = await fetch(`${API_BASE}/products/categories`, {

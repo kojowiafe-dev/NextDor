@@ -267,6 +267,7 @@ export class ProductService {
       cacheDel(CacheKey.categories()),
       cacheDel(CacheKey.trendingProducts()),
       cacheDel(CacheKey.groupedByMerchant()),
+      cacheDel("storefront:hero_banners"),
       flushPattern("products:list:*"),
     ]);
 
@@ -322,6 +323,7 @@ export class ProductService {
     stockQty?: number | null;
     category?: string;
     image?: string;
+    isBannerFeatured?: boolean;
   }) {
     const existing = await this.productRepo.findById(id);
     if (!existing || existing.deletedAt) {
@@ -336,6 +338,7 @@ export class ProductService {
     if (input.currency !== undefined) data.currency = input.currency;
     if (input.stockStatus !== undefined) data.stockStatus = input.stockStatus;
     if (input.stockQty !== undefined) data.stockQty = input.stockQty;
+    if (input.isBannerFeatured !== undefined) data.isBannerFeatured = Boolean(input.isBannerFeatured);
 
     if (input.category !== undefined) {
       const categoryId = await ProductService.resolveOrUpsertCategoryId(input.category);
@@ -361,6 +364,7 @@ export class ProductService {
       cacheDel(CacheKey.categories()),
       cacheDel(CacheKey.trendingProducts()),
       cacheDel(CacheKey.groupedByMerchant()),
+      cacheDel("storefront:hero_banners"),
       flushPattern("products:list:*"),
     ]);
 
@@ -409,6 +413,7 @@ export class ProductService {
       cacheDel(CacheKey.product(product.slug ?? id)),
       cacheDel(CacheKey.trendingProducts()),
       cacheDel(CacheKey.groupedByMerchant()),
+      cacheDel("storefront:hero_banners"),
       flushPattern("products:list:*"),
     ]);
   }

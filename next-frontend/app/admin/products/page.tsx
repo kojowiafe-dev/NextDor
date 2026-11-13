@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus, Pencil, Trash2, Search, RefreshCw, CheckCircle2, AlertCircle, Store, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, RefreshCw, CheckCircle2, AlertCircle, Store, AlertTriangle, FileSpreadsheet, Star } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { formatPrice } from "@/lib/utils";
 import {
@@ -39,6 +39,7 @@ export interface ProductItem {
   currency: string;
   stockStatus: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
   stockQty?: number | null;
+  isBannerFeatured?: boolean;
   vendor?: {
     id: string;
     name: string;
@@ -185,6 +186,37 @@ export default function AdminProductsPage() {
     const matchesCategory = p.categories?.some((c) => c.name.toLowerCase().includes(query));
     return matchesName || matchesCategory;
   });
+
+  const [togglingBannerId, setTogglingBannerId] = useState<string | null>(null);
+
+  async function handleToggleBannerFeature(product: ProductItem) {
+    setTogglingBannerId(product.id);
+    const nextVal = !product.isBannerFeatured;
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("nextdor-token") : null;
+      const res = await fetch(`${API_BASE}/products/${product.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ isBannerFeatured: nextVal }),
+      });
+      if (res.ok) {
+        setProducts((prev) => {
+          const updated = prev.map((p) =>
+            p.id === product.id ? { ...p, isBannerFeatured: nextVal } : p
+          );
+          setCachedProducts(updated);
+          return updated;
+        });
+      }
+    } catch {
+      // ignore
+    } finally {
+      setTogglingBannerId(null);
+    }
+  }
 
   async function handleDelete(id: string) {
     setIsDeleting(true);
@@ -409,6 +441,19 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBannerFeature(product)}
+                          disabled={togglingBannerId === product.id}
+                          className={`rounded p-1.5 transition ${
+                            product.isBannerFeatured
+                              ? "bg-amber-50 text-amber-500 hover:bg-amber-100"
+                              : "text-zinc-400 hover:bg-zinc-100 hover:text-amber-500"
+                          }`}
+                          title={product.isBannerFeatured ? "Remove from Homepage Banner" : "Showcase on Homepage Banner"}
+                        >
+                          <Star className={`h-4 w-4 ${product.isBannerFeatured ? "fill-amber-400" : ""}`} />
+                        </button>
                         <Link
                           href={`/admin/products/${product.id}`}
                           className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"

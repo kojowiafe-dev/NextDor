@@ -398,6 +398,7 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
             stockQty: { type: "integer", nullable: true },
             category: { type: "string" },
             image: { type: "string" },
+            isBannerFeatured: { type: "boolean" },
           },
         },
       },

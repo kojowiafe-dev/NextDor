@@ -279,6 +279,7 @@ model Product {
   expectedRestockDate DateTime?      // date restocking is promised
   isPreOrder          Boolean        @default(false)
   preOrderReleaseDate DateTime?
+  isBannerFeatured    Boolean        @default(false)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   deletedAt           DateTime?
@@ -291,12 +292,37 @@ model Product {
   warehouseStocks     WarehouseStock[]
   stockMovements      StockMovement[]
   stockAlerts         StockAlert[]
+  heroBanners         HeroBanner[]
 
   @@index([slug])
   @@index([vendorId])
   @@index([deletedAt])
   @@index([stockStatus])
+  @@index([isBannerFeatured])
   @@map("products")
+}
+
+/// Curated homepage hero banner slides managed by Admins.
+model HeroBanner {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  badge         String   @default("Featured")
+  subtitle      String
+  bgImageUrl    String
+  ctaText       String   @default("Shop Now")
+  ctaHref       String   @default("/shop")
+  secondaryText String?  @default("View Deals")
+  secondaryHref String?  @default("/deals")
+  productId     String?  @db.Uuid
+  accentCards   Json?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, sortOrder])
+  @@map("hero_banners")
 }
 
 enum StockStatus {
