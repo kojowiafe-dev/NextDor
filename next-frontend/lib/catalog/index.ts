@@ -208,20 +208,39 @@ export async function getProductById(id: string): Promise<Product | null> {
   return getProductBySlug(id);
 }
 
+function decodeHtmlEntities(str: string): string {
+  if (!str) return "";
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#8211;/g, "-")
+    .replace(/&#8212;/g, "-")
+    .replace(/&#8216;/g, "'")
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&#8243;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+}
+
 /**
  * Fetches all product categories from NextDor catalog.
  */
 export async function getCategories(): Promise<Category[]> {
   try {
     const res = await fetch(`${API_BASE}/products/categories`, {
-      next: { revalidate: 120 },
+      cache: "no-store",
     });
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.data?.categories)) {
         return json.data.categories.map((c: any) => ({
           id: c.id,
-          name: c.name,
+          name: decodeHtmlEntities(c.name),
           slug: c.slug,
           description: c.description || "",
           parentId: c.parentId ?? null,

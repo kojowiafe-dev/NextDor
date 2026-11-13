@@ -1,7 +1,7 @@
 "use client";
 
+import React, { FormEvent, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, X, Loader2, ArrowRight, TrendingUp, Sparkles, Folder, CheckCircle } from "lucide-react";
@@ -108,8 +108,11 @@ export function SearchBar({ className = "" }: { className?: string }) {
 
   return (
     <div ref={containerRef} className={`relative flex flex-1 items-center ${className}`}>
-      <form onSubmit={handleSubmit} className="relative flex w-full items-center">
-        <div className="relative flex-1">
+      <form
+        onSubmit={handleSubmit}
+        className="relative flex w-full items-stretch h-10 rounded-lg bg-white ring-1 ring-zinc-300 focus-within:ring-2 focus-within:ring-[#ff9900] overflow-hidden transition"
+      >
+        <div className="relative flex-1 h-full min-w-0">
           <input
             ref={inputRef}
             type="text"
@@ -120,10 +123,10 @@ export function SearchBar({ className = "" }: { className?: string }) {
             }}
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
-            placeholder="Search products, brands and categories..."
+            placeholder="Search Nextdor products..."
             aria-label="Search products"
             autoComplete="off"
-            className="w-full rounded-l-lg bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none ring-1 ring-zinc-300 focus:ring-2 focus:ring-[#ff9900] transition"
+            className="w-full h-full bg-transparent px-3.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none border-0"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {isLoading && (
@@ -148,7 +151,7 @@ export function SearchBar({ className = "" }: { className?: string }) {
         <button
           type="submit"
           aria-label="Submit search"
-          className="flex h-full items-center justify-center rounded-r-lg bg-[#ff9900] px-4 py-2 font-semibold text-zinc-950 transition-colors hover:bg-[#f08804] active:scale-95"
+          className="flex h-full items-center justify-center bg-[#ff9900] px-4 font-semibold text-zinc-950 transition-colors hover:bg-[#f08804] active:scale-95 shrink-0"
         >
           <Search className="h-4.5 w-4.5" />
         </button>
@@ -224,11 +227,10 @@ export function SearchBar({ className = "" }: { className?: string }) {
                           key={prod.id}
                           href={`/product/${prod.slug}`}
                           onClick={() => setIsOpen(false)}
-                          className={`flex items-center gap-3 rounded-lg p-2 transition ${
-                            isSelected
-                              ? "bg-[#fff3e0] ring-1 ring-[#ff9900]/50"
-                              : "hover:bg-zinc-50"
-                          }`}
+                          className={`flex items-center gap-3 rounded-lg p-2 transition ${isSelected
+                            ? "bg-[#fff3e0] ring-1 ring-[#ff9900]/50"
+                            : "hover:bg-zinc-50"
+                            }`}
                         >
                           <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-zinc-100 border border-zinc-200">
                             {prod.image ? (

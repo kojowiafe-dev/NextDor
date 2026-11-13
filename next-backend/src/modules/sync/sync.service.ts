@@ -78,6 +78,24 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>?/gm, "").trim();
 }
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#8211;/g, "-")
+    .replace(/&#8212;/g, "-")
+    .replace(/&#8216;/g, "'")
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&#8243;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+}
+
 function parsePrice(rawMinor: string, minorUnit: number): string {
   const parsed = parseInt(rawMinor || "0", 10);
   if (isNaN(parsed) || parsed <= 0) return "0.00";
@@ -476,7 +494,7 @@ export class SyncService {
         for (const p of prods) {
           try {
             const wcId = p.id;
-            const name = p.name || "Untitled Product";
+            const name = decodeHtmlEntities(p.name || "Untitled Product");
             let rawPrice = "0.00";
             let rawSale: string | null = null;
 
@@ -495,18 +513,45 @@ export class SyncService {
             const isInStock = p.is_in_stock ?? (p.stock_status === "instock");
             const stockStatus = isInStock ? "IN_STOCK" : "OUT_OF_STOCK";
 
-            // Category resolution
+            // Category resolution: match only against existing NextDor standard categories (do NOT invent/pollute new categories from WooCommerce)
             const categoryIds: string[] = [];
-            if (Array.isArray(p.categories)) {
+            if (Array.isArray(p.categories) && p.categories.length > 0) {
+              const allStoreCats = await prisma.category.findMany({ select: { id: true, slug: true, name: true } });
               for (const c of p.categories) {
-                const catSlug = c.slug || slugify(c.name || "General");
-                const cat = await prisma.category.upsert({
-                  where: { slug: catSlug },
-                  create: { name: c.name || "General", slug: catSlug },
-                  update: { name: c.name || "General" },
-                });
-                categoryIds.push(cat.id);
-                categoriesCreated++;
+                const cleanedName = decodeHtmlEntities(c.name || "").toLowerCase();
+                const catSlug = (c.slug || slugify(cleanedName)).toLowerCase();
+
+                // 1. Direct slug or name match against our clean NextDor categories
+                const matched = allStoreCats.find(
+                  (sc) => sc.slug === catSlug || sc.name.toLowerCase() === cleanedName
+                );
+                if (matched && !categoryIds.includes(matched.id)) {
+                  categoryIds.push(matched.id);
+                  continue;
+                }
+
+                // 2. Intelligent mapping of common WooCommerce sub-categories to NextDor primary categories
+                let targetSlug: string | null = null;
+                if (/laptop|phone|tv|appliance|electronic|audio|headphone/i.test(cleanedName)) {
+                  targetSlug = /appliance|fridge|cooker|iron|fan|heater/i.test(cleanedName) ? "home-appliances" : "electronics";
+                } else if (/bag|case|cable|speaker|watch|accessory|earbud/i.test(cleanedName)) {
+                  targetSlug = "accessories";
+                } else if (/bakery|cake|snack|honey|grocery|food/i.test(cleanedName)) {
+                  targetSlug = "bakery-groceries";
+                } else if (/beauty|perfume|herbal|care|spray|skin/i.test(cleanedName)) {
+                  targetSlug = "beauty-personal-care";
+                } else if (/shirt|cloth|fashion|apparel|shoe/i.test(cleanedName)) {
+                  targetSlug = "fashion-apparel";
+                } else if (/book|stationery/i.test(cleanedName)) {
+                  targetSlug = "books";
+                }
+
+                if (targetSlug) {
+                  const mappedCat = allStoreCats.find((sc) => sc.slug === targetSlug);
+                  if (mappedCat && !categoryIds.includes(mappedCat.id)) {
+                    categoryIds.push(mappedCat.id);
+                  }
+                }
               }
             }
 
