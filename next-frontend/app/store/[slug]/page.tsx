@@ -79,33 +79,33 @@ export default async function VendorStorefrontPage({
 
       {/* Merchant Hero Banner */}
       <div className="relative border-b border-zinc-200 bg-white">
-        <div className="h-44 w-full bg-gradient-to-r from-purple-800 via-indigo-800 to-zinc-900 object-cover" />
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="relative -mt-16 flex flex-col items-start gap-4 pb-6 sm:flex-row sm:items-end sm:gap-6">
-            <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-white shadow-md overflow-hidden font-bold text-2xl text-purple-700">
+        <div className="h-24 sm:h-36 w-full bg-gradient-to-r from-purple-800 via-indigo-800 to-zinc-900 object-cover" />
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
+          <div className="relative -mt-10 sm:-mt-14 flex flex-col items-start gap-3 pb-4 sm:pb-6 sm:flex-row sm:items-end sm:gap-5">
+            <div className="flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-white shadow-md overflow-hidden font-bold text-xl text-purple-700">
               {vendor.logoUrl ? (
                 <img src={vendor.logoUrl} alt={vendor.name} className="h-full w-full object-cover" />
               ) : (
-                <Store className="h-12 w-12 text-purple-600" />
+                <Store className="h-9 w-9 sm:h-11 sm:w-11 text-purple-600" />
               )}
             </div>
 
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-2xl font-black tracking-tight text-zinc-900 sm:text-3xl">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-black tracking-tight text-zinc-900 sm:text-2xl">
                   {vendor.name}
                 </h1>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                  <CheckCircle className="h-3.5 w-3.5" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                  <CheckCircle className="h-3 w-3" />
                   <span>Verified Merchant</span>
                 </span>
               </div>
 
-              <p className="mt-1.5 max-w-3xl text-sm text-zinc-600">
+              <p className="mt-1 max-w-3xl text-xs sm:text-sm text-zinc-600 line-clamp-2">
                 {vendor.description || "Official seller store on Nextdor Ghana Marketplace."}
               </p>
 
-              <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
                 {vendor.phone && (
                   <span className="flex items-center gap-1">
                     <Phone className="h-3.5 w-3.5 text-zinc-400" />
@@ -129,80 +129,72 @@ export default async function VendorStorefrontPage({
       </div>
 
       {/* Merchant Products Catalog */}
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between border-b border-zinc-200 pb-4 mb-6">
+      <main className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="flex items-center justify-between border-b border-zinc-200 pb-3 mb-4">
           <div>
-            <h2 className="text-lg font-bold text-zinc-900">Products from {vendor.name}</h2>
+            <h2 className="text-base sm:text-lg font-bold text-zinc-900">Products from {vendor.name}</h2>
             <p className="text-xs text-zinc-500">
-              Direct from the vendor • Protected by Nextdor 48-Hour Buyer Protection
+              Protected by NextDor 48-Hour Buyer Escrow
             </p>
           </div>
         </div>
 
         {products.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-12 text-center text-zinc-500">
-            <ShoppingBag className="mx-auto h-12 w-12 text-zinc-300" />
-            <p className="mt-3 font-semibold text-zinc-800">No active products currently listed.</p>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-8 sm:p-12 text-center text-zinc-500">
+            <ShoppingBag className="mx-auto h-10 w-10 text-zinc-300" />
+            <p className="mt-2 font-semibold text-zinc-800">No active products currently listed.</p>
             <p className="text-xs text-zinc-400">Check back soon for new arrivals from this store!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3 lg:grid-cols-4">
             {products.map((prod) => {
               const primaryImg = prod.images?.[0]?.url;
               return (
                 <div
                   key={prod.id}
-                  className="group flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:shadow-md hover:border-purple-200"
+                  className="group flex flex-col overflow-hidden rounded-xl sm:rounded-2xl border border-zinc-200 bg-white shadow-xs transition hover:shadow-md hover:border-purple-200"
                 >
-                  <div className="relative aspect-square w-full overflow-hidden bg-zinc-100">
+                  <Link href={`/product/${prod.slug}`} className="relative aspect-square w-full overflow-hidden bg-zinc-50 block">
                     {primaryImg ? (
                       <img
                         src={primaryImg}
                         alt={prod.name}
-                        className="h-full w-full object-cover object-center transition duration-300 group-hover:scale-105"
+                        className="h-full w-full object-contain p-2 transition duration-300 group-hover:scale-105"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center font-bold text-zinc-300 text-3xl">
+                      <div className="flex h-full w-full items-center justify-center font-bold text-zinc-300 text-2xl">
                         {prod.name.charAt(0)}
                       </div>
                     )}
                     {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
-                      <span className="absolute top-2.5 left-2.5 rounded-md bg-red-600 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
+                      <span className="absolute top-2 left-2 rounded bg-[#cc0c39] px-1.5 py-0.5 text-[10px] font-bold text-white shadow-2xs">
                         -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
                       </span>
                     )}
-                  </div>
+                  </Link>
 
-                  <div className="flex flex-1 flex-col p-4">
-                    <p className="text-xs font-semibold text-purple-600">
+                  <div className="flex flex-1 flex-col p-2.5 sm:p-4">
+                    <p className="text-[10px] sm:text-xs font-semibold text-purple-600 truncate">
                       {prod.categories?.[0]?.name || "Catalog"}
                     </p>
-                    <h3 className="mt-1 font-bold text-zinc-900 line-clamp-1 group-hover:text-purple-600 transition">
+                    <h3 className="mt-0.5 text-xs sm:text-sm font-bold text-zinc-900 line-clamp-2 group-hover:text-purple-600 transition">
                       <Link href={`/product/${prod.slug}`}>{prod.name}</Link>
                     </h3>
-                    <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{prod.description}</p>
 
-                    <div className="mt-auto pt-4 flex items-center justify-between">
+                    <div className="mt-auto pt-2.5 sm:pt-3 flex items-center justify-between gap-1">
                       <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-base font-extrabold text-zinc-900">
-                            {formatPrice(Number(prod.salePrice ?? prod.price), prod.currency || "GHS")}
-                          </span>
-                          {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
-                            <span className="rounded bg-red-50 border border-red-200 px-1.5 py-0.2 text-[10px] font-bold text-red-600">
-                              -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-xs sm:text-base font-extrabold text-zinc-900">
+                          {formatPrice(Number(prod.salePrice ?? prod.price), prod.currency || "GHS")}
+                        </span>
                         {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
-                          <span className="block text-xs text-zinc-400 line-through">
+                          <span className="block text-[10px] text-zinc-400 line-through">
                             {formatPrice(Number(prod.price), prod.currency || "GHS")}
                           </span>
                         )}
                       </div>
 
                       <span
-                        className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold ${
                           prod.stockStatus === "IN_STOCK"
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : "bg-red-50 text-red-700 border border-red-200"

@@ -125,47 +125,43 @@ export function DealsClient({ initialProducts, categories }: DealsClientProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
-      {/* ─── 1. HERO BANNER ────────────────────────────────────────────── */}
-      <section className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-[#131921] via-[#1a2536] to-[#2a1b18] p-6 text-white shadow-xl sm:p-10 ring-1 ring-white/10">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-[#cc0c39]/20 blur-3xl" />
-        <div className="pointer-events-none absolute right-1/3 bottom-0 h-60 w-60 rounded-full bg-[#ff9900]/15 blur-2xl" />
+    <div className="mx-auto max-w-7xl px-3 sm:px-4 py-3 sm:py-5">
+      {/* ─── 1. COMPACT DEALS HERO BANNER ──────────────────────────────── */}
+      <section className="relative mb-4 sm:mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-[#131921] via-[#1a2536] to-[#2a1b18] p-4 sm:p-6 text-white shadow-md ring-1 ring-white/10">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#cc0c39]/20 blur-3xl" />
 
-        <div className="relative z-10 max-w-3xl">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#cc0c39] px-3.5 py-1 text-xs font-black uppercase tracking-wider text-white shadow-md">
-            <Flame className="h-4 w-4 animate-bounce" />
-            <span>NextDor Flash Deals &amp; Discounts</span>
+        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-xl">
+            <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-[#cc0c39] px-2.5 py-0.5 text-[10px] sm:text-xs font-black uppercase tracking-wider text-white">
+              <Flame className="h-3.5 w-3.5" />
+              <span>Flash Deals &amp; Discounts</span>
+            </div>
+
+            <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl lg:text-3xl">
+              Save Big with <span className="text-[#ff9900]">Verified Deals</span>
+            </h1>
+
+            <p className="mt-1 text-xs sm:text-sm text-zinc-300 line-clamp-1">
+              Genuine products across Ghana backed by 48-Hour Buyer Escrow Protection.
+            </p>
           </div>
 
-          <h1 className="text-2xl font-black tracking-tight text-white sm:text-4xl lg:text-5xl">
-            Save Big with <span className="text-[#ff9900]">Ghana&apos;s Best</span> Verified Prices
-          </h1>
-
-          <p className="mt-3 text-sm text-zinc-300 sm:text-base leading-relaxed">
-            Every deal is 100% genuine, fulfilled by verified merchants across Ghana, and backed by the{" "}
-            <strong className="text-white font-semibold">NextDor 48-Hour Buyer Protection Escrow</strong>.
-          </p>
-
           {/* Quick Metric Pills */}
-          <div className="mt-6 flex flex-wrap items-center gap-3 text-xs sm:text-sm">
-            <div className="inline-flex items-center gap-2 rounded-xl bg-white/10 backdrop-blur-xs px-3.5 py-2 ring-1 ring-white/15">
-              <Tag className="h-4 w-4 text-[#ff9900]" />
+          <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
+            <div className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
+              <Tag className="h-3.5 w-3.5 text-[#ff9900]" />
               <span>
-                <strong className="font-bold text-white">{dealProducts.length}</strong> Active Deals
+                <strong className="font-bold text-white">{dealProducts.length}</strong> Deals
               </span>
             </div>
             {maxDiscount > 0 && (
-              <div className="inline-flex items-center gap-2 rounded-xl bg-rose-500/20 backdrop-blur-xs px-3.5 py-2 ring-1 ring-rose-400/30 text-rose-200">
-                <Percent className="h-4 w-4 text-rose-300" />
+              <div className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500/20 px-3 py-1.5 ring-1 ring-rose-400/30 text-rose-200">
+                <Percent className="h-3.5 w-3.5 text-rose-300" />
                 <span>
                   Up to <strong className="font-bold text-white">{maxDiscount}% OFF</strong>
                 </span>
               </div>
             )}
-            <div className="inline-flex items-center gap-2 rounded-xl bg-white/10 backdrop-blur-xs px-3.5 py-2 ring-1 ring-white/15">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              <span>Escrow Protected</span>
-            </div>
           </div>
         </div>
       </section>

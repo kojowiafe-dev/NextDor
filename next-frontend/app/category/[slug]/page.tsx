@@ -96,9 +96,9 @@ export default async function CategoryPage({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-3 sm:px-4 py-3 sm:py-5">
       {/* Breadcrumb Navigation */}
-      <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-1.5 text-xs text-zinc-500">
+      <nav aria-label="Breadcrumb" className="mb-2.5 sm:mb-3 flex items-center gap-1.5 text-xs text-zinc-500">
         <Link href="/" className="hover:text-[#c7511f] transition">
           Home
         </Link>
@@ -107,35 +107,35 @@ export default async function CategoryPage({
           Shop
         </Link>
         <ChevronRight className="h-3 w-3 text-zinc-400" />
-        <span className="font-semibold text-zinc-900">{category.name}</span>
+        <span className="font-semibold text-zinc-900 truncate">{category.name}</span>
       </nav>
 
-      {/* Category Hero Banner */}
-      <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#232f3e] via-[#1f2b38] to-[#131921] p-6 text-white shadow-sm sm:p-8">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
-              <Folder className="h-3.5 w-3.5" />
-              <span>Category Showcase</span>
+      {/* Compact Category Hero Banner */}
+      <div className="mb-4 sm:mb-5 rounded-2xl bg-gradient-to-r from-[#232f3e] via-[#1f2b38] to-[#131921] p-4 sm:p-5 text-white shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
+              <Folder className="h-3 w-3" />
+              <span>Department</span>
             </div>
-            <h1 className="mt-1 text-2xl font-black text-white sm:text-3xl">
+            <h1 className="mt-0.5 text-lg sm:text-2xl font-black text-white truncate">
               {category.name}
             </h1>
-            <p className="mt-1 text-sm text-zinc-300 max-w-2xl">
-              {category.description || `Discover top-quality ${category.name} from verified merchants across Ghana.`}
+            <p className="mt-0.5 text-xs text-zinc-300 line-clamp-1 max-w-xl">
+              {category.description || `Discover verified ${category.name} across Ghana.`}
             </p>
           </div>
-          <div className="rounded-xl bg-white/10 px-4 py-2 text-center backdrop-blur-xs border border-white/15 self-start sm:self-auto">
-            <span className="block text-xl font-black text-[#ff9900]">{total}</span>
-            <span className="text-[11px] text-zinc-300 uppercase tracking-wider">Available Products</span>
+          <div className="rounded-xl bg-white/10 px-3 py-1.5 text-center backdrop-blur-xs border border-white/15 shrink-0">
+            <span className="block text-base sm:text-lg font-black text-[#ff9900] leading-tight">{total}</span>
+            <span className="text-[10px] text-zinc-300 uppercase tracking-wider">Items</span>
           </div>
         </div>
 
-        {/* Sibling Categories Pills */}
-        <div className="mt-4 flex flex-wrap gap-2 pt-4 border-t border-white/10">
+        {/* Sibling Categories Pills - Horizontal Scroll on Mobile */}
+        <div className="mt-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2.5 border-t border-white/10">
           <Link
             href="/shop"
-            className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-zinc-300 hover:bg-white/20 transition"
+            className="shrink-0 whitespace-nowrap rounded-full bg-white/10 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-zinc-300 hover:bg-white/20 transition"
           >
             All Categories
           </Link>
@@ -145,7 +145,7 @@ export default async function CategoryPage({
               <Link
                 key={cat.id}
                 href={`/category/${cat.slug}`}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] sm:text-xs font-medium transition ${
                   isCurrent
                     ? "bg-[#ff9900] text-zinc-950 font-bold"
                     : "bg-white/10 text-zinc-300 hover:bg-white/20"
@@ -159,7 +159,7 @@ export default async function CategoryPage({
       </div>
 
       {/* 2-Column Catalog Layout */}
-      <div className="flex items-start gap-8">
+      <div className="flex items-start gap-6 lg:gap-8">
         {/* Left Column: Desktop Faceted Filter Sidebar */}
         <aside className="w-64 shrink-0 hidden lg:block sticky top-24 rounded-2xl bg-white p-5 shadow-xs border border-zinc-100">
           <ShopFilters
@@ -171,32 +171,32 @@ export default async function CategoryPage({
         {/* Right Column: Catalog Grid & Top Controls */}
         <main className="flex-1 min-w-0">
           {/* Controls Bar */}
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white p-3.5 shadow-xs border border-zinc-100">
-            <div className="flex items-center gap-3">
+          <div className="mb-3 sm:mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white p-2.5 sm:p-3.5 shadow-xs border border-zinc-100">
+            <div className="flex items-center justify-between sm:justify-start gap-3">
               <MobileFilterDrawer
                 categories={allCategories}
                 totalProducts={total}
               />
               <div className="text-xs text-zinc-500 font-medium">
                 Showing <strong className="text-zinc-900">{products.length}</strong> of{" "}
-                <strong className="text-zinc-900">{total}</strong> products
+                <strong className="text-zinc-900">{total}</strong>
               </div>
             </div>
 
-            {/* Sort Bar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <span className="text-xs font-semibold text-zinc-400 shrink-0 hidden sm:inline flex items-center gap-1">
+            {/* Sort Bar - Single Horizontal Scroll on Mobile */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <span className="text-xs font-semibold text-zinc-400 shrink-0 hidden sm:inline-flex items-center gap-1">
                 <ArrowUpDown className="h-3 w-3" />
                 Sort:
               </span>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 {sortOptions.map((opt) => {
                   const isActive = sort === opt.value;
                   return (
                     <Link
                       key={opt.value}
                       href={buildSortHref(opt.value)}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                      className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-medium transition ${
                         isActive
                           ? "bg-[#232f3e] text-white shadow-xs"
                           : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"

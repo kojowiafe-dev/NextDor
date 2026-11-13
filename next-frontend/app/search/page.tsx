@@ -98,18 +98,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-3 sm:px-4 py-3 sm:py-5">
       {/* Search bar */}
-      <div className="mb-6 flex justify-center">
+      <div className="mb-4 sm:mb-5 flex justify-center">
         <SearchPageBar initialQuery={query} />
       </div>
 
       {query ? (
         <>
           {/* Result header */}
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white p-4 shadow-xs border border-zinc-100">
+          <div className="mb-3 sm:mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white p-3 sm:p-4 shadow-xs border border-zinc-100">
             <div>
-              <h1 className="text-xl font-bold text-zinc-900">
+              <h1 className="text-base sm:text-xl font-bold text-zinc-900">
                 {total > 0 ? (
                   <>
                     <span className="text-zinc-500 font-normal">Results for </span>
@@ -127,18 +127,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             </div>
 
             {/* Sort & Mobile filter trigger */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
               <MobileFilterDrawer
                 categories={categories}
                 totalProducts={total}
               />
               {total > 0 && (
-                <div className="flex flex-wrap gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   {sortOptions.map((opt) => (
                     <Link
                       key={opt.value}
                       href={buildSortHref(opt.value)}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                      className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-medium transition ${
                         sort === opt.value
                           ? "bg-[#232f3e] text-white shadow-xs"
                           : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100"

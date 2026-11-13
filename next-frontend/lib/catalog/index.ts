@@ -43,7 +43,7 @@ function mapBackendProduct(p: any): Product {
   return {
     id: p.id,
     slug: p.slug,
-    name: p.name,
+    name: decodeHtmlEntities(p.name || ""),
     description: p.description || "",
     shortDescription: p.shortDesc || "",
     price,
@@ -297,12 +297,15 @@ export async function getRelatedProducts(
 
 export async function getDealOfTheDay(): Promise<Product | null> {
   const products = await getAllProducts({ onSale: true });
-  if (products.length === 0) {
+  const withImages = products.filter((p) => p.images?.[0]?.src && p.price > 0);
+  const pool = withImages.length > 0 ? withImages : products;
+
+  if (pool.length === 0) {
     const popular = await getPopularProducts(1);
     return popular[0] ?? null;
   }
 
-  return products.reduce((best, current) =>
+  return pool.reduce((best, current) =>
     getDiscountPercent(current) > getDiscountPercent(best) ? current : best,
   );
 }

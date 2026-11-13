@@ -114,19 +114,19 @@ export default async function ProductPage({ params }: ProductPageProps) {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-6">
       {/* Schema.org Structured Data for Google Rich Snippets */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <nav className="mb-4 text-sm text-zinc-500">
+      <nav className="mb-3 sm:mb-4 text-xs sm:text-sm text-zinc-500 overflow-x-auto whitespace-nowrap no-scrollbar py-0.5">
         <Link href="/" className="hover:text-[#c7511f] hover:underline">
           Home
         </Link>
         {product.categories[0] && (
           <>
-            <span className="mx-2">›</span>
+            <span className="mx-1.5 sm:mx-2">›</span>
             <Link
               href={`/category/${product.categories[0].slug}`}
               className="hover:text-[#c7511f] hover:underline"
@@ -135,11 +135,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </Link>
           </>
         )}
-        <span className="mx-2">›</span>
-        <span className="text-zinc-900">{product.name}</span>
+        <span className="mx-1.5 sm:mx-2">›</span>
+        <span className="text-zinc-900 truncate max-w-[200px] inline-block align-bottom">{product.name}</span>
       </nav>
 
-      <div className="grid gap-8 rounded-lg bg-white p-6 shadow-sm lg:grid-cols-2">
+      <div className="grid gap-6 sm:gap-8 rounded-2xl bg-white p-4 sm:p-6 shadow-sm lg:grid-cols-2">
         <ProductGallery images={product.images} productName={product.name} />
 
         <div className="space-y-4">

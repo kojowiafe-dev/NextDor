@@ -69,11 +69,11 @@ export function ProductCard({ product }: ProductCardProps) {
   }
 
   return (
-    <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-zinc-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-[#ff9900]/30">
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-xl sm:rounded-2xl bg-white p-2.5 sm:p-3.5 shadow-xs ring-1 ring-zinc-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-[#ff9900]/30">
       {/* Top Badges: Sale Discount & In-Stock Availability */}
-      <div className="mb-2 flex items-center justify-between gap-1.5">
+      <div className="mb-1.5 sm:mb-2 flex items-center justify-between gap-1">
         {product.onSale && discount > 0 ? (
-          <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-xs">
+          <span className="rounded-md bg-[#cc0c39] px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white">
             -{discount}%
           </span>
         ) : (
@@ -81,30 +81,30 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
         <div className="ml-auto">
           {product.stockQty !== null && product.stockQty !== undefined && product.stockQty > 0 && product.stockQty <= 5 ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-800 border border-amber-300 shadow-2xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-amber-800 border border-amber-300">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-              Only {product.stockQty} left!
+              {product.stockQty} left
             </span>
           ) : product.inStock ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200/80">
-              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-emerald-700 border border-emerald-200/80">
+              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
               In Stock
             </span>
           ) : isBackorder ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200/80">
-              📦 Backorder
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-amber-700 border border-amber-200/80">
+              Backorder
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-              <AlertCircle className="h-3 w-3 text-zinc-400" />
-              Out of Stock
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium text-zinc-500">
+              <AlertCircle className="h-2.5 w-2.5 text-zinc-400" />
+              Sold Out
             </span>
           )}
         </div>
       </div>
 
       {/* Product Image & Wishlist Button Container */}
-      <div className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-zinc-50 transition-colors group-hover:bg-[#ff9900]/5">
+      <div className="relative mb-2 sm:mb-3 aspect-square overflow-hidden rounded-lg sm:rounded-xl bg-zinc-50 transition-colors group-hover:bg-[#ff9900]/5">
         <Link
           href={`/product/${product.slug}`}
           className="block h-full w-full"
@@ -114,8 +114,8 @@ export function ProductCard({ product }: ProductCardProps) {
               src={image.src}
               alt={image.alt || product.name}
               fill
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              className="object-contain p-2.5 transition-transform duration-300 group-hover:scale-105"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+              className="object-contain p-2 transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
             <div className="flex h-full items-center justify-center text-xs font-medium text-zinc-400">
@@ -130,14 +130,14 @@ export function ProductCard({ product }: ProductCardProps) {
           onClick={handleToggleWishlist}
           aria-label={liked ? "Remove from wishlist" : "Add to wishlist"}
           title={liked ? "Remove from wishlist" : "Add to wishlist"}
-          className={`absolute top-2 right-2 z-10 flex h-7.5 w-7.5 items-center justify-center rounded-full bg-white/95 backdrop-blur-xs shadow-xs ring-1 transition-all duration-200 hover:scale-110 active:scale-90 cursor-pointer ${
+          className={`absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 backdrop-blur-xs shadow-2xs ring-1 transition-all duration-200 hover:scale-110 cursor-pointer touch-manipulation ${
             liked
-              ? "text-rose-600 ring-rose-200 bg-rose-50/90 shadow-rose-100"
+              ? "text-rose-600 ring-rose-200 bg-rose-50/90"
               : "text-zinc-400 ring-zinc-200/80 hover:text-rose-600 hover:bg-white"
           }`}
         >
           <Heart
-            className={`h-4 w-4 transition-transform ${
+            className={`h-3.5 w-3.5 transition-transform ${
               liked ? "fill-rose-600 stroke-rose-600 scale-105" : "stroke-[2]"
             }`}
           />
@@ -148,18 +148,18 @@ export function ProductCard({ product }: ProductCardProps) {
       <div className="flex flex-1 flex-col">
         <Link
           href={`/product/${product.slug}`}
-          className="line-clamp-2 text-sm font-semibold text-zinc-900 transition-colors hover:text-[#c7511f]"
+          className="line-clamp-2 text-xs sm:text-sm font-semibold text-zinc-900 leading-snug transition-colors hover:text-[#c7511f]"
           title={product.name}
         >
           {product.name}
         </Link>
 
         {description && (
-          <p className="mt-1 line-clamp-1 text-xs text-zinc-500">{description}</p>
+          <p className="mt-1 hidden sm:line-clamp-1 text-xs text-zinc-500">{description}</p>
         )}
 
         {/* Rating */}
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">
+        <div className="mt-1.5 flex items-center gap-1 text-xs text-zinc-500">
           <div className="flex text-[#ff9900]">
             {Array.from({ length: 5 }).map((_, index) => (
               <Star
@@ -172,52 +172,52 @@ export function ProductCard({ product }: ProductCardProps) {
               />
             ))}
           </div>
-          <span className="text-[11px] text-zinc-400">
+          <span className="text-[10px] sm:text-[11px] text-zinc-400">
             ({product.reviewCount || 0})
           </span>
         </div>
 
         {/* Price */}
-        <div className="mt-3">
+        <div className="mt-2 sm:mt-2.5">
           <PriceDisplay product={product} size="sm" />
         </div>
       </div>
 
       {/* 1-Click Purchase / Add to Cart Action */}
-      <div className="mt-4 pt-2.5 border-t border-zinc-100">
+      <div className="mt-2.5 sm:mt-3.5 pt-2 border-t border-zinc-100">
         <button
           type="button"
           onClick={handleAddToCart}
           disabled={!canAddToCart}
-          className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-200 active:scale-95 shadow-xs ${
+          className={`flex w-full items-center justify-center gap-1.5 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold transition-all duration-200 shadow-2xs touch-manipulation ${
             justAdded
               ? "bg-emerald-600 text-white"
               : product.inStock
-              ? "bg-[#ff9900] text-zinc-950 hover:bg-[#f08804] hover:shadow-[#ff9900]/25 cursor-pointer"
+              ? "bg-[#ff9900] text-zinc-950 hover:bg-[#f08804] active:bg-[#e47911] cursor-pointer"
               : isBackorder
-              ? "bg-amber-600 text-white hover:bg-amber-500 cursor-pointer shadow-sm"
+              ? "bg-amber-600 text-white hover:bg-amber-500 cursor-pointer"
               : "cursor-not-allowed bg-zinc-100 text-zinc-400"
           }`}
         >
           {justAdded ? (
             <>
               <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-              <span>Added to Cart!</span>
+              <span>Added!</span>
             </>
           ) : product.inStock ? (
             <>
-              <ShoppingCart className="h-3.5 w-3.5" />
-              <span>
-                {inCartQty > 0 ? `Add Another (${inCartQty})` : "Add to Cart"}
+              <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {inCartQty > 0 ? `Add More (${inCartQty})` : "Add to Cart"}
               </span>
             </>
           ) : isBackorder ? (
             <>
-              <ShoppingCart className="h-3.5 w-3.5" />
-              <span>Backorder Now</span>
+              <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+              <span>Backorder</span>
             </>
           ) : (
-            <span>Out of Stock</span>
+            <span>Sold Out</span>
           )}
         </button>
       </div>

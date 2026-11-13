@@ -26,9 +26,13 @@ body {
   font-family: var(--font-outfit), Arial, Helvetica, sans-serif;
 }
 
-/* Ensure smooth touch scrolling on low-end mobile devices */
-* {
-  -webkit-overflow-scrolling: touch;
+/* Hide scrollbars while allowing smooth scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 a {

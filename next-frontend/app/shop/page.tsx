@@ -92,31 +92,31 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      {/* Page Header Banner */}
-      <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#232f3e] via-[#1a222d] to-[#131921] p-6 text-white shadow-md sm:p-8">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="mx-auto max-w-7xl px-3 sm:px-4 py-3 sm:py-5">
+      {/* Compact Page Header Banner */}
+      <div className="mb-4 sm:mb-5 rounded-2xl bg-gradient-to-r from-[#232f3e] via-[#1a222d] to-[#131921] p-4 sm:p-5 text-white shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
-              <Sparkles className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
+              <Sparkles className="h-3 w-3" />
               <span>NextDor Marketplace Catalog</span>
             </div>
-            <h1 className="mt-1 text-2xl font-black text-white sm:text-3xl">
+            <h1 className="mt-0.5 text-lg sm:text-2xl font-black text-white">
               All Products in Ghana
             </h1>
-            <p className="mt-1 text-sm text-zinc-300">
-              Explore thousands of authentic products backed by our 48-Hour Escrow Protection.
+            <p className="mt-0.5 text-xs text-zinc-300 line-clamp-1">
+              Authentic products backed by our 48-Hour Escrow Protection.
             </p>
           </div>
-          <div className="flex items-center gap-3 self-start md:self-auto rounded-xl bg-white/10 px-4 py-2 text-xs backdrop-blur-xs border border-white/15">
+          <div className="hidden sm:flex items-center gap-2 self-start sm:self-auto rounded-xl bg-white/10 px-3 py-1.5 text-xs backdrop-blur-xs border border-white/15">
             <ShieldCheck className="h-4 w-4 text-emerald-400" />
-            <span className="text-zinc-200">100% Verified Sellers & Genuine Products</span>
+            <span className="text-zinc-200">100% Verified Sellers</span>
           </div>
         </div>
       </div>
 
       {/* 2-Column Catalog Layout */}
-      <div className="flex items-start gap-8">
+      <div className="flex items-start gap-6 lg:gap-8">
         {/* Left Column: Desktop Faceted Filter Sidebar */}
         <aside className="w-64 shrink-0 hidden lg:block sticky top-24 rounded-2xl bg-white p-5 shadow-xs border border-zinc-100">
           <ShopFilters
@@ -128,32 +128,32 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
         {/* Right Column: Catalog Grid & Top Controls */}
         <main className="flex-1 min-w-0">
           {/* Controls Bar: Mobile filter drawer trigger, Active counts, Sort */}
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white p-3.5 shadow-xs border border-zinc-100">
-            <div className="flex items-center gap-3">
+          <div className="mb-3 sm:mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white p-2.5 sm:p-3.5 shadow-xs border border-zinc-100">
+            <div className="flex items-center justify-between sm:justify-start gap-3">
               <MobileFilterDrawer
                 categories={categories}
                 totalProducts={total}
               />
               <div className="text-xs text-zinc-500 font-medium">
                 Showing <strong className="text-zinc-900">{products.length}</strong> of{" "}
-                <strong className="text-zinc-900">{total}</strong> products
+                <strong className="text-zinc-900">{total}</strong>
               </div>
             </div>
 
-            {/* Sort Bar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <span className="text-xs font-semibold text-zinc-400 shrink-0 hidden sm:inline flex items-center gap-1">
+            {/* Sort Bar - Single Horizontal Scroll on Mobile */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <span className="text-xs font-semibold text-zinc-400 shrink-0 hidden sm:inline-flex items-center gap-1">
                 <ArrowUpDown className="h-3 w-3" />
                 Sort:
               </span>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 {sortOptions.map((opt) => {
                   const isActive = sort === opt.value;
                   return (
                     <Link
                       key={opt.value}
                       href={buildSortHref(opt.value)}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                      className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-medium transition ${
                         isActive
                           ? "bg-[#232f3e] text-white shadow-xs"
                           : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"

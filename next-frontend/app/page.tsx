@@ -17,7 +17,11 @@ export default async function HomePage() {
 
   return (
     <main className="space-y-4">
-      <HeroCarousel />
+      <HeroCarousel
+        products={products}
+        categories={categories}
+        dealProduct={dealProduct}
+      />
       <StreamlinedStorefront
         products={products}
         categories={categories}
