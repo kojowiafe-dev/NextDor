@@ -6,11 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPrice(amount: number, currency = "GHS"): string {
-  return new Intl.NumberFormat("en-GH", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
+  const num = Number.isFinite(Number(amount)) ? Number(amount) : 0;
+  const formattedNumber = num
+    .toFixed(2)
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  const code = (currency || "GHS").toUpperCase();
+  if (code === "GHS") {
+    return `GH₵${formattedNumber}`;
+  }
+  return `${code} ${formattedNumber}`;
 }
 
 export function stripHtml(html: string): string {
