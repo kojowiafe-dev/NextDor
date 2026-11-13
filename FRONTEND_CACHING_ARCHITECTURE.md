@@ -1,4 +1,4 @@
-# NextDor Frontend — Caching & Performance Architecture
+# Nextdor Frontend — Caching & Performance Architecture
 
 > **Design Objective**: Sub-10ms perceived navigation latency, zero layout shift, seamless offline resilience, and automatic background revalidation across Customer Storefront, Vendor Portals, and Administrative Command Centers.
 
@@ -8,7 +8,7 @@
 
 Modern e-commerce and administrative portals often suffer from the "Spinner Carousel" anti-pattern: every route transition displays full-page skeletons or loaders while waiting for database queries to round-trip over the network. 
 
-NextDor implements a **Multi-Tier Stale-While-Revalidate (SWR) Client Architecture** paired with **In-Flight Request Deduplication** (`lib/cache/clientCache.ts` and `lib/cache/adminCache.ts`).
+Nextdor implements a **Multi-Tier Stale-While-Revalidate (SWR) Client Architecture** paired with **In-Flight Request Deduplication** (`lib/cache/clientCache.ts` and `lib/cache/adminCache.ts`).
 
 ```
   ┌────────────────────────────────────────────────────────┐

@@ -56,10 +56,10 @@ export function AdminLayout({ children, title, actions }: AdminLayoutProps) {
                 <Menu className="h-5 w-5" />
               </button>
               {/* Mobile brand arrow logo */}
-              <Link href="/admin" className="flex md:hidden items-center shrink-0" title="NextDor Admin">
+              <Link href="/admin" className="flex md:hidden items-center shrink-0" title="Nextdor Admin">
                 <Image
                   src="/arrow-loader.png"
-                  alt="NextDor"
+                  alt="Nextdor"
                   width={24}
                   height={24}
                   className="h-6 w-6 object-contain drop-shadow-xs"

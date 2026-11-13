@@ -86,11 +86,11 @@ const envSchema = z.object({
     .string()
     .email()
     .or(z.string().regex(/^.+ <.+@.+>$/, "EMAIL_FROM must be 'Name <email@domain.com>'"))
-    .default("NextDor <nextdor@nextdor.online>"),
+    .default("Nextdor <nextdor@nextdor.online>"),
 
   // ── SMS ──────────────────────────────────────────────────────────────────
   ARKESEL_API_KEY: z.string().min(5),
-  SMS_FROM: z.string().default("NextDor"),
+  SMS_FROM: z.string().default("Nextdor"),
 
   // ── WhatsApp Provider & WATI / Meta Configuration ────────────────────────
   WHATSAPP_PROVIDER: z.enum(["meta", "wati"]).default("meta"),

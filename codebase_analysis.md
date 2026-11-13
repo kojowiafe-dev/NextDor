@@ -1,8 +1,8 @@
-# NextDor — Complete Codebase Analysis & System Architecture
+# Nextdor — Complete Codebase Analysis & System Architecture
 
 ## 1. Executive Summary
 
-**NextDor** (`nextdor.online`) is an enterprise-grade Ghanaian multi-vendor e-commerce marketplace operating under the brand motto **"Shop More, Wait Less"**. The platform connects local customers with verified Ghanaian merchants across Accra, Kumasi, and regions nationwide, supporting electronics, computing, fashion, beauty, home goods, and supermarket essentials priced in **Ghanaian Cedis (GHS)**.
+**Nextdor** (`nextdor.online`) is an enterprise-grade Ghanaian multi-vendor e-commerce marketplace operating under the brand motto **"Shop More, Wait Less"**. The platform connects local customers with verified Ghanaian merchants across Accra, Kumasi, and regions nationwide, supporting electronics, computing, fashion, beauty, home goods, and supermarket essentials priced in **Ghanaian Cedis (GHS)**.
 
 The system is architected as a high-performance monorepo:
 1. **`next-frontend`**: Next.js 16 (App Router + Turbopack + React 19) delivering a lightning-fast customer storefront, authenticated customer account management, a merchant self-service portal, and a super admin console.
@@ -16,7 +16,7 @@ The system is architected as a high-performance monorepo:
 | Layer | Technologies & Libraries | Key Responsibilities |
 | :--- | :--- | :--- |
 | **Frontend Framework** | Next.js 16.3 (App Router, Turbopack, React 19) | Server and Client Components, SSR, dynamic routing, metadata |
-| **Frontend Styling** | Tailwind CSS v4, Lucide React, Google Outfit Font | Brand Amazon/NextDor palette (`#ff9900`, `#131921`), responsive layouts |
+| **Frontend Styling** | Tailwind CSS v4, Lucide React, Google Outfit Font | Brand Amazon/Nextdor palette (`#ff9900`, `#131921`), responsive layouts |
 | **Frontend Caching** | Multi-Tier SWR (`clientCache.ts`, `adminCache.ts`), `fetchDedupe` | Instant navigation, memory + localStorage persistence, deduplication |
 | **Backend Framework** | Fastify v5, `@fastify/cors`, `@fastify/helmet`, `@fastify/swagger` | High-throughput async HTTP server (~76k req/s), OpenAPI documentation |
 | **Database & ORM** | PostgreSQL 16 (Neon Serverless), Prisma ORM 5 | 15 relational models (including `AuthCode`), migrations, ACID transactions, UUID v4 keys |
@@ -36,7 +36,7 @@ The system is architected as a high-performance monorepo:
 ## 3. High-Level Monorepo Structure
 
 ```
-NextDor/
+Nextdor/
 ├── next-frontend/                      # Next.js 16 App Router Client
 │   ├── app/                            # 41 active routes
 │   │   ├── (storefront)/               # Customer shopping routes (/, /shop, /deals, /product/[slug], /cart, /checkout, /returns)
@@ -134,7 +134,7 @@ The frontend provides four distinct user experiences governed by RBAC and clean 
 ### 🛡️ Admin Management Console (`/admin`)
 - **`/admin`**: Executive dashboard with platform KPIs, gross revenue, vendor count, order volume, live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), and recent audit activity (strictly excludes `CANCELLED` and `REFUNDED` orders from revenue calculations).
 - **Admin Notifications Center**: Interactive header bell popover (`AdminNotificationsPopover.tsx`) with real-time unread badge, one-click "Mark read" (zeroes unread count), one-click "Clear all" (switches to empty state), and individual item dismissal with persistent storage.
-- **Admin Navigation**: Zero-scrollbar non-scrollable desktop sidebar (`AdminSidebar.tsx`) with large NextDor logo and full-text action buttons, paired with a touch-friendly auto-dismissing mobile drawer with close (`X`) control.
+- **Admin Navigation**: Zero-scrollbar non-scrollable desktop sidebar (`AdminSidebar.tsx`) with large Nextdor logo and full-text action buttons, paired with a touch-friendly auto-dismissing mobile drawer with close (`X`) control.
 - **`/admin/orders`**: Global order management across all marketplace transactions, search by customer or order number, courier dispatch console, and manual status override with audit logging.
 - **`/admin/products`**: Global catalog directory, pricing audits, admin product creation (`POST /api/v1/products` via `AdminProductCreateForm`), admin bulk upload (`POST /api/v1/products/bulk`), and soft-delete controls.
 - **`/admin/inventory`**: Multi-warehouse physical stock dashboard, cross-hub transfers with atomic unit conservation, and SKU low-stock threshold monitors.

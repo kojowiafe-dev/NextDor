@@ -64,7 +64,7 @@ export function FloatingSupportButton() {
                   <Headphones className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">NextDor Support</h3>
+                  <h3 className="text-sm font-bold text-white">Nextdor Support</h3>
                   <p className="text-[11px] text-zinc-300">We&apos;re here to help in Ghana</p>
                 </div>
               </div>
@@ -171,7 +171,7 @@ export function FloatingSupportButton() {
 
           {/* Footer note */}
           <div className="bg-zinc-50 px-4 py-2 text-center text-[10px] text-zinc-400 border-t border-zinc-100">
-            NextDor Buyer Protection Guarantee
+            Nextdor Buyer Protection Guarantee
           </div>
         </div>
       )}

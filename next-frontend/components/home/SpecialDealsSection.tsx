@@ -222,7 +222,7 @@ export function SpecialDealsSection({ dealProduct }: SpecialDealsSectionProps) {
               </div>
 
               <h3 className="mt-4 text-xl font-extrabold text-white sm:text-2xl tracking-tight">
-                NextDor Direct Flash Steals
+                Nextdor Direct Flash Steals
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-200">
                 Order directly from verified merchants. Enjoy fast doorstep delivery and seamless mobile money payment.

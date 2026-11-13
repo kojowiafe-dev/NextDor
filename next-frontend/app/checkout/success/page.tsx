@@ -107,8 +107,8 @@ function SuccessContent() {
       </h1>
       <p className="mt-3 text-sm text-zinc-600 max-w-lg mx-auto">
         {isPaid
-          ? "Thank you for shopping with NextDor! Your payment was verified via Paystack and your merchants are packaging your items."
-          : "Thank you for shopping with NextDor. Your order has been registered in our system and is being prepared for dispatch."}
+          ? "Thank you for shopping with Nextdor! Your payment was verified via Paystack and your merchants are packaging your items."
+          : "Thank you for shopping with Nextdor. Your order has been registered in our system and is being prepared for dispatch."}
       </p>
 
       {/* Order Summary Card */}

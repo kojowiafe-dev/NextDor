@@ -369,10 +369,10 @@ export function DealsClient({ initialProducts, categories }: DealsClientProps) {
             </div>
             <div>
               <h4 className="font-bold text-zinc-900 text-sm sm:text-base">
-                100% NextDor Escrow Guarantee on All Deals
+                100% Nextdor Escrow Guarantee on All Deals
               </h4>
               <p className="mt-1 text-xs text-zinc-600 max-w-2xl leading-relaxed">
-                When you purchase a discounted deal on NextDor, your payment is held securely in escrow for 48 hours after delivery. 
+                When you purchase a discounted deal on Nextdor, your payment is held securely in escrow for 48 hours after delivery. 
                 If the item doesn&apos;t match the description or arrives defective, return it easily for a full refund.
               </p>
             </div>

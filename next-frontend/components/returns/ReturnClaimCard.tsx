@@ -171,7 +171,7 @@ export function ReturnClaimCard({ claim, token, onRefresh }: ReturnClaimCardProp
       {/* Admin Notes if present */}
       {claim.adminNote && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-          <span className="font-bold block">NextDor Resolution Note:</span>
+          <span className="font-bold block">Nextdor Resolution Note:</span>
           <span>{claim.adminNote}</span>
         </div>
       )}
@@ -210,7 +210,7 @@ export function ReturnClaimCard({ claim, token, onRefresh }: ReturnClaimCardProp
             </div>
 
             <p className="text-xs text-zinc-500">
-              A NextDor marketplace compliance officer will review your return claim, order photos,
+              A Nextdor marketplace compliance officer will review your return claim, order photos,
               and merchant communication to issue a final binding ruling.
             </p>
 

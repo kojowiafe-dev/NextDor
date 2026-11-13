@@ -81,7 +81,7 @@ export class PaymentService {
     const email = order.user?.email || order.guestEmail || input.email;
     if (!email) throw new BadRequestError("A customer email address is required to start payment");
 
-    // Only honour callback URLs that point back to a trusted NextDor frontend origin.
+    // Only honour callback URLs that point back to a trusted Nextdor frontend origin.
     let callbackUrl: string | undefined;
     if (input.callbackUrl) {
       const origin = originOf(input.callbackUrl);

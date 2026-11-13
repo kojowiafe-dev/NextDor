@@ -1,5 +1,5 @@
 /**
- * NextDor Email Dispatcher Service.
+ * Nextdor Email Dispatcher Service.
  *
  * Supports live dispatch via Cloudflare Email Sending API (with optional Resend fallback)
  * and resilient terminal fallback in development environments to ensure testing is never blocked.
@@ -53,7 +53,7 @@ export class EmailService {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: config.EMAIL_FROM || "NextDor <nextdor@nextdor.online>",
+            from: config.EMAIL_FROM || "Nextdor <nextdor@nextdor.online>",
             to: [to],
             subject,
             html,
@@ -181,17 +181,17 @@ export class EmailService {
             <div class="content">
               <h2 style="font-size: 20px; font-weight: 700; margin-top: 0;">Verify your email address</h2>
               <p style="color: #52525b; font-size: 14px; line-height: 1.6;">Hello ${name},</p>
-              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">Thank you for registering on NextDor. Please use the 6-digit verification code below to activate your account and begin shopping:</p>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">Thank you for registering on Nextdor. Please use the 6-digit verification code below to activate your account and begin shopping:</p>
               
               <div class="code-box">
                 <div class="code-number">${formattedCode}</div>
                 <p style="margin: 8px 0 0 0; font-size: 12px; color: #b45309; font-weight: 600;">Valid for 15 minutes</p>
               </div>
 
-              <p style="color: #71717a; font-size: 13px; line-height: 1.5;">If you did not sign up for an account on NextDor, you can safely ignore this email.</p>
+              <p style="color: #71717a; font-size: 13px; line-height: 1.5;">If you did not sign up for an account on Nextdor, you can safely ignore this email.</p>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -200,9 +200,9 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `${code} is your NextDor verification code`,
+      subject: `${code} is your Nextdor verification code`,
       html,
-      text: `Your NextDor verification code is: ${code}. It expires in 15 minutes.`,
+      text: `Your Nextdor verification code is: ${code}. It expires in 15 minutes.`,
     });
   }
 
@@ -247,7 +247,7 @@ export class EmailService {
             <div class="content">
               <h2 style="font-size: 20px; font-weight: 700; margin-top: 0;">Reset your password</h2>
               <p style="color: #52525b; font-size: 14px; line-height: 1.6;">Hello ${name},</p>
-              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">We received a request to reset the password for your NextDor account. Use the 6-digit recovery code below to choose a new password:</p>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6;">We received a request to reset the password for your Nextdor account. Use the 6-digit recovery code below to choose a new password:</p>
               
               <div class="code-box">
                 <div class="code-number">${formattedCode}</div>
@@ -257,7 +257,7 @@ export class EmailService {
               <p style="color: #71717a; font-size: 13px; line-height: 1.5;">If you did not request a password reset, you can safely ignore this email. Your current password remains secure.</p>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -266,9 +266,9 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `${code} is your NextDor password reset code`,
+      subject: `${code} is your Nextdor password reset code`,
       html,
-      text: `Your NextDor password reset code is: ${code}. It expires in 15 minutes.`,
+      text: `Your Nextdor password reset code is: ${code}. It expires in 15 minutes.`,
     });
   }
 
@@ -405,7 +405,7 @@ export class EmailService {
               </div>
 
               <div class="escrow-callout">
-                🛡️ <strong>NextDor 48-Hour Buyer Protection Escrow:</strong> Your funds are safely held until 48 hours after delivery. If your order does not arrive as described, you are protected with a full refund.
+                🛡️ <strong>Nextdor 48-Hour Buyer Protection Escrow:</strong> Your funds are safely held until 48 hours after delivery. If your order does not arrive as described, you are protected with a full refund.
               </div>
 
               <a href="${trackUrl}" class="btn-track" style="color: #131921 !important;">
@@ -414,7 +414,7 @@ export class EmailService {
             </div>
             <div class="footer">
               <p style="margin: 0 0 6px 0;">Need support? WhatsApp or call us at <strong>+233 55 750 7693</strong> or email support@nextdor.online.</p>
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -423,7 +423,7 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Order Confirmed: ${orderNumber} — NextDor Ghana`,
+      subject: `Order Confirmed: ${orderNumber} — Nextdor Ghana`,
       html,
       text: `Thank you for your order, ${customerName}! Order ${orderNumber} is confirmed. Total: GH₵${Number(total).toFixed(2)}. Track your order here: ${trackUrl}`,
     });
@@ -499,7 +499,7 @@ export class EmailService {
               </a>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. Merchant Fulfillment Services.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. Merchant Fulfillment Services.</p>
             </div>
           </div>
         </body>
@@ -562,7 +562,7 @@ export class EmailService {
               </a>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -571,7 +571,7 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Order Update: ${orderNumber} is now ${status} — NextDor`,
+      subject: `Order Update: ${orderNumber} is now ${status} — Nextdor`,
       html,
       text: `Hi ${customerName}, your order ${orderNumber} is now ${status}. Track it here: ${trackUrl}`,
     });
@@ -664,7 +664,7 @@ export class EmailService {
               </div>
 
               <div class="escrow-callout">
-                🛡️ <strong>Buyer Escrow Assurance:</strong> Your money is held in 48-Hour NextDor Buyer Escrow until after your package is safely delivered and inspected.
+                🛡️ <strong>Buyer Escrow Assurance:</strong> Your money is held in 48-Hour Nextdor Buyer Escrow until after your package is safely delivered and inspected.
               </div>
 
               <a href="${trackUrl}" class="btn">
@@ -673,7 +673,7 @@ export class EmailService {
             </div>
             <div class="footer">
               <p style="margin: 0 0 6px 0;">Need help with this payment? WhatsApp or call us at <strong>+233 55 750 7693</strong>.</p>
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -682,7 +682,7 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Payment Receipt: GH₵${Number(amountPaid).toFixed(2)} for Order ${orderNumber} — NextDor`,
+      subject: `Payment Receipt: GH₵${Number(amountPaid).toFixed(2)} for Order ${orderNumber} — Nextdor`,
       html,
       text: `Hello ${customerName}, your payment of GH₵${Number(amountPaid).toFixed(2)} for order ${orderNumber} has been successfully verified via Paystack (Ref: ${paystackRef}). Track your order here: ${trackUrl}`,
     });
@@ -707,8 +707,8 @@ export class EmailService {
       : "Your package is ready and on the way!";
 
     const subText = isPickup
-      ? `Your order from <strong>${storeName || "NextDor Merchant"}</strong> has been prepared and is ready for collection at the Accra Digital Centre Pickup Hub.`
-      : `Your order from <strong>${storeName || "NextDor Merchant"}</strong> has been securely packaged, inspected, and handed over to our dispatch courier delivering to <strong>${destinationCity || "your destination"}</strong>.`;
+      ? `Your order from <strong>${storeName || "Nextdor Merchant"}</strong> has been prepared and is ready for collection at the Accra Digital Centre Pickup Hub.`
+      : `Your order from <strong>${storeName || "Nextdor Merchant"}</strong> has been securely packaged, inspected, and handed over to our dispatch courier delivering to <strong>${destinationCity || "your destination"}</strong>.`;
 
     const html = `
       <!DOCTYPE html>
@@ -750,7 +750,7 @@ export class EmailService {
             </div>
             <div class="footer">
               <p style="margin: 0 0 6px 0;">Questions? Call/WhatsApp support at <strong>+233 55 750 7693</strong>.</p>
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -759,14 +759,14 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Package Ready: ${orderNumber} is on the way! — NextDor`,
+      subject: `Package Ready: ${orderNumber} is on the way! — Nextdor`,
       html,
       text: `Hi ${customerName}, your package for order ${orderNumber} is ready and dispatched! Track live here: ${trackUrl}`,
     });
   }
 
   /**
-   * Welcomes a newly verified customer to the NextDor Marketplace.
+   * Welcomes a newly verified customer to the Nextdor Marketplace.
    */
   static async sendWelcomeCustomer(email: string, customerName: string): Promise<boolean> {
     const shopUrl = "https://nextdor.online";
@@ -798,7 +798,7 @@ export class EmailService {
             </div>
             <div class="content">
               <div class="badge">🎉 Account Verified &amp; Active</div>
-              <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 10px 0; color: #09090b;">Welcome to NextDor, ${customerName}!</h2>
+              <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 10px 0; color: #09090b;">Welcome to Nextdor, ${customerName}!</h2>
               <p style="color: #52525b; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
                 Your email has been verified. You now have full access to Ghana's premier verified multi-vendor marketplace.
               </p>
@@ -831,7 +831,7 @@ export class EmailService {
             </div>
             <div class="footer">
               <p style="margin: 0 0 6px 0;">Need any assistance? Call or WhatsApp us at <strong>+233 55 750 7693</strong>.</p>
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -840,9 +840,9 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Welcome to NextDor, ${customerName}! 🇬🇭 Start shopping with 48-Hour Escrow Protection`,
+      subject: `Welcome to Nextdor, ${customerName}! 🇬🇭 Start shopping with 48-Hour Escrow Protection`,
       html,
-      text: `Welcome to NextDor, ${customerName}! Your account is verified. Start shopping today at: ${shopUrl}`,
+      text: `Welcome to Nextdor, ${customerName}! Your account is verified. Start shopping today at: ${shopUrl}`,
     });
   }
 
@@ -910,7 +910,7 @@ export class EmailService {
             </div>
             <div class="footer">
               <p style="margin: 0 0 6px 0;">Questions or delivery feedback? Call/WhatsApp <strong>+233 55 750 7693</strong>.</p>
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -919,7 +919,7 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Delivered: Order ${orderNumber} has arrived! — NextDor 48h Escrow Active`,
+      subject: `Delivered: Order ${orderNumber} has arrived! — Nextdor 48h Escrow Active`,
       html,
       text: `Hi ${customerName}, order ${orderNumber} has been delivered to ${deliveryAddress}. Inspect your package within 48 hours: ${trackUrl}`,
     });
@@ -984,13 +984,13 @@ export class EmailService {
               </div>
 
               <p style="color: #71717a; font-size: 13px; line-height: 1.5;">
-                The merchant and NextDor customer dispute team have been notified. Claims are reviewed within 24 business hours. If approved, funds will be refunded immediately to your original payment method.
+                The merchant and Nextdor customer dispute team have been notified. Claims are reviewed within 24 business hours. If approved, funds will be refunded immediately to your original payment method.
               </p>
 
               <a href="${portalUrl}" class="btn">View Return Progress &rarr;</a>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. Dispute Arbitration Team.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. Dispute Arbitration Team.</p>
             </div>
           </div>
         </body>
@@ -999,7 +999,7 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Return Request Received: Order ${orderNumber} (Claim #${returnId.slice(0, 8)}) — NextDor`,
+      subject: `Return Request Received: Order ${orderNumber} (Claim #${returnId.slice(0, 8)}) — Nextdor`,
       html,
       text: `Hello ${customerName}, your return request for order ${orderNumber} is received and under review. Track here: ${portalUrl}`,
     });
@@ -1059,7 +1059,7 @@ export class EmailService {
               </p>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -1068,7 +1068,7 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Refund Approved: GH₵${Number(refundAmount).toFixed(2)} for Order ${orderNumber} — NextDor`,
+      subject: `Refund Approved: GH₵${Number(refundAmount).toFixed(2)} for Order ${orderNumber} — Nextdor`,
       html,
       text: `Hello ${customerName}, your refund of GH₵${Number(refundAmount).toFixed(2)} for order ${orderNumber} has been approved and processed to your ${paymentChannel}.`,
     });
@@ -1111,7 +1111,7 @@ export class EmailService {
               <div class="badge">⚖️ Escalated to Admin Arbitration</div>
               <h2 style="font-size: 20px; font-weight: 700; margin: 12px 0 8px 0;">Hello ${customerName},</h2>
               <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
-                Your return request for Order <strong style="color: #18181b;">${orderNumber}</strong> has been escalated to NextDor Super-Admin Arbitration for impartial review.
+                Your return request for Order <strong style="color: #18181b;">${orderNumber}</strong> has been escalated to Nextdor Super-Admin Arbitration for impartial review.
               </p>
 
               ${
@@ -1126,7 +1126,7 @@ export class EmailService {
             </div>
             <div class="footer">
               <p style="margin: 0 0 6px 0;">WhatsApp arbitration team at <strong>+233 55 750 7693</strong>.</p>
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -1135,9 +1135,9 @@ export class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: `Claim Escalated: Order ${orderNumber} is under Admin Arbitration — NextDor`,
+      subject: `Claim Escalated: Order ${orderNumber} is under Admin Arbitration — Nextdor`,
       html,
-      text: `Hello ${customerName}, your return for order ${orderNumber} has been escalated to NextDor Admin Arbitration. We will update you shortly.`,
+      text: `Hello ${customerName}, your return for order ${orderNumber} has been escalated to Nextdor Admin Arbitration. We will update you shortly.`,
     });
   }
 
@@ -1160,7 +1160,7 @@ export class EmailService {
       logger.warn("sendLowStockAlert: missing recipient email");
       return false;
     }
-    const storeName = params.storeName || params.recipientName || "NextDor Merchant";
+    const storeName = params.storeName || params.recipientName || "Nextdor Merchant";
     const sku = params.sku || "SKU-N/A";
     const { productName, currentStock, threshold, warehouseName } = params;
     const portalUrl = "https://nextdor.online/vendor/dashboard";
@@ -1209,7 +1209,7 @@ export class EmailService {
               <a href="${portalUrl}" class="btn">Restock in Merchant Portal &rarr;</a>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. Automated Inventory Telemetry.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. Automated Inventory Telemetry.</p>
             </div>
           </div>
         </body>
@@ -1225,7 +1225,7 @@ export class EmailService {
   }
 
   /**
-   * Alerts a merchant that their store application has been approved by NextDor administrators.
+   * Alerts a merchant that their store application has been approved by Nextdor administrators.
    */
   static async sendVendorApproved(params: {
     vendorEmail: string;
@@ -1264,7 +1264,7 @@ export class EmailService {
               <div class="badge">🎉 Store Application Approved</div>
               <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 10px 0; color: #09090b;">Congratulations, ${ownerName}!</h2>
               <p style="color: #52525b; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
-                Your merchant application for <strong style="color: #18181b;">${storeName}</strong> has been reviewed and officially approved by NextDor Operations.
+                Your merchant application for <strong style="color: #18181b;">${storeName}</strong> has been reviewed and officially approved by Nextdor Operations.
               </p>
 
               <div class="card">
@@ -1288,7 +1288,7 @@ export class EmailService {
             </div>
             <div class="footer">
               <p style="margin: 0 0 6px 0;">Merchant Onboarding Support: WhatsApp <strong>+233 55 750 7693</strong> or email vendors@nextdor.online.</p>
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. All rights reserved.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -1297,9 +1297,9 @@ export class EmailService {
 
     return this.sendEmail({
       to: vendorEmail,
-      subject: `🎉 Congratulations! Your Store "${storeName}" is Approved on NextDor Ghana`,
+      subject: `🎉 Congratulations! Your Store "${storeName}" is Approved on Nextdor Ghana`,
       html,
-      text: `Congratulations ${ownerName}! Your store "${storeName}" is approved on NextDor. Start listing products at: ${portalUrl}`,
+      text: `Congratulations ${ownerName}! Your store "${storeName}" is approved on Nextdor. Start listing products at: ${portalUrl}`,
     });
   }
 
@@ -1343,7 +1343,7 @@ export class EmailService {
               <div class="badge">Status Update: ${status}</div>
               <h2 style="font-size: 20px; font-weight: 700; margin: 12px 0 8px 0;">Hello ${storeName},</h2>
               <p style="color: #52525b; font-size: 14px; line-height: 1.6;">
-                Your store status on NextDor has been updated to: <strong style="color: ${badgeColor};">${status}</strong>.
+                Your store status on Nextdor has been updated to: <strong style="color: ${badgeColor};">${status}</strong>.
               </p>
 
               ${
@@ -1361,7 +1361,7 @@ export class EmailService {
               </p>
             </div>
             <div class="footer">
-              <p style="margin: 0;">NextDor Ghana Merchant Governance Team • support@nextdor.online</p>
+              <p style="margin: 0;">Nextdor Ghana Merchant Governance Team • support@nextdor.online</p>
             </div>
           </div>
         </body>
@@ -1370,9 +1370,9 @@ export class EmailService {
 
     return this.sendEmail({
       to: vendorEmail,
-      subject: `Store Update: "${storeName}" is now ${status} — NextDor`,
+      subject: `Store Update: "${storeName}" is now ${status} — Nextdor`,
       html,
-      text: `Hello ${storeName}, your store status on NextDor is now ${status}. Details: ${portalUrl}`,
+      text: `Hello ${storeName}, your store status on Nextdor is now ${status}. Details: ${portalUrl}`,
     });
   }
 
@@ -1435,7 +1435,7 @@ export class EmailService {
               <a href="${portalUrl}" class="btn">View Payout History &rarr;</a>
             </div>
             <div class="footer">
-              <p style="margin: 0;">&copy; ${new Date().getFullYear()} NextDor Marketplace Ghana. Automated Financial Settlements.</p>
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Nextdor Marketplace Ghana. Automated Financial Settlements.</p>
             </div>
           </div>
         </body>

@@ -194,7 +194,7 @@ export class PaymentRepository {
     });
 
     // Spec §2: Total = subtotal + deliveryFee
-    // Delivery fee belongs to NextDor (spec assumption 1).
+    // Delivery fee belongs to Nextdor (spec assumption 1).
     // Split delivery fee across vendor lines proportionally by their subtotal share.
     const totalSubtotalPesewas = Money.fromMajor(order.subtotal).toMinor();
     const deliveryFeePesewas   = Money.fromMajor(order.deliveryFee).toMinor();

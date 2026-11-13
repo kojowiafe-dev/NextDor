@@ -608,7 +608,7 @@ export class OrderRepository {
   }
 
   /**
-   * Resolves the flagship "NextDor Direct" vendor that owns catalog items with no
+   * Resolves the flagship "Nextdor Direct" vendor that owns catalog items with no
    * merchant (needed because VendorOrder.vendorId is a real UUID foreign key).
    */
   async findPlatformVendorId(): Promise<string | null> {

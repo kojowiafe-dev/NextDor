@@ -2,15 +2,15 @@
 
 import Image from "next/image";
 
-export interface NextDorSpinnerProps {
+export interface NextdorSpinnerProps {
   size?: "sm" | "md" | "lg";
   className?: string;
 }
 
-export function NextDorSpinner({
+export function NextdorSpinner({
   size = "lg",
   className = "",
-}: NextDorSpinnerProps) {
+}: NextdorSpinnerProps) {
   const sizeConfig = {
     sm: {
       outer: "h-12 w-12",
@@ -49,13 +49,13 @@ export function NextDorSpinner({
         className={`absolute inset-0 animate-spin rounded-full border-transparent border-t-[#ff9900] border-r-[#f08804] ${sizeConfig.ringBorder}`}
       />
 
-      {/* Inner dark badge with NextDor signature arrow logo */}
+      {/* Inner dark badge with Nextdor signature arrow logo */}
       <div
         className={`relative flex items-center justify-center rounded-full bg-[#131921] shadow-md ring-2 ring-[#ff9900]/40 overflow-hidden ${sizeConfig.inner}`}
       >
         <Image
           src="/arrow-loader.png"
-          alt="NextDor"
+          alt="Nextdor"
           width={sizeConfig.imgSize}
           height={sizeConfig.imgSize}
           priority
@@ -66,17 +66,17 @@ export function NextDorSpinner({
   );
 }
 
-interface NextDorPageLoaderProps {
+interface NextdorPageLoaderProps {
   message?: string;
   subMessage?: string;
   fullScreen?: boolean;
 }
 
-export function NextDorPageLoader({
-  message = "Loading NextDor...",
+export function NextdorPageLoader({
+  message = "Loading Nextdor...",
   subMessage = "Shop More, Wait Less",
   fullScreen = true,
-}: NextDorPageLoaderProps) {
+}: NextdorPageLoaderProps) {
   return (
     <div
       className={`flex flex-col items-center justify-center bg-zinc-50/90 backdrop-blur-xs transition-opacity duration-300 ${
@@ -90,9 +90,9 @@ export function NextDorPageLoader({
         <div className="absolute -inset-4 rounded-full bg-[#ff9900]/15 blur-xl animate-pulse" />
 
         {/* Outer dual-spin ring with signature arrow */}
-        <NextDorSpinner size="lg" />
+        <NextdorSpinner size="lg" />
 
-        {/* NextDor Brand Typography */}
+        {/* Nextdor Brand Typography */}
         <div className="mt-5 text-center">
           <p className="text-sm font-bold tracking-wide text-zinc-900">
             {message}

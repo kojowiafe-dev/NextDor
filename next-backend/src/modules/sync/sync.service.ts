@@ -168,7 +168,7 @@ export class SyncService {
 
     logger.info({ endpoint }, "Starting WooCommerce catalog synchronization");
 
-    // Resolve NextDor Flagship Vendor
+    // Resolve Nextdor Flagship Vendor
     const flagshipVendor = await prisma.vendor.findUnique({
       where: { slug: "nextdor" },
       select: { id: true },
@@ -197,7 +197,7 @@ export class SyncService {
           response = await fetch(url, {
             headers: {
               "Accept": "application/json",
-              "User-Agent": "NextDor-SyncService/1.0",
+              "User-Agent": "Nextdor-SyncService/1.0",
             },
             signal: controller.signal,
           });
@@ -237,7 +237,7 @@ export class SyncService {
           try {
             this.status.progress = `Saving ${wcProd.name}...`;
 
-            // 1. Match against existing canonical NextDor categories only (never upsert/invent new categories from WooCommerce)
+            // 1. Match against existing canonical Nextdor categories only (never upsert/invent new categories from WooCommerce)
             const categoryIds: string[] = [];
             if (Array.isArray(wcProd.categories) && wcProd.categories.length > 0) {
               const allStoreCats = await prisma.category.findMany({ select: { id: true, slug: true, name: true } });
@@ -447,7 +447,7 @@ export class SyncService {
         const url = `${endpoint}?per_page=${perPage}&page=${page}`;
         const headers: Record<string, string> = {
           "Accept": "application/json",
-          "User-Agent": "NextDor-SyncService/1.0",
+          "User-Agent": "Nextdor-SyncService/1.0",
         };
 
         if (hasKeys && vendor.wcConsumerKey && decryptedSecret) {
@@ -511,7 +511,7 @@ export class SyncService {
             const isInStock = p.is_in_stock ?? (p.stock_status === "instock");
             const stockStatus = isInStock ? "IN_STOCK" : "OUT_OF_STOCK";
 
-            // Category resolution: match only against existing NextDor standard categories (do NOT invent/pollute new categories from WooCommerce)
+            // Category resolution: match only against existing Nextdor standard categories (do NOT invent/pollute new categories from WooCommerce)
             const categoryIds: string[] = [];
             if (Array.isArray(p.categories) && p.categories.length > 0) {
               const allStoreCats = await prisma.category.findMany({ select: { id: true, slug: true, name: true } });
@@ -519,7 +519,7 @@ export class SyncService {
                 const cleanedName = decodeHtmlEntities(c.name || "").toLowerCase();
                 const catSlug = (c.slug || slugify(cleanedName)).toLowerCase();
 
-                // 1. Direct slug or name match against our clean NextDor categories
+                // 1. Direct slug or name match against our clean Nextdor categories
                 const matched = allStoreCats.find(
                   (sc) => sc.slug === catSlug || sc.name.toLowerCase() === cleanedName
                 );
@@ -528,7 +528,7 @@ export class SyncService {
                   continue;
                 }
 
-                // 2. Intelligent mapping of common WooCommerce sub-categories to NextDor primary categories
+                // 2. Intelligent mapping of common WooCommerce sub-categories to Nextdor primary categories
                 let targetSlug: string | null = null;
                 if (/laptop|phone|tv|appliance|electronic|audio|headphone/i.test(cleanedName)) {
                   targetSlug = /appliance|fridge|cooker|iron|fan|heater/i.test(cleanedName) ? "home-appliances" : "electronics";

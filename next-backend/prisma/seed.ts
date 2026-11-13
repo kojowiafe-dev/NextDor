@@ -4,22 +4,22 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 /**
- * NextDor Platform Administrator & System Initialization Script.
+ * Nextdor Platform Administrator & System Initialization Script.
  *
  * DESIGN:
  * This script initializes only legitimate platform entities:
  * 1. Root Platform Super Administrator (SUPER_ADMIN)
- * 2. NextDor Direct (Root Marketplace Operator Vendor)
+ * 2. Nextdor Direct (Root Marketplace Operator Vendor)
  *
  * ZERO mock merchants, dummy products, or synthetic reviews are injected.
  * Real marketplace merchants register legitimately through /vendor/register.
  */
 async function main() {
-  console.log("🛡️ Initializing NextDor Platform System Accounts...");
+  console.log("🛡️ Initializing Nextdor Platform System Accounts...");
 
   // 1. Create or ensure Super Administrator exists
   const adminEmail = process.env.ADMIN_EMAIL || "admin@nextdor.com";
-  const defaultPassword = process.env.ADMIN_INITIAL_PASSWORD || "Admin@NextDor2026!";
+  const defaultPassword = process.env.ADMIN_INITIAL_PASSWORD || "Admin@Nextdor2026!";
   const adminPasswordHash = await bcrypt.hash(defaultPassword, 12);
 
   const admin = await prisma.user.upsert({
@@ -31,7 +31,7 @@ async function main() {
     create: {
       email: adminEmail.toLowerCase().trim(),
       passwordHash: adminPasswordHash,
-      name: "NextDor Platform Admin",
+      name: "Nextdor Platform Admin",
       phone: "+233200000001",
       role: "SUPER_ADMIN",
       emailVerified: true,
@@ -47,9 +47,9 @@ async function main() {
       ownerId: admin.id,
     },
     create: {
-      name: "NextDor Direct",
+      name: "Nextdor Direct",
       slug: "nextdor",
-      description: "Official NextDor flagship store for curated inventory and platform operations.",
+      description: "Official Nextdor flagship store for curated inventory and platform operations.",
       email: admin.email,
       phone: admin.phone || "+233200000001",
       status: "ACTIVE",

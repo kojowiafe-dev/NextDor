@@ -1,4 +1,4 @@
-# NextDor Architecture, Security Hardening & 48-Hour Escrow Specification
+# Nextdor Architecture, Security Hardening & 48-Hour Escrow Specification
 
 This document records every production fix, security patch, and architectural decision made across `next-backend` and `next-frontend`, along with the **engineering and security rationale ("the why")** behind each choice.
 
@@ -18,7 +18,7 @@ This document records every production fix, security patch, and architectural de
 - **The Problem:** When Upstash or local Redis was unreachable (`ECONNREFUSED`), BullMQ email queues, rate limiters, and cache reads threw unhandled connection errors or stalled requests.
 - **The Choice:** Implemented a non-blocking Redis client with a fast 5-attempt circuit breaker (`isRedisAvailable()`), in-memory rate-limit fallback in Fastify, null-safe cache wrappers (`getCache`/`setCache`), and direct Resend email fallback when BullMQ cannot reach Redis.
 - **Why This Choice Was Made:**
-  - Redis in NextDor serves as a **performance & background-queue accelerator**, not the primary source of financial truth (PostgreSQL is the source of truth).
+  - Redis in Nextdor serves as a **performance & background-queue accelerator**, not the primary source of financial truth (PostgreSQL is the source of truth).
   - Crashing checkout or customer logins because a cache/queue node is temporarily unreachable violates high-availability principles. Failing open to PostgreSQL and direct email dispatch keeps revenue-critical paths online with zero data loss.
 
 ### 1.2 Neon PostgreSQL Idle Connection Recovery & Retry Middleware
@@ -250,7 +250,7 @@ stateDiagram-v2
 - **Files:** [`next-backend/src/modules/admin/admin.analytics.service.ts`](next-backend/src/modules/admin/admin.analytics.service.ts), [`next-frontend/app/admin/page.tsx`](next-frontend/app/admin/page.tsx)
 - **The Problem:**
   - The main Admin Overview (`/admin`) computed `platformFee = totalRevenue * 0.10` and `escrowHold = totalRevenue * 0.90` on the frontend using only the last 100 orders (including unpaid/pending orders), and displayed a hardcoded `"↑ 12% vs last week"` badge.
-  - In reality, flagship NextDor items have 0% vendor commission, individual merchants can have custom commission rates, delivery fees belong to platform revenue, and settled payouts leave the escrow pool.
+  - In reality, flagship Nextdor items have 0% vendor commission, individual merchants can have custom commission rates, delivery fees belong to platform revenue, and settled payouts leave the escrow pool.
   - Furthermore, `/admin` made 3 redundant API calls (`/admin/analytics/overview`, `/admin/customers?limit=1`, `/products?limit=1`) to fetch counts already returned by `/admin/analytics/overview`.
 - **The Choice:**
   - Extended `AdminAnalyticsService.getOverview()` to compute true database-backed financial metrics in parallel:
@@ -292,14 +292,14 @@ stateDiagram-v2
 ### 6.1 Seamless & Secure Shopper-to-Merchant Account Upgrade
 - **Files:** [`next-backend/src/modules/vendors/vendor.service.ts`](next-backend/src/modules/vendors/vendor.service.ts), [`next-backend/src/modules/vendors/vendor.repository.ts`](next-backend/src/modules/vendors/vendor.repository.ts), [`next-backend/src/modules/vendors/vendor.routes.ts`](next-backend/src/modules/vendors/vendor.routes.ts), [`next-frontend/app/vendor/register/page.tsx`](next-frontend/app/vendor/register/page.tsx), [`next-frontend/context/AuthContext.tsx`](next-frontend/context/AuthContext.tsx), [`next-frontend/components/account/AccountSidebar.tsx`](next-frontend/components/account/AccountSidebar.tsx), [`next-frontend/app/account/page.tsx`](next-frontend/app/account/page.tsx)
 - **The Problem:**
-  - When an existing NextDor shopper wanted to open a store on `/vendor/register` using their existing account email, `VendorService.registerVendor()` unconditionally threw `ConflictError("An account with this email address already exists.")`, forcing customers to create a separate email address just to sell on the platform.
+  - When an existing Nextdor shopper wanted to open a store on `/vendor/register` using their existing account email, `VendorService.registerVendor()` unconditionally threw `ConflictError("An account with this email address already exists.")`, forcing customers to create a separate email address just to sell on the platform.
 - **The Choice:**
   1. **Unified Identity Upgrade (`VendorRepository.upgradeUserToVendor`):** When `POST /api/v1/vendors/register` receives an email belonging to an existing `CUSTOMER` account, the system upgrades that user in an ACID transaction — creating the `Vendor` record (`status: "PENDING_APPROVAL"`), linking `user.vendorId`, and promoting `user.role` to `VENDOR_OWNER` — while preserving all existing customer orders, saved addresses, and wishlist items.
   2. **Cryptographic Ownership Verification (Anti-Hijacking Guard):** Before upgrading an existing account, `VendorService.registerVendor()` verifies that the caller owns the customer account via **either**:
      - A valid JWT `Authorization: Bearer <token>` header matching `existingUser.id` (when signed in), **OR**
      - A valid password matching `bcrypt.compare(dto.password, existingUser.passwordHash)` (when logged out).
   3. **Immediate JWT Re-Issuance for Verified Accounts:** If `existingUser.emailVerified` is already `true`, the backend immediately mints fresh JWT tokens (`authService._issueTokens(updatedUser.id)`) carrying the new `VENDOR_OWNER` role and `vendorId`, and the frontend updates `AuthContext` via `setSession()` and routes directly to `/vendor/dashboard` without forcing a redundant OTP step.
-  4. **Customer Dashboard Entry Points:** Added **"Sell on NextDor • Open Store"** CTAs in `AccountSidebar.tsx` and `app/account/page.tsx`, and pre-filled customer details on `/vendor/register` when signed in.
+  4. **Customer Dashboard Entry Points:** Added **"Sell on Nextdor • Open Store"** CTAs in `AccountSidebar.tsx` and `app/account/page.tsx`, and pre-filled customer details on `/vendor/register` when signed in.
 - **Why This Choice Was Made:**
   - **Frictionless Conversion Without Compromising Security:** Customers can become sellers in 60 seconds under a single identity while keeping their shopping history, and requiring JWT or current-password verification prevents any third party from attaching a store to someone else's email address.
 

@@ -254,7 +254,7 @@ export function PackingSlipModal({
           {/* Financial Summary & Escrow Note */}
           <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-t border-zinc-200 pt-4 text-xs">
             <div className="space-y-1 text-zinc-500 max-w-sm">
-              <p className="font-bold text-zinc-700">NextDor Merchant Invariant Settlement:</p>
+              <p className="font-bold text-zinc-700">Nextdor Merchant Invariant Settlement:</p>
               <p>• 90% Net Merchant Split: {formatPrice(Number(vendorOrder.vendorEarnings), "GHS")}</p>
               <p>• 10% Platform Technology Fee: {formatPrice(Number(vendorOrder.commissionAmount), "GHS")}</p>
               <p>• Escrow Window: 48 Hours buyer protection inspection before wallet release.</p>
@@ -300,7 +300,7 @@ export function PackingSlipModal({
 
           {/* Document Footer */}
           <div className="mt-8 text-center text-[10px] text-zinc-400 border-t border-zinc-100 pt-3">
-            NextDor Ghana • Automated Multi-Vendor Marketplace Operations • https://nextdor.com
+            Nextdor Ghana • Automated Multi-Vendor Marketplace Operations • https://nextdor.com
           </div>
         </div>
       </div>

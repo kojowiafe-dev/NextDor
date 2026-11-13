@@ -443,7 +443,7 @@ export default function AdminOrderDetailPage() {
                       onChange={(e) => setCarrier(e.target.value)}
                       className="w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-zinc-900 outline-none focus:border-[#ff9900]"
                     >
-                      <option value="INTERNAL_COURIER">NextDor Dedicated Driver (Internal)</option>
+                      <option value="INTERNAL_COURIER">Nextdor Dedicated Driver (Internal)</option>
                       <option value="FEZ">Fez Delivery Ghana</option>
                       <option value="KWIK">Kwik Delivery</option>
                       <option value="DHL">DHL Express Ghana</option>

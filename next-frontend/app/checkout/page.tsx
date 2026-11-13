@@ -802,7 +802,7 @@ export default function CheckoutPage() {
             <div className="space-y-1.5 text-center">
               <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700">
                 <ShieldCheck className="h-4 w-4" />
-                48-Hour NextDor Buyer Escrow Guarantee
+                48-Hour Nextdor Buyer Escrow Guarantee
               </p>
               <p className="text-[11px] text-zinc-400">
                 Encrypted with 256-bit SSL · Paystack Certified Gateway

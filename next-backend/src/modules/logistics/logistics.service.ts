@@ -212,7 +212,7 @@ export class LogisticsService {
       if (recipientPhone) {
         SmsService.sendSms(
           recipientPhone,
-          `NextDor Update: Your package (${shipment.trackingNumber}) is out for delivery! Our courier ${payload.courierName || "driver"} will contact you shortly.`,
+          `Nextdor Update: Your package (${shipment.trackingNumber}) is out for delivery! Our courier ${payload.courierName || "driver"} will contact you shortly.`,
         ).catch((err) => logger.warn({ err: err?.message }, "Failed to dispatch delivery SMS"));
       }
       if (optIn && recipientPhone) {
@@ -221,7 +221,7 @@ export class LogisticsService {
           {
             orderNumber: shipment.order.number,
             trackingNumber: shipment.trackingNumber,
-            courierName: payload.courierName || shipment.carrier || "NextDor Express",
+            courierName: payload.courierName || shipment.carrier || "Nextdor Express",
             status: "OUT_FOR_DELIVERY",
             recipientName,
           },
@@ -255,7 +255,7 @@ export class LogisticsService {
       if (recipientPhone) {
         SmsService.sendSms(
           recipientPhone,
-          `NextDor Update: Order ${shipment.order.number} has been delivered. Thank you for shopping with NextDor!`,
+          `Nextdor Update: Order ${shipment.order.number} has been delivered. Thank you for shopping with Nextdor!`,
         ).catch((err) => logger.warn({ err: err?.message }, "Failed to dispatch delivered SMS"));
       }
       if (recipientEmail) {
@@ -275,7 +275,7 @@ export class LogisticsService {
           {
             orderNumber: shipment.order.number,
             trackingNumber: shipment.trackingNumber,
-            courierName: payload.courierName || shipment.carrier || "NextDor Express",
+            courierName: payload.courierName || shipment.carrier || "Nextdor Express",
             status: "DELIVERED",
             recipientName,
           },

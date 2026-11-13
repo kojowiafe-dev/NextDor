@@ -16,13 +16,13 @@ const ACCOUNTS = [
     code: "GATEWAY_CLEARING",
     name: "Gateway Clearing",
     accountType: "ASSET" as const,
-    description: "Money Paystack holds on behalf of NextDor, not yet settled to bank",
+    description: "Money Paystack holds on behalf of Nextdor, not yet settled to bank",
   },
   {
     code: "BANK_MOMO_SETTLEMENT",
     name: "Bank / MoMo Settlement",
     accountType: "ASSET" as const,
-    description: "Funds settled from Paystack into the NextDor bank or MoMo account",
+    description: "Funds settled from Paystack into the Nextdor bank or MoMo account",
   },
   {
     code: "PAYOUT_IN_TRANSIT",

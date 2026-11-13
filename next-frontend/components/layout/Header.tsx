@@ -174,7 +174,7 @@ export function Header({ categories }: HeaderProps) {
           <Link href="/" className="flex items-center shrink-0 py-0.5">
             <Image
               src="/logo.png"
-              alt="NextDor"
+              alt="Nextdor"
               width={140}
               height={38}
               priority

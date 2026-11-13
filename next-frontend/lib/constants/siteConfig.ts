@@ -1,12 +1,12 @@
 /**
- * Centralized Site Configuration & Official Brand Details for NextDor.
+ * Centralized Site Configuration & Official Brand Details for Nextdor.
  *
  * Configurable via environment variables with production defaults.
  */
 
 export const SITE_CONFIG = {
-  name: "NextDor",
-  legalName: "NextDor E-Commerce Marketplace Ltd.",
+  name: "Nextdor",
+  legalName: "Nextdor E-Commerce Marketplace Ltd.",
   tagline: "Shop More, Wait Less",
   domain: "https://www.nextdor.online",
   
@@ -14,7 +14,7 @@ export const SITE_CONFIG = {
   phone: (process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+233557507693").replace(/\s+/g, ""),
   phoneDisplay: process.env.NEXT_PUBLIC_SUPPORT_PHONE_DISPLAY || "+233 55 750 7693",
   whatsapp: (process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "+233557507693").replace(/\s+/g, ""),
-  whatsappUrl: `https://wa.me/${(process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "233557507693").replace(/[^0-9]/g, "")}?text=${encodeURIComponent("Hello NextDor Support, I have an inquiry about an order / product.")}`,
+  whatsappUrl: `https://wa.me/${(process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "233557507693").replace(/[^0-9]/g, "")}?text=${encodeURIComponent("Hello Nextdor Support, I have an inquiry about an order / product.")}`,
   email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "hello@nextdor.online",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@nextdor.online",
 

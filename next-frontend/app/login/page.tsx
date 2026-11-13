@@ -180,7 +180,7 @@ export default function LoginPage() {
             <Link href="/" className="inline-block rounded-xl bg-[#131921] px-5 py-2.5 shadow-md transition hover:bg-black">
               <Image
                 src="/logo.png"
-                alt="NextDor"
+                alt="Nextdor"
                 width={140}
                 height={38}
                 className="h-8 w-auto object-contain mx-auto"

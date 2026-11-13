@@ -1,4 +1,4 @@
-# NextDor Backend — Production Architecture
+# Nextdor Backend — Production Architecture
 
 > Living document. Updated as each phase is built.
 > Last updated: October 2026
@@ -93,7 +93,7 @@ graph TB
 ## 3. Repository Layout
 
 ```
-NextDor/
+Nextdor/
 ├── next-frontend/          # Next.js 16 App Router (React 19)
 ├── next-backend/           # Fastify v5 API Server
 │   ├── src/

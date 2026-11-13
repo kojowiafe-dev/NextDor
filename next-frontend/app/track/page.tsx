@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { fetchPublicOrderTracking, type PublicOrderTracking } from "@/lib/orders/api";
 import { SITE_CONFIG } from "@/lib/constants/siteConfig";
-import { NextDorPageLoader } from "@/components/ui/NextDorPageLoader";
+import { NextdorPageLoader } from "@/components/ui/NextdorPageLoader";
 
 // ─── 5-Stage Order Lifecycle Progression (Aligned with Prisma Schema) ────────
 
@@ -173,13 +173,13 @@ function TrackingContent() {
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff9900]/10 px-3 py-1 text-xs font-bold text-[#b86200]">
-              <Truck className="h-3.5 w-3.5" /> NextDor Real-Time Logistics Tracking
+              <Truck className="h-3.5 w-3.5" /> Nextdor Real-Time Logistics Tracking
             </span>
             <h1 className="mt-2 text-2xl font-black text-zinc-900 sm:text-3xl">
               Track Your Order
             </h1>
             <p className="mt-1 text-sm text-zinc-600">
-              Enter your NextDor Order Number (e.g. <span className="font-mono font-semibold">ND-00001</span>) to see live courier milestones.
+              Enter your Nextdor Order Number (e.g. <span className="font-mono font-semibold">ND-00001</span>) to see live courier milestones.
             </p>
           </div>
 
@@ -263,9 +263,9 @@ function TrackingContent() {
         {/* Loading state indicator */}
         {isLoading && !activeTracking && (
           <div className="mt-8 rounded-2xl bg-white p-8 shadow-xs ring-1 ring-zinc-200">
-            <NextDorPageLoader
+            <NextdorPageLoader
               message="Locating your package..."
-              subMessage="Connecting to NextDor Logistics & Store Dispatch"
+              subMessage="Connecting to Nextdor Logistics & Store Dispatch"
               fullScreen={false}
             />
           </div>
@@ -599,7 +599,7 @@ function TrackingContent() {
               </div>
               <div className="flex gap-2">
                 <a
-                  href={`https://wa.me/${SITE_CONFIG.whatsapp.replace(/[^0-9]/g, "")}?text=Hello%20NextDor%2C%20I%20am%20tracking%20order%20${activeTracking.orderNumber}`}
+                  href={`https://wa.me/${SITE_CONFIG.whatsapp.replace(/[^0-9]/g, "")}?text=Hello%20Nextdor%2C%20I%20am%20tracking%20order%20${activeTracking.orderNumber}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700"

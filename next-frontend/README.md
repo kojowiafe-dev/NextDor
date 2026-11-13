@@ -1,6 +1,6 @@
-# NextDor Frontend (`next-frontend`)
+# Nextdor Frontend (`next-frontend`)
 
-> High-performance, modern e-commerce storefront, customer account center, merchant portal, and administrative control center for **NextDor** — Ghana's premier multi-vendor marketplace ("Shop More, Wait Less").
+> High-performance, modern e-commerce storefront, customer account center, merchant portal, and administrative control center for **Nextdor** — Ghana's premier multi-vendor marketplace ("Shop More, Wait Less").
 
 ---
 
@@ -8,7 +8,7 @@
 
 - **Framework**: [Next.js 16.3](https://nextjs.org/) (App Router, Turbopack, React 19)
 - **Language**: TypeScript 5
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with custom Amazon/NextDor palette (`#ff9900`, `#131921`)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with custom Amazon/Nextdor palette (`#ff9900`, `#131921`)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Typography**: [Outfit](https://fonts.google.com/specimen/Outfit) via Google Fonts (`next/font`)
 - **State & Caching**: Multi-Tier SWR caching (`clientCache.ts`, `adminCache.ts`), in-flight request deduplication (`fetchDedupe`), React Context (`CartContext`, `AuthContext`)
@@ -136,7 +136,7 @@ The application features **41 active routes** organized into four distinct opera
 
 ## 🏷️ Dynamic Pricing & Discount Engine
 
-NextDor features native compare-at pricing and automatic discount calculations across all storefront and portal views:
+Nextdor features native compare-at pricing and automatic discount calculations across all storefront and portal views:
 - **Pricing Rule**: When `regularPrice > price`, the UI highlights the current selling price, strikes through the previous price (`line-through text-neutral-400`), and computes a percentage-off badge:
   $$\text{Discount \%} = \text{round}\left(\frac{\text{regularPrice} - \text{price}}{\text{regularPrice}} \times 100\right)\%$$
 - **Omission Rule**: When `regularPrice` is null, undefined, or $\le \text{price}$, only the current selling price is shown, omitting strikethrough styling and discount tags.

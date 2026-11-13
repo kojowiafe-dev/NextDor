@@ -15,7 +15,7 @@ export function ProductSpecifications({ product }: ProductSpecificationsProps) {
     { label: "Category", value: categoryNames, icon: PackageCheck },
     { label: "Stock Availability", value: product.inStock ? "In Stock (Available for Instant Dispatch)" : "Currently Out of Stock", icon: PackageCheck },
     { label: "Condition", value: "100% Brand New & Factory Sealed", icon: Award },
-    { label: "Warranty & Guarantee", value: "12 Months Manufacturer Warranty / NextDor 48h Escrow Guarantee", icon: Shield },
+    { label: "Warranty & Guarantee", value: "12 Months Manufacturer Warranty / Nextdor 48h Escrow Guarantee", icon: Shield },
     { label: "Return Policy", value: "7-Day Hassle-Free Returns for Eligible Items", icon: RefreshCw },
     { label: "Delivery Method", value: "Courier Doorstep Delivery & Hub Pickup in Ghana", icon: PackageCheck },
   ];

@@ -3,7 +3,7 @@
  *
  * DESIGN PATTERN: Domain Service / Strategy Pattern
  * ─────────────────────────────────────────────────
- * Encapsulates the mathematical split between platform fees (NextDor take-rate)
+ * Encapsulates the mathematical split between platform fees (Nextdor take-rate)
  * and vendor net earnings.
  *
  * INVARIANT GUARANTEE:

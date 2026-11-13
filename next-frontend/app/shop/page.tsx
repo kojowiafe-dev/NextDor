@@ -34,7 +34,7 @@ const sortOptions: { value: ProductSort; label: string }[] = [
 ];
 
 export const metadata = {
-  title: "Shop All Marketplace Products — NextDor Ghana",
+  title: "Shop All Marketplace Products — Nextdor Ghana",
   description: "Browse verified electronics, fashion, groceries, and home essentials with instant MoMo checkout and fast nationwide delivery.",
 };
 
@@ -99,7 +99,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           <div>
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#ff9900]">
               <Sparkles className="h-3 w-3" />
-              <span>NextDor Marketplace Catalog</span>
+              <span>Nextdor Marketplace Catalog</span>
             </div>
             <h1 className="mt-0.5 text-lg sm:text-2xl font-black text-white">
               All Products in Ghana

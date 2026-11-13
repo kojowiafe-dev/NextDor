@@ -1,4 +1,4 @@
-// NextDor — Prisma Schema
+// Nextdor — Prisma Schema
 // Run `npx prisma migrate dev --name init` to create the first migration.
 //
 // DESIGN DECISIONS documented inline throughout.
@@ -78,7 +78,7 @@ enum UserStatus {
 // VENDORS & MARKETPLACE
 // ═══════════════════════════════════════════════════════════════════
 
-/// A vendor/merchant store on the NextDor marketplace.
+/// A vendor/merchant store on the Nextdor marketplace.
 model Vendor {
   id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                   String

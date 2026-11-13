@@ -25,7 +25,7 @@ type SearchPageProps = {
 
 export async function generateMetadata({ searchParams }: SearchPageProps) {
   const { q } = await searchParams;
-  return { title: q ? `"${q}" — Search Results` : "Search NextDor Ghana" };
+  return { title: q ? `"${q}" — Search Results` : "Search Nextdor Ghana" };
 }
 
 const sortOptions: { value: ProductSort; label: string }[] = [

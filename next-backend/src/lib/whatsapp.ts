@@ -1,5 +1,5 @@
 /**
- * NextDor WhatsApp Service — powered by Meta WhatsApp Cloud API.
+ * Nextdor WhatsApp Service — powered by Meta WhatsApp Cloud API.
  *
  * Provides transactional, real-time WhatsApp alerts for:
  * 1. 6-digit Authentication OTP codes (Registration & Password Reset)
@@ -567,10 +567,10 @@ export class WhatsAppService {
     fallbackEmail?: { email: string; name?: string }
   ): Promise<boolean> {
     const isVerification = purpose === "verification";
-    const title = isVerification ? "NextDor Account Verification" : "NextDor Password Recovery";
+    const title = isVerification ? "Nextdor Account Verification" : "Nextdor Password Recovery";
     const actionDesc = isVerification
-      ? "verify your NextDor customer account"
-      : "reset your NextDor account password";
+      ? "verify your Nextdor customer account"
+      : "reset your Nextdor account password";
 
     const text = [
       `🔐 *${title}*`,
@@ -580,7 +580,7 @@ export class WhatsAppService {
       `👉 *${otpCode}* 👈`,
       ``,
       `⏳ Code is valid for *15 minutes*.`,
-      `⚠️ Never share this code with anyone. NextDor staff will never ask for your code.`,
+      `⚠️ Never share this code with anyone. Nextdor staff will never ask for your code.`,
       ``,
       `_Shop More, Wait Less_`,
       `https://nextdor.online`,
@@ -656,7 +656,7 @@ export class WhatsAppService {
     const trackingUrl = data.trackingUrl || `https://nextdor.online/account/orders/${data.orderNumber}`;
 
     const text = [
-      `🛍️ *NextDor: Order Received!*`,
+      `🛍️ *Nextdor: Order Received!*`,
       `────────────────────────────`,
       `Hi *${data.customerName}*, we've received your order *#${data.orderNumber}*!`,
       ``,
@@ -727,7 +727,7 @@ export class WhatsAppService {
     const dateFormatted = (data.paidAt || new Date()).toLocaleString("en-GB", { timeZone: "Africa/Accra" });
 
     const text = [
-      `🧾 *NextDor Official Payment Receipt*`,
+      `🧾 *Nextdor Official Payment Receipt*`,
       `────────────────────────────`,
       `Payment Confirmed! Thank you, *${data.customerName}*.`,
       ``,
@@ -797,7 +797,7 @@ export class WhatsAppService {
     const trackingUrl = data.trackingUrl || `https://nextdor.online/account/orders/${data.orderNumber}`;
 
     const text = [
-      `📦 *NextDor Order Update — #${data.orderNumber}*`,
+      `📦 *Nextdor Order Update — #${data.orderNumber}*`,
       `────────────────────────────`,
       `Hi *${data.customerName}*, your order is now:`,
       `✨ *${data.status}* ✨`,
@@ -862,7 +862,7 @@ export class WhatsAppService {
 
     const text = isOut
       ? [
-          `🚚 *NextDor: Out For Delivery!*`,
+          `🚚 *Nextdor: Out For Delivery!*`,
           `────────────────────────────`,
           `Hi *${data.recipientName}*, your package (*${data.trackingNumber}*) is out for delivery!`,
           `Our courier partner *${data.courierName}* will contact you shortly to complete delivery.`,
@@ -873,7 +873,7 @@ export class WhatsAppService {
           `_Shop More, Wait Less_`,
         ].join("\n")
       : [
-          `🎉 *NextDor: Package Delivered!*`,
+          `🎉 *Nextdor: Package Delivered!*`,
           `────────────────────────────`,
           `Hi *${data.recipientName}*, order *#${data.orderNumber}* has been delivered!`,
           ``,
@@ -881,7 +881,7 @@ export class WhatsAppService {
           `Your payment is securely held in escrow for 48 hours. If anything is wrong, visit our Returns Hub:`,
           `👉 https://nextdor.online/returns`,
           ``,
-          `Thank you for shopping with NextDor!`,
+          `Thank you for shopping with Nextdor!`,
         ].join("\n");
 
     const result = await this.dispatchTemplateMessage(
@@ -938,7 +938,7 @@ export class WhatsAppService {
     const dashboardUrl = data.dashboardUrl || "https://nextdor.online/vendor/dashboard";
 
     const text = [
-      `🔔 *NextDor Merchant Alert: New Order!*`,
+      `🔔 *Nextdor Merchant Alert: New Order!*`,
       `────────────────────────────`,
       `Store: *${data.storeName}*`,
       `Order: *#${data.orderNumber}*`,
@@ -950,7 +950,7 @@ export class WhatsAppService {
       `Please check inventory, pack the items, and prepare for courier dispatch:`,
       `👉 ${dashboardUrl}`,
       ``,
-      `_NextDor Merchant Portal_`,
+      `_Nextdor Merchant Portal_`,
     ].join("\n");
 
     const result = await this.dispatchMessage(phone, text, "VENDOR_NEW_ORDER", {
@@ -991,7 +991,7 @@ export class WhatsAppService {
     const dashboardUrl = data.dashboardUrl || "https://nextdor.online/vendor/dashboard";
 
     const text = [
-      `⚠️ *NextDor Inventory Alert: Low Stock!*`,
+      `⚠️ *Nextdor Inventory Alert: Low Stock!*`,
       `────────────────────────────`,
       `Store: *${data.storeName}*`,
       `Product: *${data.productName}*`,
@@ -1001,7 +1001,7 @@ export class WhatsAppService {
       `Please restock your inventory to prevent stockouts and missed sales:`,
       `👉 ${dashboardUrl}`,
       ``,
-      `_NextDor Merchant Portal_`,
+      `_Nextdor Merchant Portal_`,
     ].join("\n");
 
     const result = await this.dispatchMessage(phone, text, "VENDOR_LOW_STOCK", {
@@ -1042,7 +1042,7 @@ export class WhatsAppService {
     const dashboardUrl = data.dashboardUrl || "https://nextdor.online/vendor/dashboard";
 
     const text = [
-      `💰 *NextDor Payout: MoMo Disbursed!*`,
+      `💰 *Nextdor Payout: MoMo Disbursed!*`,
       `────────────────────────────`,
       `Store: *${data.storeName}*`,
       `Disbursed Amount: *GH₵${data.amount.toFixed(2)}*`,
@@ -1053,7 +1053,7 @@ export class WhatsAppService {
       `View your full earnings & payout ledger:`,
       `👉 ${dashboardUrl}`,
       ``,
-      `_NextDor Merchant Portal_`,
+      `_Nextdor Merchant Portal_`,
     ].join("\n");
 
     const result = await this.dispatchMessage(phone, text, "VENDOR_PAYOUT", {

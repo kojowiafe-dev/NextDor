@@ -1,6 +1,6 @@
-# NextDor Backend (`next-backend`)
+# Nextdor Backend (`next-backend`)
 
-> Enterprise-grade, high-throughput REST API for **NextDor** — Ghana's premier multi-vendor marketplace ("Shop More, Wait Less").
+> Enterprise-grade, high-throughput REST API for **Nextdor** — Ghana's premier multi-vendor marketplace ("Shop More, Wait Less").
 
 ---
 

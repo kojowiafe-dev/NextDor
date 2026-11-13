@@ -78,13 +78,13 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
             className={`flex items-center gap-2.5 overflow-hidden ${
               collapsed ? "justify-center" : ""
             }`}
-            title="NextDor Admin Command"
+            title="Nextdor Admin Command"
           >
             {collapsed ? (
               <div className="group/logo flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#1c2333] to-[#121824] ring-1 ring-[#ff9900]/40 shadow-md hover:ring-[#ff9900] transition-all duration-200">
                 <Image
                   src="/arrow-loader.png"
-                  alt="NextDor Admin"
+                  alt="Nextdor Admin"
                   width={28}
                   height={28}
                   className="h-6 w-6 object-contain drop-shadow-[0_2px_6px_rgba(255,153,0,0.45)] group-hover/logo:scale-110 transition-transform duration-200"
@@ -95,7 +95,7 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
               <div className="flex flex-col gap-1">
                 <Image
                   src="/logo.png"
-                  alt="NextDor Admin"
+                  alt="Nextdor Admin"
                   width={155}
                   height={42}
                   className="h-8.5 w-auto object-contain drop-shadow-xs"

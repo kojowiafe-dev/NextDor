@@ -68,12 +68,12 @@ export function MobileNav({ categories }: MobileNavProps) {
 
           {/* Drawer Sidebar */}
           <aside className="relative flex h-full w-[min(85vw,340px)] flex-col bg-[#131921] text-white shadow-2xl z-10 animate-in slide-in-from-left duration-200">
-            {/* Header with NextDor logo and close button */}
+            {/* Header with Nextdor logo and close button */}
             <div className="flex h-15 items-center justify-between border-b border-white/10 px-4 py-3 bg-[#0d1117]">
               <Link href="/" onClick={close} className="flex items-center">
                 <Image
                   src="/logo.png"
-                  alt="NextDor"
+                  alt="Nextdor"
                   width={115}
                   height={32}
                   className="h-7 w-auto object-contain"
@@ -276,7 +276,7 @@ export function MobileNav({ categories }: MobileNavProps) {
                 </button>
               )}
               <div className="pt-1 text-[11px] text-zinc-500 text-center">
-                NextDor Ghana • Shop More, Wait Less
+                Nextdor Ghana • Shop More, Wait Less
               </div>
             </div>
           </aside>

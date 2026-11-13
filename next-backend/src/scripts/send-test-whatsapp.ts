@@ -1,5 +1,5 @@
 /**
- * NextDor WhatsApp Diagnostic & Test Dispatcher.
+ * Nextdor WhatsApp Diagnostic & Test Dispatcher.
  * Supports both WATI Gateway and Meta WhatsApp Cloud API.
  *
  * Usage:
@@ -17,7 +17,7 @@ async function run() {
   const provider = WhatsAppService.getProvider();
 
   console.log("=================================================");
-  console.log("  NextDor WhatsApp Live Diagnostic & Dispatcher");
+  console.log("  Nextdor WhatsApp Live Diagnostic & Dispatcher");
   console.log("=================================================");
   console.log(`Target Phone:        ${targetPhone} -> ${normalized}`);
   console.log(`Active Provider:     ${provider.toUpperCase()}`);
@@ -60,9 +60,9 @@ async function run() {
 
     console.log("\n2. Sending Live Test Message via WATI to", normalized, "...");
     const testMessage = [
-      `🔔 *NextDor WhatsApp Notification Test (WATI)*`,
+      `🔔 *Nextdor WhatsApp Notification Test (WATI)*`,
       `────────────────────────────`,
-      `Hello! This is a test message from your NextDor Marketplace deployment.`,
+      `Hello! This is a test message from your Nextdor Marketplace deployment.`,
       ``,
       `📅 Time: ${new Date().toLocaleString("en-GB", { timeZone: "Africa/Accra" })}`,
       `🚀 Gateway: *WATI WhatsApp BSP*`,
@@ -126,9 +126,9 @@ async function run() {
 
     console.log("\n2. Sending Live Test Message to", normalized, "...");
     const testMessage = [
-      `🔔 *NextDor WhatsApp Notification Test*`,
+      `🔔 *Nextdor WhatsApp Notification Test*`,
       `────────────────────────────`,
-      `Hello! This is a test message from your NextDor Marketplace deployment.`,
+      `Hello! This is a test message from your Nextdor Marketplace deployment.`,
       ``,
       `📅 Time: ${new Date().toLocaleString("en-GB", { timeZone: "Africa/Accra" })}`,
       `🚀 Meta Cloud API Status: *CONNECTED*`,

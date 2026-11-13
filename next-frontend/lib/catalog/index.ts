@@ -84,7 +84,7 @@ function mapBackendProduct(p: any): Product {
 }
 
 /**
- * Fetches paginated products from the NextDor marketplace catalog.
+ * Fetches paginated products from the Nextdor marketplace catalog.
  */
 export async function getProducts(
   options: GetProductsOptions = {},
@@ -139,7 +139,7 @@ export async function getProducts(
 }
 
 /**
- * Fetches all products matching options from NextDor marketplace catalog.
+ * Fetches all products matching options from Nextdor marketplace catalog.
  */
 export async function getAllProducts(
   options: Omit<GetProductsOptions, "page" | "perPage"> = {},
@@ -181,7 +181,7 @@ export async function getAllProducts(
 }
 
 /**
- * Single product lookup by slug from NextDor catalog.
+ * Single product lookup by slug from Nextdor catalog.
  */
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   try {
@@ -202,7 +202,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 }
 
 /**
- * Single product lookup by ID from NextDor catalog.
+ * Single product lookup by ID from Nextdor catalog.
  */
 export async function getProductById(id: string): Promise<Product | null> {
   return getProductBySlug(id);
@@ -228,7 +228,7 @@ function decodeHtmlEntities(str: string): string {
 }
 
 /**
- * Fetches all product categories from NextDor catalog.
+ * Fetches all product categories from Nextdor catalog.
  */
 export interface HeroBannerProduct {
   id: string;
@@ -308,7 +308,7 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 /**
- * Retrieves a single category by slug from NextDor catalog.
+ * Retrieves a single category by slug from Nextdor catalog.
  */
 export async function getCategoryBySlug(slug: string): Promise<Category | null> {
   const categories = await getCategories();

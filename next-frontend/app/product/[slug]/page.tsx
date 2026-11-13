@@ -28,14 +28,14 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
   if (!product) {
     return {
-      title: "Product Not Found | NextDor Ghana",
+      title: "Product Not Found | Nextdor Ghana",
     };
   }
 
-  const title = `${product.name} — Buy Online in Ghana | NextDor`;
+  const title = `${product.name} — Buy Online in Ghana | Nextdor`;
   const description =
     product.shortDescription ||
-    `Buy ${product.name} at the best price in Ghana on NextDor. Verified sellers, fast delivery across Accra and nationwide, 48-hour buyer escrow guarantee.`;
+    `Buy ${product.name} at the best price in Ghana on Nextdor. Verified sellers, fast delivery across Accra and nationwide, 48-hour buyer escrow guarantee.`;
   const canonicalUrl = `https://nextdor.online/product/${product.slug}`;
   const images = product.images?.[0]?.src ? [product.images[0].src] : [];
 
@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
       title,
       description,
       url: canonicalUrl,
-      siteName: "NextDor Ghana",
+      siteName: "Nextdor Ghana",
       images: images.map((url) => ({ url, alt: product.name })),
       type: "website",
     },
@@ -85,7 +85,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     sku: product.id,
     brand: {
       "@type": "Brand",
-      name: "NextDor",
+      name: "Nextdor",
     },
     offers: {
       "@type": "Offer",
@@ -99,7 +99,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         : "https://schema.org/OutOfStock",
       seller: {
         "@type": "Organization",
-        name: product.vendor?.name || "NextDor Verified Merchant",
+        name: product.vendor?.name || "Nextdor Verified Merchant",
       },
     },
     ...(product.reviewCount > 0

@@ -1,12 +1,12 @@
-# NextDor Multi-Vendor Architecture: Object-Oriented Design & Code Breakdown
+# Nextdor Multi-Vendor Architecture: Object-Oriented Design & Code Breakdown
 
-This document provides a comprehensive, function-by-function, line-by-line architectural breakdown of the NextDor Multi-Vendor Marketplace. It explains the design patterns, mathematical invariants, security mechanisms, and Object-Oriented / SOLID principles governing the codebase.
+This document provides a comprehensive, function-by-function, line-by-line architectural breakdown of the Nextdor Multi-Vendor Marketplace. It explains the design patterns, mathematical invariants, security mechanisms, and Object-Oriented / SOLID principles governing the codebase.
 
 ---
 
 ## 🏛️ 1. Architecture Overview & SOLID Compliance
 
-NextDor does not use an "anemic model" (where raw database rows are passed around without validation). Instead, it follows **Clean Architecture** and **Domain-Driven Design (DDD)** principles:
+Nextdor does not use an "anemic model" (where raw database rows are passed around without validation). Instead, it follows **Clean Architecture** and **Domain-Driven Design (DDD)** principles:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -103,7 +103,7 @@ JavaScript numbers use IEEE 754 double-precision floats. Running `0.1 + 0.2` out
 
 ---
 
-### [`next-backend/src/domain/CommissionCalculator.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/domain/CommissionCalculator.ts)
+### [`next-backend/src/domain/CommissionCalculator.ts`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-backend/src/domain/CommissionCalculator.ts)
 
 Encapsulates marketplace revenue sharing between platform take-rate and vendor net payout.
 
@@ -134,7 +134,7 @@ Suppose Subtotal = `GH₵ 10.05` and commission is 50%:
 
 ---
 
-### [`next-backend/src/modules/products/product.repository.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/modules/products/product.repository.ts)
+### [`next-backend/src/modules/products/product.repository.ts`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-backend/src/modules/products/product.repository.ts)
 
 Isolates all Prisma queries for catalog items.
 
@@ -166,7 +166,7 @@ Isolates all Prisma queries for catalog items.
 
 ---
 
-### [`next-backend/src/modules/vendors/vendor.repository.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/modules/vendors/vendor.repository.ts)
+### [`next-backend/src/modules/vendors/vendor.repository.ts`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-backend/src/modules/vendors/vendor.repository.ts)
 
 Isolates all merchant, inventory, and payout queries.
 
@@ -203,7 +203,7 @@ Isolates all merchant, inventory, and payout queries.
 
 ---
 
-### [`next-backend/src/modules/auth/user.repository.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/modules/auth/user.repository.ts)
+### [`next-backend/src/modules/auth/user.repository.ts`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-backend/src/modules/auth/user.repository.ts)
 
 Manages identity and refresh token lifecycles.
 
@@ -224,7 +224,7 @@ Manages identity and refresh token lifecycles.
 
 ---
 
-### [`next-backend/src/modules/vendors/vendor.service.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/modules/vendors/vendor.service.ts)
+### [`next-backend/src/modules/vendors/vendor.service.ts`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-backend/src/modules/vendors/vendor.service.ts)
 
 Handles merchant onboarding, dashboard analytics, and tenant-isolated product updates.
 
@@ -257,7 +257,7 @@ Handles merchant onboarding, dashboard analytics, and tenant-isolated product up
 
 ---
 
-### [`next-backend/src/modules/auth/auth.service.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/modules/auth/auth.service.ts)
+### [`next-backend/src/modules/auth/auth.service.ts`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-backend/src/modules/auth/auth.service.ts)
 
 ```typescript
 108:     const passwordToCheck = user?.passwordHash ?? "$2b$12$invalidhashpadding";
@@ -274,7 +274,7 @@ Handles merchant onboarding, dashboard analytics, and tenant-isolated product up
 
 ---
 
-### [`next-backend/src/modules/vendors/vendor.routes.ts`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-backend/src/modules/vendors/vendor.routes.ts)
+### [`next-backend/src/modules/vendors/vendor.routes.ts`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-backend/src/modules/vendors/vendor.routes.ts)
 
 Acts as a clean controller delegating requests to the service layer.
 
@@ -305,7 +305,7 @@ Acts as a clean controller delegating requests to the service layer.
 
 ## 🖥️ 6. Frontend Reactive State & OCC Integration
 
-### [`next-frontend/app/vendor/dashboard/page.tsx`](file:///c:/Users/User/OneDrive/Desktop/NextDor/next-frontend/app/vendor/dashboard/page.tsx)
+### [`next-frontend/app/vendor/dashboard/page.tsx`](file:///c:/Users/User/OneDrive/Desktop/Nextdor/next-frontend/app/vendor/dashboard/page.tsx)
 
 ```typescript
 164:   const res = await fetch(`${API_BASE}/vendors/portal/products/${product.id}`, {
@@ -336,10 +336,10 @@ Acts as a clean controller delegating requests to the service layer.
 
 ## 📦 7. Domain Design: Sub-Order Partitioning & Independent Fulfillment
 
-In a multi-vendor marketplace, a single customer cart frequently contains products from multiple independent merchants (e.g., pastries from *Sweet Bakes* and phone accessories from *NextDor Direct*).
+In a multi-vendor marketplace, a single customer cart frequently contains products from multiple independent merchants (e.g., pastries from *Sweet Bakes* and phone accessories from *Nextdor Direct*).
 
 ### The Architectural Invariant: Master Order vs. Sub-Orders
-Passing the raw checkout order directly to merchants would violate tenant isolation and prevent independent delivery logistics. NextDor implements the **Master-Sub Order Decomposition Pattern**:
+Passing the raw checkout order directly to merchants would violate tenant isolation and prevent independent delivery logistics. Nextdor implements the **Master-Sub Order Decomposition Pattern**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -374,9 +374,9 @@ $$\text{PENDING} \xrightarrow{\text{Accept}} \text{PROCESSING} \xrightarrow{\tex
 E-commerce in West Africa requires balancing buyer trust with merchant liquidity. If merchants received immediate payouts before delivery, buyers would face fraud risks; conversely, manual delays hurt small business cash flow.
 
 ### The 48-Hour Escrow State Machine
-NextDor solves this with an automated **Escrow Settlement Engine**:
+Nextdor solves this with an automated **Escrow Settlement Engine**:
 
-1. **Checkout & Authorization**: Customer pays via Paystack (MTN Mobile Money, Telecel Cash, Card). Funds enter NextDor's platform escrow account.
+1. **Checkout & Authorization**: Customer pays via Paystack (MTN Mobile Money, Telecel Cash, Card). Funds enter Nextdor's platform escrow account.
 2. **Merchant Fulfillment**: Merchant accepts order, prepares items, and dispatches with a rider.
 3. **Delivery Timestamp**: When marked `DELIVERED`, `updateVendorOrderStatus` calculates and writes:
    $$\text{clearedAt} = \text{now}() + 48 \text{ hours}$$
@@ -402,7 +402,7 @@ The Merchant Portal ([`next-frontend/app/vendor/dashboard/page.tsx`](./next-fron
 
 ## ☁️ 10. Media Infrastructure: Cloudinary Asset Pipeline
 
-NextDor delegates binary media storage to **Cloudinary** to maintain serverless scalability and maximize edge CDN performance:
+Nextdor delegates binary media storage to **Cloudinary** to maintain serverless scalability and maximize edge CDN performance:
 
 1. **Signed Serverless Upload Route (`/api/upload`)**: Next.js route handler securely signs uploads and streams file buffers to Cloudinary under folder `nextdor/products`, keeping API secrets strictly server-side.
 2. **Interactive UI Component (`components/ui/ImageUpload.tsx`)**: Reusable drag-and-drop component featuring instant client previews, real-time Cloudinary upload progress, CDN badge detection, and fallback URL input.
@@ -414,7 +414,7 @@ NextDor delegates binary media storage to **Cloudinary** to maintain serverless 
 
 ## 🚀 11. 3-Tier Multi-Vendor Catalog Ingestion Architecture
 
-Merchants on NextDor vary widely in inventory scale — from boutique artisans with 5 handmade products to distributors with thousands of SKUs. NextDor provides a flexible 3-tier catalog ingestion pipeline:
+Merchants on Nextdor vary widely in inventory scale — from boutique artisans with 5 handmade products to distributors with thousands of SKUs. Nextdor provides a flexible 3-tier catalog ingestion pipeline:
 
 ```
                   ┌────────────────────────────────────────────────────────┐
@@ -465,7 +465,7 @@ Merchants on NextDor vary widely in inventory scale — from boutique artisans w
 ## 🏷️ 12. Dynamic Pricing & Financial Integrity Engine
 
 ### Compare-At Pricing & Discount Engine
-To motivate conversions without deceptive pricing, NextDor implements an automated discount calculation and strikethrough engine:
+To motivate conversions without deceptive pricing, Nextdor implements an automated discount calculation and strikethrough engine:
 
 1. **Pricing Invariant:**
    - **Current Price (`price`)**: The actual checkout price charged to the buyer.

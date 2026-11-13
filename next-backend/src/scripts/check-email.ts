@@ -1,5 +1,5 @@
 /**
- * NextDor Email Diagnostics & Verification CLI
+ * Nextdor Email Diagnostics & Verification CLI
  *
  * Run with: npm run email:check [recipient@example.com]
  *
@@ -22,7 +22,7 @@ async function runEmailCheck() {
 
   console.log("1. Environment & Configuration Check:");
   console.log(`   - NODE_ENV:              ${config.NODE_ENV}`);
-  console.log(`   - EMAIL_FROM:            ${config.EMAIL_FROM || "(using default NextDor <nextdor@nextdor.online>)"}`);
+  console.log(`   - EMAIL_FROM:            ${config.EMAIL_FROM || "(using default Nextdor <nextdor@nextdor.online>)"}`);
 
   const hasResend = Boolean(
     config.RESEND_API_KEY &&
@@ -80,7 +80,7 @@ async function runEmailCheck() {
       const testCode = Math.floor(100000 + Math.random() * 900000).toString();
       const success = await EmailService.sendVerificationCode(
         targetEmail,
-        "NextDor QA Tester",
+        "Nextdor QA Tester",
         testCode
       );
 

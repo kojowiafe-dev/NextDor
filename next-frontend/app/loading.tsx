@@ -1,9 +1,9 @@
-import { NextDorPageLoader } from "@/components/ui/NextDorPageLoader";
+import { NextdorPageLoader } from "@/components/ui/NextdorPageLoader";
 
 export default function Loading() {
   return (
-    <NextDorPageLoader
-      message="Loading NextDor..."
+    <NextdorPageLoader
+      message="Loading Nextdor..."
       subMessage="Shop More, Wait Less"
       fullScreen={false}
     />

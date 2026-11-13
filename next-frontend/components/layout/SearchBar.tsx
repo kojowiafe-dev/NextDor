@@ -243,7 +243,7 @@ export function SearchBar({ className = "" }: { className?: string }) {
                               />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
-                                NextDor
+                                Nextdor
                               </div>
                             )}
                           </div>

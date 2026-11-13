@@ -1,11 +1,11 @@
-# NextDor: Master Project Blueprint & Navigation Map
+# Nextdor: Master Project Blueprint & Navigation Map
 
-Welcome to **NextDor** — an enterprise-grade Ghanaian E-Commerce & Multi-Vendor Marketplace platform. This document serves as the master guide to the entire codebase: explaining what the system does, where every feature lives, and providing an instant **"If I want this, where do I go?"** navigation index.
+Welcome to **Nextdor** — an enterprise-grade Ghanaian E-Commerce & Multi-Vendor Marketplace platform. This document serves as the master guide to the entire codebase: explaining what the system does, where every feature lives, and providing an instant **"If I want this, where do I go?"** navigation index.
 
 ---
 
 ## 🧭 Table of Contents
-1. [What is NextDor?](#-1-what-is-nextdor)
+1. [What is Nextdor?](#-1-what-is-nextdor)
 2. [High-Level Architecture & Tech Stack](#-2-high-level-architecture--tech-stack)
 3. [Repository Directory Structure](#-3-repository-directory-structure)
 4. ["If I Want This, Where Do I Go?" (Navigation Cheat Sheet)](#-4-if-i-want-this-where-do-i-go)
@@ -21,9 +21,9 @@ Welcome to **NextDor** — an enterprise-grade Ghanaian E-Commerce & Multi-Vendo
 
 ---
 
-## 🎯 1. What is NextDor?
+## 🎯 1. What is Nextdor?
 
-NextDor is a hybrid e-commerce ecosystem specifically tailored for the Ghanaian retail market:
+Nextdor is a hybrid e-commerce ecosystem specifically tailored for the Ghanaian retail market:
 - **3-Tier Catalog Ingestion:** Multi-channel product onboarding designed for solo artisans, high-volume merchants, and existing store owners:
   1. *Single Product Ingestion:* Interactive form with drag-and-drop Cloudinary media upload, category mapping, and Optimistic Concurrency Control (OCC).
   2. *Bulk CSV/Excel Upload:* High-speed batch ingestion with RFC 4180 parsing, delimiter auto-detection, row-by-row error validation, and one-click template download.
@@ -35,7 +35,7 @@ NextDor is a hybrid e-commerce ecosystem specifically tailored for the Ghanaian 
 - **Concurrency & Race Condition Prevention:** Built with **Optimistic Concurrency Control (OCC)** so multiple store managers updating the same product never overwrite each other's stock.
 - **Accurate Financial Engine:** Implements Martin Fowler's **Value Object Pattern** with fixed minor-unit integer arithmetic (pesewas), completely eliminating floating-point rounding errors and guaranteeing 100% mathematical conservation on 90% merchant / 10% platform splits.
 - **High-Performance Cloud Media:** Integrated with **Cloudinary** for signed, fast image uploads and responsive edge CDN delivery.
-- **Brand Consistency:** Standardized around the Amazon/NextDor brand orange palette (`#ff9900` / `#f08804`) with the motto *"Shop More, Wait Less"*.
+- **Brand Consistency:** Standardized around the Amazon/Nextdor brand orange palette (`#ff9900` / `#f08804`) with the motto *"Shop More, Wait Less"*.
 
 ---
 
@@ -75,7 +75,7 @@ NextDor is a hybrid e-commerce ecosystem specifically tailored for the Ghanaian 
 ## 📁 3. Repository Directory Structure
 
 ```
-NextDor/
+Nextdor/
 ├── next-backend/                     # Fastify REST API server
 │   ├── prisma/
 │   │   ├── schema.prisma             # Complete PostgreSQL database schema (20+ normalized models)
@@ -437,6 +437,6 @@ cd next-backend && npm run email:check
 
 ## 📖 8. Architecture Books & Advanced Reading
 
-To deepen your mastery over each core pillar implemented in NextDor (Domain-Driven Design, Financial Conservation, Multi-Tenant Isolation, Concurrency Control, and Marketplace Economics), consult our dedicated reading curriculum:
+To deepen your mastery over each core pillar implemented in Nextdor (Domain-Driven Design, Financial Conservation, Multi-Tenant Isolation, Concurrency Control, and Marketplace Economics), consult our dedicated reading curriculum:
 
 👉 **[Recommended Books on Core Architectural Pillars](./RECOMMENDED_BOOKS_AND_ARCHITECTURE_PILLARS.md)**

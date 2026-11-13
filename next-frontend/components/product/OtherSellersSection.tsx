@@ -27,7 +27,7 @@ export function OtherSellersSection({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-zinc-900 text-sm sm:text-base">
-                Other Sellers on NextDor
+                Other Sellers on Nextdor
               </h3>
               <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">
                 {sellers.length} alternative offer{sellers.length !== 1 ? "s" : ""}

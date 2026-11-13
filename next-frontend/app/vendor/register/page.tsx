@@ -163,7 +163,7 @@ export default function VendorRegisterPage() {
           <Link href="/" className="flex items-center gap-3">
             <Image
               src="/logo.png"
-              alt="NextDor"
+              alt="Nextdor"
               width={120}
               height={32}
               className="h-7 w-auto object-contain"
@@ -242,7 +242,7 @@ export default function VendorRegisterPage() {
               <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-white">
-                  Upgrading Your NextDor Shopper Account ({user.email})
+                  Upgrading Your Nextdor Shopper Account ({user.email})
                 </p>
                 <p className="mt-0.5 text-emerald-200/80 leading-relaxed">
                   Your existing customer orders, saved addresses, and wishlist will stay connected to this account while we link your new Merchant Store.
@@ -341,8 +341,8 @@ export default function VendorRegisterPage() {
                   />
                   <p className="mt-1 text-[11px] text-zinc-400">
                     {isCustomerUpgrade
-                      ? "Linked to your signed-in NextDor account."
-                      : "Already have a NextDor customer account? Enter your existing email and current password below to upgrade it into a Seller store."}
+                      ? "Linked to your signed-in Nextdor account."
+                      : "Already have a Nextdor customer account? Enter your existing email and current password below to upgrade it into a Seller store."}
                   </p>
                 </div>
 
@@ -356,7 +356,7 @@ export default function VendorRegisterPage() {
                         type={showPassword ? "text" : "password"}
                         required
                         minLength={8}
-                        placeholder="Minimum 8 characters (or your existing NextDor password)"
+                        placeholder="Minimum 8 characters (or your existing Nextdor password)"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"

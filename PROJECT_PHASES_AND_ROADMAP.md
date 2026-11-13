@@ -1,4 +1,4 @@
-       # NextDor — Master Phased Implementation Roadmap
+       # Nextdor — Master Phased Implementation Roadmap
 > **Platform Motto:** *"Shop More, Wait Less"*  
 > **Status:** Enterprise Multi-Vendor Marketplace (Ghana)  
 > **Architecture:** Next.js 16 (App Router + React 19) + Fastify v5 + Prisma ORM (Neon PostgreSQL)  
@@ -37,7 +37,7 @@ graph TD
 | ID | Item | Implementation & Verification |
 | :--- | :--- | :--- |
 | **#1** | **Review Count & Rating Consistency** | Standardized across all `ProductCard`, `ProductRow`, and product detail pages (`reviewCount`, `rating`). |
-| **#2 & #3** | **NextDor Ghana Contact & Address** | Replaced placeholders with real Accra, Ghana physical address and contact phone number (`+233 55 750 7693`). |
+| **#2 & #3** | **Nextdor Ghana Contact & Address** | Replaced placeholders with real Accra, Ghana physical address and contact phone number (`+233 55 750 7693`). |
 | **#6** | **"Buy Now" Button** | Direct 1-click purchase button added alongside "Add to Cart", routing straight to checkout. |
 | **#9 & #10** | **Delivery Cost & Time on Product Pages** | `ProductDeliveryInfo.tsx` displays regional delivery costs (Accra: GH₵25, Kumasi: GH₵35, Nationwide: GH₵45) and delivery windows (1–2 days Accra, 2–4 days nationwide). |
 | **#22 & #23** | **Rich Product Specifications & Gallery** | Multi-image zoom gallery (`ProductGallery.tsx`), specifications tab (`ProductSpecifications.tsx`), and warranty details. |
@@ -82,7 +82,7 @@ graph TD
 | **#23** | **Dedicated Deals Hub (`/deals`)** | Brand new `/deals` page with discount tier filtering (🔥 50%+ OFF, ⚡ 30%+ OFF, 15%+ OFF, Under GH₵100), category pills, and sorting by savings. Prominent "⚡ Today's Deals" button added to desktop and mobile navigation. |
 | **#34** | **Automated Customer & Vendor Emailing** | Implemented `sendOrderConfirmation`, `sendVendorNewOrderNotification`, and `sendOrderStatusUpdate` in `EmailService`. Dispatched automatically upon checkout, Paystack payment verification, and status updates. |
 | **#35** | **Schema.org Product JSON-LD & SEO** | OpenGraph tags, Twitter cards, canonical URLs, and Schema.org `Product` JSON-LD structured data on all product pages for Google Rich Snippets. |
-| **UX** | **NextDor Page Transition Loader** | Top progress bar (`NavigationProgressBar.tsx`) triggers immediately on click; branded NextDor spinner (`NextDorPageLoader.tsx` & `app/loading.tsx`) animates during data fetching and route changes. |
+| **UX** | **Nextdor Page Transition Loader** | Top progress bar (`NavigationProgressBar.tsx`) triggers immediately on click; branded Nextdor spinner (`NextdorPageLoader.tsx` & `app/loading.tsx`) animates during data fetching and route changes. |
 | **Fix** | **Duplicate Price Elimination** | Removed redundant price display from `AddToCartButton.tsx`; prices now render once and only once across the product detail page. |
 
 ---

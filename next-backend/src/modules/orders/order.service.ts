@@ -249,12 +249,12 @@ export class OrderService {
 
     // ── Resolve the owning vendor for merchant-less catalog items ────────────
     // VendorOrder.vendorId is a real UUID foreign key, so items with no merchant are
-    // attributed to the flagship "NextDor Direct" vendor (looked up by slug).
+    // attributed to the flagship "Nextdor Direct" vendor (looked up by slug).
     if (enrichedItems.some((i) => !i.vendorId)) {
       const platformVendorId = await this.repo.findPlatformVendorId();
       if (!platformVendorId) {
         throw new UnprocessableError(
-          "The NextDor Direct store is not configured, so merchant-less items cannot be ordered right now.",
+          "The Nextdor Direct store is not configured, so merchant-less items cannot be ordered right now.",
         );
       }
       for (const item of enrichedItems) item.vendorId ??= platformVendorId;
@@ -414,7 +414,7 @@ export class OrderService {
 
     if (order.paymentStatus === "PAID") {
       throw new UnprocessableError(
-        "This order has already been paid. Please contact NextDor support to cancel it so your refund can be processed.",
+        "This order has already been paid. Please contact Nextdor support to cancel it so your refund can be processed.",
       );
     }
 
@@ -682,7 +682,7 @@ export class OrderService {
           });
 
           const vendorEmail = vendor?.email || vendor?.owner?.email;
-          const storeName = vendor?.name || "NextDor Vendor";
+          const storeName = vendor?.name || "Nextdor Vendor";
           const vendorPhone = vendor?.whatsappPhone || vendor?.phone || vendor?.owner?.phone;
 
           if (vendorEmail) {

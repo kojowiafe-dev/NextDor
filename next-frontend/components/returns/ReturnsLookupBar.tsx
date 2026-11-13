@@ -24,7 +24,7 @@ export function ReturnsLookupBar() {
         </h3>
       </div>
       <p className="text-xs text-zinc-500 mb-4">
-        Enter your NextDor Order Number (e.g. <span className="font-mono font-semibold">ND-00101</span>) to inspect items, check escrow clearance, and submit a return request.
+        Enter your Nextdor Order Number (e.g. <span className="font-mono font-semibold">ND-00101</span>) to inspect items, check escrow clearance, and submit a return request.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">

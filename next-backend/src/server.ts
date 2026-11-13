@@ -130,7 +130,7 @@ async function main() {
   // Start listening
   try {
     const address = await app.listen({ port: config.PORT, host: config.HOST });
-    logger.info({ address, env: config.NODE_ENV }, "🚀 NextDor API is running");
+    logger.info({ address, env: config.NODE_ENV }, "🚀 Nextdor API is running");
 
     // ─── Database Pool Keep-Alive (Neon Serverless Stability) ──────────────
     // Pings database every 2.5 minutes to prevent idle socket termination by serverless proxies

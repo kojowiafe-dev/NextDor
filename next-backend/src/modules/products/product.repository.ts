@@ -471,10 +471,10 @@ export class ProductRepository {
     if (directProducts.length > 0) {
       result.push({
         id: "nextdor-direct",
-        name: "NextDor Direct (Official Store)",
+        name: "Nextdor Direct (Official Store)",
         slug: "nextdor-direct",
         logoUrl: null,
-        description: "Official NextDor flagship store with instant MoMo checkout and express courier dispatch.",
+        description: "Official Nextdor flagship store with instant MoMo checkout and express courier dispatch.",
         rating: 5.0,
         totalProducts: directCount,
         products: directProducts,
@@ -591,7 +591,7 @@ export class ProductRepository {
         rating: Number(p.averageRating),
         reviewCount: p.reviewCount,
         image: p.images[0]?.url || null,
-        vendorName: p.vendor?.name || "NextDor Official",
+        vendorName: p.vendor?.name || "Nextdor Official",
         categoryName: p.categories[0]?.name || null,
       })),
       categories: categories.map((c) => ({

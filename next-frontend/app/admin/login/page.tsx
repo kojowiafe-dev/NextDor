@@ -78,7 +78,7 @@ export default function AdminLoginPage() {
           <Link href="/" className="inline-block mb-3 transition hover:opacity-90">
             <Image
               src="/logo.png"
-              alt="NextDor"
+              alt="Nextdor"
               width={160}
               height={44}
               priority
@@ -175,7 +175,7 @@ export default function AdminLoginPage() {
               <div className="mt-6 rounded-lg bg-white/5 p-3 text-center text-xs text-zinc-500">
                 <p className="font-medium text-zinc-400">Default Super Admin credentials</p>
                 <p className="mt-1">Email: <span className="text-zinc-300">admin@nextdor.com</span></p>
-                <p>Password: <span className="text-zinc-300">Admin@NextDor2026!</span></p>
+                <p>Password: <span className="text-zinc-300">Admin@Nextdor2026!</span></p>
               </div>
             </>
           )}

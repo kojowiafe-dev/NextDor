@@ -87,7 +87,7 @@ describe("WhatsApp Service & Meta Normalization (whatsapp.ts)", () => {
       const sent = await WhatsAppService.sendCourierDelivery("0244123456", {
         orderNumber: "ND-00001",
         trackingNumber: "ND-SHIP-9999",
-        courierName: "NextDor Express",
+        courierName: "Nextdor Express",
         status: "OUT_FOR_DELIVERY",
         recipientName: "Kojo Wiafe",
       });

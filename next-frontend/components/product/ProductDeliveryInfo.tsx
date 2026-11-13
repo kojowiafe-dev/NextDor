@@ -50,7 +50,7 @@ export function ProductDeliveryInfo({ vendor, currency = "GH₵" }: ProductDeliv
   };
 
   const active = regionData[selectedRegion];
-  const vendorName = vendor?.name || "NextDor Direct Flagship";
+  const vendorName = vendor?.name || "Nextdor Direct Flagship";
   const vendorSlug = vendor?.slug || "nextdor";
 
   return (
@@ -148,12 +148,12 @@ export function ProductDeliveryInfo({ vendor, currency = "GH₵" }: ProductDeliv
         </div>
       </div>
 
-      {/* ─── 3. NextDor 48-Hour Buyer Protection (Item #32) ─────────────────── */}
+      {/* ─── 3. Nextdor 48-Hour Buyer Protection (Item #32) ─────────────────── */}
       <div className="rounded-lg bg-gradient-to-r from-amber-50 to-orange-50/70 p-3 border border-amber-200/80 shadow-2xs space-y-2">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-[#ff9900] shrink-0" />
           <h4 className="text-xs font-bold text-zinc-900">
-            NextDor 48-Hour Buyer Protection
+            Nextdor 48-Hour Buyer Protection
           </h4>
         </div>
         <p className="text-[11px] text-zinc-600 leading-relaxed">

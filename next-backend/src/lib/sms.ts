@@ -1,5 +1,5 @@
 /**
- * NextDor Ghana SMS Service — powered by Arkesel SMS API v2.
+ * Nextdor Ghana SMS Service — powered by Arkesel SMS API v2.
  *
  * Provides transactional SMS updates for:
  * 1. Order Confirmation (Order placed / paid)
@@ -72,7 +72,7 @@ export class SmsService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sender: config.SMS_FROM || "NextDor",
+          sender: config.SMS_FROM || "Nextdor",
           message,
           recipients: [recipient],
         }),
@@ -98,7 +98,7 @@ export class SmsService {
    */
   static async sendOrderReceived(phone: string, orderNumber: string, total: number): Promise<boolean> {
     const formattedTotal = `GH₵${total.toFixed(2)}`;
-    const msg = `NextDor: We received your order #${orderNumber} (${formattedTotal}). Track it at https://nextdor.online/track?order=${orderNumber}`;
+    const msg = `Nextdor: We received your order #${orderNumber} (${formattedTotal}). Track it at https://nextdor.online/track?order=${orderNumber}`;
     return this.sendSms(phone, msg);
   }
 
@@ -107,7 +107,7 @@ export class SmsService {
    */
   static async sendOrderConfirmed(phone: string, orderNumber: string, total: number): Promise<boolean> {
     const formattedTotal = `GH₵${total.toFixed(2)}`;
-    const msg = `NextDor: Your order #${orderNumber} (${formattedTotal}) is confirmed! We are preparing it for delivery. Track at https://nextdor.online/track?order=${orderNumber}`;
+    const msg = `Nextdor: Your order #${orderNumber} (${formattedTotal}) is confirmed! We are preparing it for delivery. Track at https://nextdor.online/track?order=${orderNumber}`;
     return this.sendSms(phone, msg);
   }
 
@@ -115,7 +115,7 @@ export class SmsService {
    * Triggered when order is marked as SHIPPED.
    */
   static async sendOrderShipped(phone: string, orderNumber: string): Promise<boolean> {
-    const msg = `NextDor: Great news! Order #${orderNumber} has been dispatched with our courier and is on its way to you. Track live at https://nextdor.online/track?order=${orderNumber}`;
+    const msg = `Nextdor: Great news! Order #${orderNumber} has been dispatched with our courier and is on its way to you. Track live at https://nextdor.online/track?order=${orderNumber}`;
     return this.sendSms(phone, msg);
   }
 
@@ -123,7 +123,7 @@ export class SmsService {
    * Triggered when order is marked as DELIVERED.
    */
   static async sendOrderDelivered(phone: string, orderNumber: string): Promise<boolean> {
-    const msg = `NextDor: Order #${orderNumber} has been delivered! Thank you for shopping with us. For inquiries or support, visit https://nextdor.online/contact`;
+    const msg = `Nextdor: Order #${orderNumber} has been delivered! Thank you for shopping with us. For inquiries or support, visit https://nextdor.online/contact`;
     return this.sendSms(phone, msg);
   }
 }

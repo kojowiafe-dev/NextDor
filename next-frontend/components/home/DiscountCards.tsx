@@ -253,7 +253,7 @@ export function BuyerConvenienceCard() {
         <div className="space-y-0.5">
           <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-emerald-300">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-            NextDor Buyer Protection
+            Nextdor Buyer Protection
           </span>
           <h3 className="text-base sm:text-lg font-black text-white">
             Fast, Safe &amp; Escrow-Protected Shopping

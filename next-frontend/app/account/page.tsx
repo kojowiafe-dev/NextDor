@@ -110,7 +110,7 @@ export default function AccountPage() {
             </div>
             <div>
               <h2 className="text-sm font-bold text-zinc-900">
-                Want to sell your products on NextDor?
+                Want to sell your products on Nextdor?
               </h2>
               <p className="mt-0.5 text-xs text-zinc-600">
                 Upgrade this customer account into a Merchant Store in 60 seconds — keep your order history while receiving 48-hour Mobile Money payouts.

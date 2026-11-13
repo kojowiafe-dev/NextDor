@@ -134,7 +134,7 @@ export default async function VendorStorefrontPage({
           <div>
             <h2 className="text-base sm:text-lg font-bold text-zinc-900">Products from {vendor.name}</h2>
             <p className="text-xs text-zinc-500">
-              Protected by NextDor 48-Hour Buyer Escrow
+              Protected by Nextdor 48-Hour Buyer Escrow
             </p>
           </div>
         </div>

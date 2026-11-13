@@ -215,7 +215,7 @@ export function ReturnRequestModal({
           <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs text-emerald-900">
             <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold">Protected by NextDor 48-Hour Escrow Policy</p>
+              <p className="font-bold">Protected by Nextdor 48-Hour Escrow Policy</p>
               <p className="text-emerald-800/80 mt-0.5">
                 Merchant funds remain safely locked in escrow until the inspection window passes.
                 Approved returns are refunded directly to your original MoMo wallet or Card.

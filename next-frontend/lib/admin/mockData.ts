@@ -1,6 +1,6 @@
 /**
  * Administrative types and empty fallback defaults.
- * Real data is served from the NextDor backend API.
+ * Real data is served from the Nextdor backend API.
  */
 
 export type AdminOrder = {

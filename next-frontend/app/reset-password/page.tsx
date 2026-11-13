@@ -117,7 +117,7 @@ function ResetPasswordContent() {
             >
               <Image
                 src="/logo.png"
-                alt="NextDor"
+                alt="Nextdor"
                 width={120}
                 height={32}
                 priority

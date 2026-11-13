@@ -1,5 +1,5 @@
 /**
- * Central API configuration for NextDor frontend.
+ * Central API configuration for Nextdor frontend.
  * Resolves the backend base URL with safe fallbacks for both production and development.
  */
 

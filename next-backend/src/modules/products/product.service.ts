@@ -210,7 +210,7 @@ export class ProductService {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
-    // Resolve vendor: connect specified vendor or default to flagship "NextDor Direct"
+    // Resolve vendor: connect specified vendor or default to flagship "Nextdor Direct"
     let vendorConnect: Prisma.VendorCreateNestedOneWithoutProductsInput | undefined;
     if (input.vendorId) {
       vendorConnect = { connect: { id: input.vendorId } };

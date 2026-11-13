@@ -1,5 +1,5 @@
 /**
- * NextDor Third-Party Service Diagnostics & Connectivity Pre-flight
+ * Nextdor Third-Party Service Diagnostics & Connectivity Pre-flight
  * 
  * Verifies live credentials and external API health across:
  * 1. Neon Cloud PostgreSQL
@@ -64,7 +64,7 @@ async function pingUrl(
 
 async function runPreflight() {
   console.log("\n=======================================================");
-  console.log(" 🚀 NextDor Marketplace — Third-Party Services Pre-Flight");
+  console.log(" 🚀 Nextdor Marketplace — Third-Party Services Pre-Flight");
   console.log("=======================================================\n");
 
   // 1. Neon Cloud PostgreSQL

@@ -140,7 +140,7 @@ export function Footer() {
           <Link href="/" className="inline-block transition hover:opacity-90">
             <Image
               src="/logo.png"
-              alt="NextDor"
+              alt="Nextdor"
               width={140}
               height={38}
               className="h-8 w-auto object-contain mx-auto"

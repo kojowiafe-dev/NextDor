@@ -7,7 +7,7 @@
  * wildcard such as `*.vercel.app` means ANY third party who deploys a page on
  * that host can issue credentialed cross-origin requests as your users.
  * Therefore, in production the wildcard "preview" hosts are OFF by default and
- * only exact origins listed in `CORS_ORIGINS` (+ the NextDor domain) are trusted.
+ * only exact origins listed in `CORS_ORIGINS` (+ the Nextdor domain) are trusted.
  *
  * The matcher is a pure factory so it can be unit-tested without booting the app.
  */

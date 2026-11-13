@@ -142,7 +142,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // publishes the full attack surface of the API.
   await app.register(import("@fastify/swagger"), {
     openapi: {
-      info: { title: "NextDor API", version: "1.0.0" },
+      info: { title: "Nextdor API", version: "1.0.0" },
       components: {
         securitySchemes: {
           bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },

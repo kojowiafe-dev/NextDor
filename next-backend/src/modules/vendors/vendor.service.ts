@@ -156,7 +156,7 @@ export class VendorService {
 
       if (!isJwtOwner && !isPasswordValid) {
         throw new UnauthorizedError(
-          "An account with this email already exists. Please enter your current NextDor account password (or sign in first) to upgrade your shopper account into a merchant store."
+          "An account with this email already exists. Please enter your current Nextdor account password (or sign in first) to upgrade your shopper account into a merchant store."
         );
       }
 
@@ -645,7 +645,7 @@ export class VendorService {
     const shipAddr = (orderObj.shippingAddress as any) || {};
     const customerEmail = orderObj.guestEmail || orderObj.user?.email;
     const customerName = shipAddr.recipientName || orderObj.user?.name || "Valued Customer";
-    const storeName = existing.vendor?.name || "NextDor Merchant";
+    const storeName = existing.vendor?.name || "Nextdor Merchant";
     const destinationCity = `${shipAddr.city || "Accra"}, ${shipAddr.region || "Greater Accra"}`;
     const isPickup = orderObj.deliveryMethod === "PICKUP";
 

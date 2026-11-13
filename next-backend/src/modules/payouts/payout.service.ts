@@ -202,7 +202,7 @@ export class PayoutService {
           recipientCode,
           amountGhs: Number(payout.amount),
           reference: transferRef,
-          reason: `NextDor Vendor Payout ${batch.batchReference}`,
+          reason: `Nextdor Vendor Payout ${batch.batchReference}`,
         });
 
         // 5. If gateway returns instant success (rare), confirm immediately.
@@ -423,7 +423,7 @@ export class PayoutService {
     if (notifyPhone) {
       SmsService.sendSms(
         notifyPhone,
-        `NextDor Payout: GH₵${Number(payout.amount).toFixed(2)} has been sent to your ${vendor.momoNetwork || "MoMo"} wallet (${vendor.momoNumber}). Ref: ${transferRef}`,
+        `Nextdor Payout: GH₵${Number(payout.amount).toFixed(2)} has been sent to your ${vendor.momoNetwork || "MoMo"} wallet (${vendor.momoNumber}). Ref: ${transferRef}`,
       ).catch((err) => logger.warn({ err: err?.message, vendorId: vendor.id }, "Payout SMS notice failed"));
     }
 
@@ -458,7 +458,7 @@ export class PayoutService {
     if (notifyPhone) {
       SmsService.sendSms(
         notifyPhone,
-        `NextDor Update: Payout of GH₵${Number(payout.amount).toFixed(2)} was successfully credited to your wallet.`,
+        `Nextdor Update: Payout of GH₵${Number(payout.amount).toFixed(2)} was successfully credited to your wallet.`,
       ).catch(() => {});
     }
 

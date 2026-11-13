@@ -100,7 +100,7 @@ export default function AdminProductsPage() {
         }
       }
     } catch (err) {
-      console.warn("Could not reach NextDor API at", API_BASE, err);
+      console.warn("Could not reach Nextdor API at", API_BASE, err);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);

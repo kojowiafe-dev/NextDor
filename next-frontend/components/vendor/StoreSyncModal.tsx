@@ -317,7 +317,7 @@ export function StoreSyncModal({
                 <p>Follow these 3 simple steps in your WordPress Admin:</p>
                 <ol className="list-decimal pl-4 space-y-1">
                   <li>Go to <strong>WooCommerce → Settings → Advanced → REST API</strong>.</li>
-                  <li>Click <strong>Add key</strong>, name it "NextDor", and set permissions to <strong>Read</strong>.</li>
+                  <li>Click <strong>Add key</strong>, name it "Nextdor", and set permissions to <strong>Read</strong>.</li>
                   <li>Click <strong>Generate API key</strong>, then copy the Consumer Key and Consumer Secret here.</li>
                 </ol>
               </div>

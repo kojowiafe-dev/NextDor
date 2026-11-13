@@ -1,7 +1,7 @@
 {
   "name": "nextdor-backend",
   "version": "1.0.0",
-  "description": "NextDor e-commerce API — Fastify + Prisma + PostgreSQL",
+  "description": "Nextdor e-commerce API — Fastify + Prisma + PostgreSQL",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

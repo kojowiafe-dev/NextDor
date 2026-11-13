@@ -1,4 +1,4 @@
-# NextDor — Enterprise Multi-Vendor Marketplace
+# Nextdor — Enterprise Multi-Vendor Marketplace
 
 > **"Shop More, Wait Less"** — An enterprise-grade, high-performance Ghanaian E-Commerce and Multi-Vendor Marketplace platform built with Next.js 16 (App Router + Turbopack), Fastify, TypeScript, Prisma ORM, Cloud PostgreSQL (Neon), and Cloudinary media infrastructure.
 
@@ -64,7 +64,7 @@ npm run dev
 9. **Multi-Tenant Security & OCC**: Hardened tenant isolation (`WHERE id = productId AND vendorId = currentVendorId`) for viewing, editing, and soft-deleting products, paired with Optimistic Concurrency Control versioning.
 10. **Platform Security & O(1) Token Indexing**: Refresh token SHA-256 indexed lookups (`lookupHash`) for microsecond O(1) queries before bcrypt verification, Redis-backed distributed rate limiting (200 req/min), Helmet HSTS headers, and strict CORS whitelisting.
 11. **Cloudinary Asset Storage**: High-speed, signed media pipeline with client-side drag-and-drop uploads and edge CDN delivery.
-12. **Brand Consistency**: Unified Amazon/NextDor orange theme (`#ff9900` / `#f08804`) and motto *"Shop More, Wait Less"*.
+12. **Brand Consistency**: Unified Amazon/Nextdor orange theme (`#ff9900` / `#f08804`) and motto *"Shop More, Wait Less"*.
 13. **Verified Email Onboarding & Recovery**: 6-digit OTP code email verification before account activation (`/verify-email`), 60-second cooldown protection, and full password recovery (`/forgot-password` $\rightarrow$ `/reset-password`) that invalidates all active sessions across devices upon password reset.
 14. **Super Admin Operations Center**: Live PostgreSQL database metrics (`totalCustomers`, `totalProducts`, `totalOrders`), real-time notification popover (`AdminNotificationsPopover.tsx`) with 1-click "Mark read" and "Clear all", zero-scrollbar non-scrollable desktop sidebar with auto-dismissing mobile drawer, and complete product CRUD (`POST /api/v1/products`).
 15. **Customer Returns & Dispute Resolution**: Self-serve customer returns within the 48-hour escrow window, merchant & admin review workflows, and automated Paystack/MoMo refund settlement with exact balance conservation.

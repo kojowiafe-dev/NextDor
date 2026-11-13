@@ -434,14 +434,14 @@ export class InventoryService {
 
     const isOutOfStock = params.quantity <= 0;
     const alertSubject = isOutOfStock
-      ? `🚨 [NextDor Alert] OUT OF STOCK: "${params.productName}" at ${params.warehouseName}`
-      : `⚠️ [NextDor Alert] LOW STOCK: "${params.productName}" (${params.quantity} left) at ${params.warehouseName}`;
+      ? `🚨 [Nextdor Alert] OUT OF STOCK: "${params.productName}" at ${params.warehouseName}`
+      : `⚠️ [Nextdor Alert] LOW STOCK: "${params.productName}" (${params.quantity} left) at ${params.warehouseName}`;
 
     // 1. Send SMS if phone number available
     if (notifyPhone) {
       const smsText = isOutOfStock
-        ? `NextDor Alert: "${params.productName}" is OUT OF STOCK at ${params.warehouseName}. Please restock immediately.`
-        : `NextDor Alert: "${params.productName}" is low on stock (${params.quantity} left, threshold ${params.threshold}) at ${params.warehouseName}.`;
+        ? `Nextdor Alert: "${params.productName}" is OUT OF STOCK at ${params.warehouseName}. Please restock immediately.`
+        : `Nextdor Alert: "${params.productName}" is low on stock (${params.quantity} left, threshold ${params.threshold}) at ${params.warehouseName}.`;
 
       await SmsService.sendSms(notifyPhone, smsText).catch((err) => {
         logger.warn({ err, notifyPhone }, "Failed to send low stock SMS");
@@ -472,7 +472,7 @@ export class InventoryService {
             ${isOutOfStock ? "🚨 Out of Stock Warning" : "⚠️ Low Stock Notice"}
           </h2>
           <p>Hello <strong>${vendorName}</strong>,</p>
-          <p>This is an automated notification from your NextDor inventory monitoring engine.</p>
+          <p>This is an automated notification from your Nextdor inventory monitoring engine.</p>
           
           <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #f9fafb;">
             <tr>
@@ -495,10 +495,10 @@ export class InventoryService {
             </tr>
           </table>
 
-          <p>Please log in to your NextDor Vendor Portal or Warehouse Management console to transfer units or update your restock window.</p>
+          <p>Please log in to your Nextdor Vendor Portal or Warehouse Management console to transfer units or update your restock window.</p>
           
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="font-size: 12px; color: #6b7280;">NextDor Ghana Marketplace — Enterprise Multi-Warehouse Logistics & Inventory</p>
+          <p style="font-size: 12px; color: #6b7280;">Nextdor Ghana Marketplace — Enterprise Multi-Warehouse Logistics & Inventory</p>
         </div>
       `;
 

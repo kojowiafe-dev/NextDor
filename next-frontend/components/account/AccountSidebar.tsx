@@ -85,7 +85,7 @@ export function AccountSidebar() {
           >
             <div className="flex items-center gap-2">
               <Store className="h-4 w-4 text-purple-600" />
-              <span>Sell on NextDor</span>
+              <span>Sell on Nextdor</span>
             </div>
             <span className="rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
               Open Store
