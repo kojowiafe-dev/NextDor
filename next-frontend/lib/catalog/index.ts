@@ -233,7 +233,7 @@ function decodeHtmlEntities(str: string): string {
 export async function getCategories(): Promise<Category[]> {
   try {
     const res = await fetch(`${API_BASE}/products/categories`, {
-      cache: "no-store",
+      next: { revalidate: 30 },
     });
     if (res.ok) {
       const json = await res.json();
