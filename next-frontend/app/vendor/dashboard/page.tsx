@@ -951,7 +951,15 @@ export default function VendorDashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition"
+            >
+              <Store className="h-3.5 w-3.5 text-purple-600" />
+              <span>Main Storefront</span>
+            </Link>
+
             {vendor?.slug && vendor?.status === "ACTIVE" ? (
               <Link
                 href={`/store/${vendor.slug}`}
@@ -2753,7 +2761,7 @@ export default function VendorDashboardPage() {
             <Link href="/contact" className="hover:text-purple-600 transition">
               Merchant Support
             </Link>
-            <Link href="/vendor/register" className="hover:text-purple-600 transition">
+            <Link href="/terms" className="hover:text-purple-600 transition">
               Merchant Terms
             </Link>
           </div>

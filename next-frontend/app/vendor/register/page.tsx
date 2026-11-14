@@ -421,7 +421,7 @@ export default function VendorRegisterPage() {
                   className="mt-0.5 h-4 w-4 rounded border-white/20 bg-zinc-900 accent-purple-600"
                 />
                 <span className="text-[11px] leading-relaxed">
-                  I agree to the <Link href="/returns" className="text-purple-400 hover:underline">Nextdor Merchant Terms</Link> and understand the platform applies a standard 10% commission on completed orders.
+                  I agree to the <Link href="/terms" target="_blank" className="text-purple-400 hover:underline">Nextdor Merchant Terms</Link> and understand the platform applies a standard 10% commission on completed orders.
                 </span>
               </label>
 
