@@ -31,7 +31,7 @@ import {
 import type { CreatePayoutBatchInput, ExecutePayoutBatchInput, PaystackTransferWebhook } from "@nextdor/shared";
 
 /** Spec §7: Minimum payout amount in GHS to avoid micro-transfers. */
-const MIN_PAYOUT_GHS = 5;
+const MIN_PAYOUT_GHS = 0.1;
 
 export class PayoutService {
   constructor(private readonly repo: PayoutRepository = new PayoutRepository()) { }

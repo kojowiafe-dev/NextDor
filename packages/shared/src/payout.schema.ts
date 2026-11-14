@@ -15,7 +15,7 @@ export type PayoutBatchStatus = z.infer<typeof PayoutBatchStatusEnum>;
 // Payout Batch Generation & Execution Schemas
 export const CreatePayoutBatchSchema = z.object({
   vendorIds: z.array(z.string().uuid("Invalid vendor ID")).optional(),
-  minThreshold: z.number().min(0).default(5), // Minimum GHS 5 balance for automatic disbursement
+  minThreshold: z.number().min(0).default(0.1), // Minimum GHS 0.10 balance for automatic disbursement
   notes: z.string().trim().max(500).optional(),
 });
 export type CreatePayoutBatchInput = z.infer<typeof CreatePayoutBatchSchema>;

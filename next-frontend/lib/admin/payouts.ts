@@ -91,7 +91,7 @@ export interface PayoutBatchItem {
   batchReference: string;
   totalAmount: number | string;
   currency: string;
-  status: "PENDING" | "PROCESSING" | "PAID" | "FAILED";
+  status: "DRAFT" | "APPROVED" | "PENDING" | "PROCESSING" | "PAID" | "FAILED";
   totalVendors: number;
   totalOrders: number;
   paystackTransferCode?: string | null;
@@ -277,7 +277,7 @@ export async function getPayoutBatches(
  */
 export async function generatePayoutBatch(
   token: string,
-  options?: { minPayoutAmount?: number; notes?: string }
+  options?: { minThreshold?: number; notes?: string }
 ): Promise<PayoutBatchItem | null> {
   const res = await fetch(`${API_BASE}/payouts/batches`, {
     method: "POST",
@@ -291,6 +291,28 @@ export async function generatePayoutBatch(
   if (!res.ok || !json.success) {
     throw new Error(
       json?.error?.message || json?.message || "Failed to generate payout batch"
+    );
+  }
+  return json.data;
+}
+
+/**
+ * Approve a DRAFT payout batch so it can be executed.
+ */
+export async function approvePayoutBatch(
+  token: string,
+  batchId: string
+): Promise<PayoutBatchItem> {
+  const res = await fetch(`${API_BASE}/payouts/batches/${batchId}/approve`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(
+      json?.error?.message || json?.message || "Failed to approve payout batch"
     );
   }
   return json.data;
