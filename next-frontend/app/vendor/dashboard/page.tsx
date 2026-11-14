@@ -48,7 +48,7 @@ import {
   Award,
   Printer,
 } from "lucide-react";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, stripHtml } from "@/lib/utils";
 import { BulkUploadModal } from "@/components/vendor/BulkUploadModal";
 import { StoreSyncModal } from "@/components/vendor/StoreSyncModal";
 import { CourierDispatchModal } from "@/components/vendor/CourierDispatchModal";
@@ -1278,8 +1278,8 @@ export default function VendorDashboardPage() {
                     )}
                   </div>
 
-                  {/* Stock Filter Chips (Scrollable on small screens) */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                  {/* Stock Filter Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {[
                       { key: "ALL", label: "All Items", count: products.length },
                       { key: "IN_STOCK", label: "In Stock", count: products.filter((p) => p.stockStatus === "IN_STOCK").length },
@@ -1325,278 +1325,33 @@ export default function VendorDashboardPage() {
                 )}
               </div>
 
-              {/* DESKTOP VIEW: Detailed OCC Table (Hidden on mobile) */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-100 bg-zinc-50/50 text-xs font-semibold text-zinc-500">
-                      <th className="px-6 py-3.5">Product</th>
-                      <th className="px-6 py-3.5">Price (GHS)</th>
-                      <th className="px-6 py-3.5">Stock Quantity</th>
-                      <th className="px-6 py-3.5">Stock Status</th>
-                      <th className="px-6 py-3.5">Storefront Visibility</th>
-                      <th className="px-6 py-3.5 text-center">OCC Version</th>
-                      <th className="px-6 py-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {isDataLoading && products.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-zinc-400">
-                          Loading merchant inventory...
-                        </td>
-                      </tr>
-                    ) : filteredProducts.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-zinc-500">
-                          {products.length === 0 ? (
-                            <div className="space-y-3">
-                              <Package className="mx-auto h-8 w-8 text-zinc-300" />
-                              <p className="font-semibold text-zinc-700">Your store catalog is empty</p>
-                              <p className="text-xs text-zinc-400">Choose a method above to add your first products!</p>
-                            </div>
-                          ) : (
-                            <div>
-                              <p className="font-medium text-zinc-700">No products match your current search or filter.</p>
-                              <button
-                                onClick={() => {
-                                  setProductSearch("");
-                                  setProductStockFilter("ALL");
-                                }}
-                                className="mt-2 text-xs font-semibold text-purple-600 hover:underline"
-                              >
-                                Clear search & filters
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredProducts.map((prod) => {
-                        const isEditing = editingId === prod.id;
-                        const primaryImg = isEditing && editImageUrl ? editImageUrl : prod.images?.[0]?.url;
-
-                        return (
-                          <tr key={prod.id} className="hover:bg-zinc-50/70 transition">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-100 border border-zinc-200/60 flex items-center justify-center font-bold text-zinc-400 text-xs">
-                                  {primaryImg ? (
-                                    <img src={primaryImg} alt={prod.name} className="h-full w-full object-cover" />
-                                  ) : (
-                                    prod.name.charAt(0)
-                                  )}
-                                </div>
-                                <div className="min-w-0 max-w-xs">
-                                  <p className="font-semibold text-zinc-900 truncate">{prod.name}</p>
-                                  <p className="text-xs text-zinc-400 line-clamp-1">{prod.description}</p>
-                                  {isEditing ? (
-                                    <div className="mt-1.5 space-y-1.5">
-                                      <select
-                                        value={editCategory}
-                                        onChange={(e) => setEditCategory(e.target.value)}
-                                        className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 focus:border-purple-600 focus:outline-none"
-                                      >
-                                        <option value="">Select Category</option>
-                                        {availableCategories.map((c) => (
-                                          <option key={c} value={c}>
-                                            {c}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-100 transition">
-                                        <UploadCloud className="h-3 w-3" />
-                                        <span>
-                                          {isUploadingEditImage
-                                            ? "Uploading..."
-                                            : primaryImg
-                                            ? "Change Photo"
-                                            : "Upload Photo"}
-                                        </span>
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          disabled={isUploadingEditImage}
-                                          onChange={handleEditImageFileChange}
-                                          className="hidden"
-                                        />
-                                      </label>
-                                    </div>
-                                  ) : (
-                                    <span className="mt-1 inline-block rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
-                                      {prod.categories?.[0]?.name || "Uncategorized"}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="px-6 py-4">
-                              {isEditing ? (
-                                <div className="space-y-1.5 min-w-[120px]">
-                                  <div>
-                                    <span className="text-[10px] font-semibold text-zinc-500 block">Current Price *</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0.10"
-                                      value={editPrice}
-                                      onChange={(e) => setEditPrice(e.target.value)}
-                                      placeholder="Current"
-                                      className="w-24 rounded-lg border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
-                                    />
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-semibold text-zinc-400 block">Previous Price</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0.10"
-                                      value={editPreviousPrice}
-                                      onChange={(e) => setEditPreviousPrice(e.target.value)}
-                                      placeholder="Optional"
-                                      className="w-24 rounded-lg border border-zinc-300 px-2 py-0.5 text-xs text-zinc-600 focus:border-purple-600 focus:outline-none"
-                                    />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-zinc-900">
-                                      {formatPrice(Number(prod.salePrice ?? prod.price), "GHS")}
-                                    </span>
-                                    {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
-                                      <span className="rounded bg-red-50 border border-red-200 px-1 py-0.2 text-[10px] font-bold text-red-600">
-                                        -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
-                                      </span>
-                                    )}
-                                  </div>
-                                  {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
-                                    <span className="text-xs text-zinc-400 line-through block">
-                                      {formatPrice(Number(prod.price), "GHS")}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-
-                            <td className="px-6 py-4">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={editStock}
-                                  onChange={(e) => setEditStock(e.target.value)}
-                                  className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
-                                />
-                              ) : (
-                                <span className="font-medium text-zinc-700">
-                                  {prod.stockQty !== null ? `${prod.stockQty} units` : "Unlimited"}
-                                </span>
-                              )}
-                            </td>
-
-                            <td className="px-6 py-4">
-                              <span
-                                className={`inline-flex items-center shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  prod.stockStatus === "IN_STOCK"
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : prod.stockStatus === "LOW_STOCK"
-                                    ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                    : "bg-red-50 text-red-700 border border-red-200"
-                                }`}
-                              >
-                                {prod.stockStatus.replace("_", " ")}
-                              </span>
-                            </td>
-
-                            <td className="px-6 py-4">
-                              {vendor?.status === "PENDING_APPROVAL" ? (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
-                                  <EyeOff className="h-3 w-3 text-amber-600" />
-                                  <span>Staged (Offline)</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
-                                  <Eye className="h-3 w-3 text-emerald-600" />
-                                  <span>Live on Storefront</span>
-                                </span>
-                              )}
-                            </td>
-
-                            <td className="px-6 py-4 text-center">
-                              <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono font-medium text-zinc-600 border border-zinc-200">
-                                v{prod.version}
-                              </span>
-                            </td>
-
-                            <td className="px-6 py-4 text-right">
-                              {isEditing ? (
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => saveProductChanges(prod)}
-                                    disabled={isSavingProduct}
-                                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                                  >
-                                    <Save className="h-3.5 w-3.5" />
-                                    <span>Save</span>
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingId(null)}
-                                    className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => startEditing(prod)}
-                                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition"
-                                  >
-                                    Edit Stock / Price
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteProduct(prod)}
-                                    className="rounded-lg border border-red-200 p-1.5 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-300 transition"
-                                    title="Delete product"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* MOBILE VIEW: Uncongested Touch-Friendly Product Cards (Shown on mobile < md) */}
-              <div className="block md:hidden divide-y divide-zinc-100">
+              {/* RESPONSIVE INVENTORY LIST (No horizontal scroll) */}
+              <div className="divide-y divide-zinc-100">
                 {isDataLoading && products.length === 0 ? (
-                  <div className="p-8 text-center text-zinc-400 text-xs">
+                  <div className="px-6 py-12 text-center text-sm text-zinc-400">
                     Loading merchant inventory...
                   </div>
                 ) : filteredProducts.length === 0 ? (
-                  <div className="p-8 text-center">
+                  <div className="px-6 py-12 text-center">
                     {products.length === 0 ? (
                       <div className="space-y-3">
                         <Package className="mx-auto h-10 w-10 text-zinc-300" />
                         <h4 className="font-bold text-zinc-800 text-sm">No Products In Store</h4>
-                        <p className="text-xs text-zinc-500">Tap "+ Add Products" above to stock your store catalog.</p>
+                        <p className="text-xs text-zinc-500">
+                          Choose a method above or tap "+ Add Products" to stock your store catalog.
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <p className="text-xs font-medium text-zinc-600">No products match your search or filter.</p>
+                        <p className="text-sm font-medium text-zinc-700">
+                          No products match your current search or filter.
+                        </p>
                         <button
                           onClick={() => {
                             setProductSearch("");
                             setProductStockFilter("ALL");
                           }}
-                          className="text-xs font-bold text-purple-600 hover:underline"
+                          className="text-xs font-semibold text-purple-600 hover:underline"
                         >
                           Clear search & filters
                         </button>
@@ -1609,81 +1364,122 @@ export default function VendorDashboardPage() {
                     const primaryImg = isEditing && editImageUrl ? editImageUrl : prod.images?.[0]?.url;
 
                     return (
-                      <div key={prod.id} className="p-4 space-y-3 bg-white">
-                        <div className="flex items-start gap-3">
-                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100 border border-zinc-200/60 flex items-center justify-center font-bold text-zinc-400 text-sm">
-                            {primaryImg ? (
-                              <img src={primaryImg} alt={prod.name} className="h-full w-full object-cover" />
-                            ) : (
-                              prod.name.charAt(0)
+                      <div
+                        key={prod.id}
+                        className={`p-4 sm:px-6 sm:py-4 transition-colors ${
+                          isEditing ? "bg-purple-50/20" : "bg-white hover:bg-zinc-50/70"
+                        }`}
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                          {/* Product Thumbnail & Details */}
+                          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                            <div className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100 border border-zinc-200/70 flex items-center justify-center font-bold text-zinc-400 text-sm">
+                              {primaryImg ? (
+                                <img src={primaryImg} alt={prod.name} className="h-full w-full object-cover" />
+                              ) : (
+                                prod.name.charAt(0)
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-semibold text-zinc-900 text-sm sm:text-[15px] leading-snug truncate max-w-full">
+                                  {prod.name}
+                                </h3>
+                                <span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-mono font-medium text-zinc-500 border border-zinc-200/80">
+                                  v{prod.version}
+                                </span>
+                              </div>
+
+                              {prod.description && (
+                                <p className="text-xs text-zinc-500 line-clamp-1 mt-0.5">
+                                  {stripHtml(prod.description)}
+                                </p>
+                              )}
+
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex items-center rounded-md bg-purple-50 border border-purple-200/60 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+                                  {prod.categories?.[0]?.name || "Uncategorized"}
+                                </span>
+
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                    prod.stockStatus === "IN_STOCK"
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      : prod.stockStatus === "LOW_STOCK"
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                      : "bg-red-50 text-red-700 border border-red-200"
+                                  }`}
+                                >
+                                  {prod.stockStatus.replace("_", " ")}
+                                </span>
+
+                                {vendor?.status === "PENDING_APPROVAL" ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 border border-amber-200">
+                                    <EyeOff className="h-3 w-3 text-amber-600" />
+                                    <span>Staged (Offline)</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 border border-emerald-200">
+                                    <Eye className="h-3 w-3 text-emerald-600" />
+                                    <span>Live</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Price, Stock Count & Actions */}
+                          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between lg:justify-end gap-3 sm:gap-5 pt-2 lg:pt-0 border-t border-zinc-100 lg:border-t-0 shrink-0">
+                            <div className="text-left lg:text-right">
+                              <div className="flex items-center lg:justify-end gap-1.5 flex-wrap">
+                                <span className="text-base font-bold text-zinc-900">
+                                  {formatPrice(Number(prod.salePrice ?? prod.price), "GHS")}
+                                </span>
+                                {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
+                                  <>
+                                    <span className="text-xs text-zinc-400 line-through">
+                                      {formatPrice(Number(prod.price), "GHS")}
+                                    </span>
+                                    <span className="rounded bg-red-50 border border-red-200 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                                      -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              <p className="text-xs font-medium text-zinc-500 mt-0.5">
+                                {prod.stockQty !== null ? `${prod.stockQty} units in stock` : "Unlimited stock"}
+                              </p>
+                            </div>
+
+                            {!isEditing && (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() => startEditing(prod)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 active:scale-[0.98] transition"
+                                >
+                                  <span>Edit Stock / Price</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProduct(prod)}
+                                  className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white p-2 text-red-600 hover:bg-red-50 hover:border-red-300 active:scale-[0.98] transition"
+                                  title="Delete product"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <h3 className="font-semibold text-zinc-900 text-sm leading-tight truncate">{prod.name}</h3>
-                              <span className="shrink-0 text-[10px] font-mono font-medium text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
-                                v{prod.version}
-                              </span>
-                            </div>
-                            <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5">{prod.description}</p>
-                            <div className="mt-1 flex items-baseline gap-2">
-                              <span className="text-base font-bold text-zinc-900">
-                                {formatPrice(Number(prod.salePrice ?? prod.price), "GHS")}
-                              </span>
-                              {prod.salePrice && Number(prod.price) > Number(prod.salePrice) && (
-                                <>
-                                  <span className="text-xs text-zinc-400 line-through">
-                                    {formatPrice(Number(prod.price), "GHS")}
-                                  </span>
-                                  <span className="rounded bg-red-50 border border-red-200 px-1.5 py-0.2 text-[10px] font-bold text-red-600">
-                                    -{Math.round(((Number(prod.price) - Number(prod.salePrice)) / Number(prod.price)) * 100)}%
-                                  </span>
-                                </>
-                              )}
-                              <span className="text-xs text-zinc-500">
-                                • {prod.stockQty !== null ? `${prod.stockQty} in stock` : "Unlimited"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Status & Visibility Badges */}
-                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                          <span className="inline-flex items-center rounded bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
-                            {prod.categories?.[0]?.name || "Uncategorized"}
-                          </span>
-
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                              prod.stockStatus === "IN_STOCK"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : prod.stockStatus === "LOW_STOCK"
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : "bg-red-50 text-red-700 border border-red-200"
-                            }`}
-                          >
-                            {prod.stockStatus.replace("_", " ")}
-                          </span>
-
-                          {vendor?.status === "PENDING_APPROVAL" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
-                              <EyeOff className="h-3 w-3 text-amber-600" />
-                              <span>Staged (Offline)</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
-                              <Eye className="h-3 w-3 text-emerald-600" />
-                              <span>Live</span>
-                            </span>
-                          )}
                         </div>
 
                         {/* In-place OCC Edit Drawer */}
-                        {isEditing ? (
-                          <div className="mt-3 rounded-xl border border-purple-200 bg-purple-50/50 p-3 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs font-semibold text-purple-900">Update Product (OCC Protected)</p>
-                              <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-50 transition">
+                        {isEditing && (
+                          <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 sm:p-4 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-purple-900">
+                                Update Product (OCC Protected)
+                              </p>
+                              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-50 transition">
                                 <UploadCloud className="h-3.5 w-3.5" />
                                 <span>
                                   {isUploadingEditImage
@@ -1701,7 +1497,8 @@ export default function VendorDashboardPage() {
                                 />
                               </label>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                               <div>
                                 <label className="block text-[11px] font-semibold text-zinc-600">Category</label>
                                 <select
@@ -1717,8 +1514,11 @@ export default function VendorDashboardPage() {
                                   ))}
                                 </select>
                               </div>
+
                               <div>
-                                <label className="block text-[11px] font-semibold text-zinc-600">Current Price (GHS) *</label>
+                                <label className="block text-[11px] font-semibold text-zinc-600">
+                                  Current Price (GHS) *
+                                </label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -1728,8 +1528,11 @@ export default function VendorDashboardPage() {
                                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
                                 />
                               </div>
+
                               <div>
-                                <label className="block text-[11px] font-semibold text-zinc-600">Previous Price (GHS)</label>
+                                <label className="block text-[11px] font-semibold text-zinc-600">
+                                  Previous Price (GHS)
+                                </label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -1740,6 +1543,7 @@ export default function VendorDashboardPage() {
                                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-zinc-900 focus:border-purple-600 focus:outline-none"
                                 />
                               </div>
+
                               <div>
                                 <label className="block text-[11px] font-semibold text-zinc-600">Stock Qty</label>
                                 <input
@@ -1751,6 +1555,7 @@ export default function VendorDashboardPage() {
                                 />
                               </div>
                             </div>
+
                             <div className="flex items-center justify-end gap-2 pt-1">
                               <button
                                 onClick={() => setEditingId(null)}
@@ -1764,25 +1569,9 @@ export default function VendorDashboardPage() {
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                               >
                                 <Save className="h-3.5 w-3.5" />
-                                <span>{isSavingProduct ? "Saving..." : "Save"}</span>
+                                <span>{isSavingProduct ? "Saving..." : "Save Changes"}</span>
                               </button>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
-                            <button
-                              onClick={() => startEditing(prod)}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 transition min-h-[38px]"
-                            >
-                              <span>Edit Stock / Price</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProduct(prod)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 active:bg-red-100 transition min-h-[38px]"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Delete</span>
-                            </button>
                           </div>
                         )}
                       </div>

@@ -220,33 +220,71 @@ export class ReconciliationService {
     const inFlightPlatformEquity = inFlightCommissions + inFlightDeliveryFees;
     const platformRevenue = Math.max(0, totalCommissions + totalDeliveryFees - totalDiscounts);
 
-    // Total Merchant Liabilities = Disbursed + In-Flight + In-Escrow + Available + Pre-Delivery In-Flight
+    // Total Unpaid Merchant Liabilities = In-Flight Payouts + In-Escrow + Available + Pre-Delivery
     const totalMerchantLiabilities =
-      totalDisbursed + totalProcessing + totalInEscrow + totalAvailable + totalPendingFulfillment;
+      totalProcessing + totalInEscrow + totalAvailable + totalPendingFulfillment;
 
     // Mathematical Balance & Variance Check
-    // Accounted Funds = Merchant Allocations + Platform Revenue + Customer Refunds
-    const totalAccounted = totalMerchantLiabilities + platformRevenue + totalRefunds;
+    // Accounted Funds = Unpaid Merchant Liabilities + Disbursed Payouts + Platform Revenue + Customer Refunds
+    const totalAccounted =
+      totalMerchantLiabilities + totalDisbursed + platformRevenue + totalRefunds;
     const variance = Number((totalInflow - totalAccounted).toFixed(2));
     const isBalanced = Math.abs(variance) < 1.0; // Allow 1 GHS rounding tolerance over thousands of sub-orders
 
-    // 8. 14-Day Trailing Trend
+    // 8. 14-Day Trailing Trend & Recent Double-Entry Ledger Journal
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    const recentPayments = await prisma.payment.findMany({
-      where: {
-        status: "SUCCESS",
-        createdAt: { gte: fourteenDaysAgo },
-      },
-      select: { amount: true, createdAt: true },
-    });
+    const [recentPayments, recentPayouts, recentVendorOrders, ledgerEntries] = await Promise.all([
+      prisma.payment.findMany({
+        where: {
+          status: "SUCCESS",
+          createdAt: { gte: fourteenDaysAgo },
+        },
+        select: { amount: true, createdAt: true },
+      }),
+      prisma.vendorPayout.findMany({
+        where: {
+          status: "PAID",
+          paidAt: { gte: fourteenDaysAgo },
+        },
+        select: { amount: true, paidAt: true },
+      }),
+      prisma.vendorOrder.findMany({
+        where: {
+          createdAt: { gte: fourteenDaysAgo },
+          status: { not: "CANCELLED" },
+          order: { paymentStatus: "PAID" },
+        },
+        select: {
+          vendorEarnings: true,
+          commissionAmount: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+      prisma.ledgerEntry.findMany({
+        orderBy: { occurredAt: "desc" },
+        take: 50,
+        include: {
+          lines: {
+            include: {
+              account: { select: { code: true, name: true, accountType: true } },
+            },
+          },
+        },
+      }),
+    ]);
 
-    const recentPayouts = await prisma.vendorPayout.findMany({
-      where: {
-        status: "PAID",
-        paidAt: { gte: fourteenDaysAgo },
-      },
-      select: { amount: true, paidAt: true },
-    });
+    const ledgerOrderIds = Array.from(
+      new Set(ledgerEntries.map((e) => e.orderId).filter((id): id is string => Boolean(id)))
+    );
+    const ledgerOrders =
+      ledgerOrderIds.length > 0
+        ? await prisma.order.findMany({
+            where: { id: { in: ledgerOrderIds } },
+            select: { id: true, number: true },
+          })
+        : [];
+    const orderNumberById = new Map(ledgerOrders.map((o) => [o.id, o.number]));
 
     const dailyTrends = [];
     for (let i = 13; i >= 0; i--) {
@@ -261,10 +299,23 @@ export class ReconciliationService {
         .filter((p) => p.paidAt && p.paidAt.toISOString().slice(0, 10) === dateKey)
         .reduce((sum, p) => sum + Number(p.amount), 0);
 
+      const dayVendorOrders = recentVendorOrders.filter(
+        (vo) => vo.createdAt.toISOString().slice(0, 10) === dateKey
+      );
+      const dayLiabilities = dayVendorOrders.reduce(
+        (sum, vo) => sum + Number(vo.vendorEarnings),
+        0
+      );
+      const dayCommission = dayVendorOrders
+        .filter((vo) => vo.status === "DELIVERED")
+        .reduce((sum, vo) => sum + Number(vo.commissionAmount), 0);
+
       dailyTrends.push({
         date: dateKey,
         inflow: Number(dayInflow.toFixed(2)),
         outflow: Number(dayOutflow.toFixed(2)),
+        vendorLiabilitiesGhs: Number(dayLiabilities.toFixed(2)),
+        earnedCommissionGhs: Number(dayCommission.toFixed(2)),
       });
     }
 
@@ -317,9 +368,26 @@ export class ReconciliationService {
       dailyBreakdown: dailyTrends.map((d) => ({
         date: d.date,
         customerPaymentsGhs: d.inflow,
-        vendorLiabilitiesGhs: 0,
-        earnedCommissionGhs: 0,
+        vendorLiabilitiesGhs: d.vendorLiabilitiesGhs,
+        earnedCommissionGhs: d.earnedCommissionGhs,
         payoutDisbursementsGhs: d.outflow,
+      })),
+      ledgerEntries: ledgerEntries.map((entry) => ({
+        id: entry.id,
+        entryType: entry.entryType,
+        description: entry.description,
+        currency: entry.currency,
+        orderNumber: entry.orderId ? orderNumberById.get(entry.orderId) || null : null,
+        occurredAt: entry.occurredAt,
+        lines: entry.lines.map((line) => ({
+          id: line.id,
+          accountCode: line.account.code,
+          accountName: line.account.name,
+          accountType: line.account.accountType,
+          amountGhs: Number((line.amountPesewas / 100).toFixed(2)),
+          isDebit: line.isDebit,
+          memo: line.memo,
+        })),
       })),
       // Summary & trends preserved for backward compatibility
       summary: {

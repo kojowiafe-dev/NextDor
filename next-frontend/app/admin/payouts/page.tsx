@@ -267,9 +267,6 @@ export default function AdminPayoutsPage() {
             <p className="mt-1 text-xs text-zinc-500">
               {ledger.inflow.successfulPaymentsCount} successful transactions
             </p>
-            <div className="mt-3 border-t border-zinc-100 pt-2 text-[11px] text-zinc-400">
-              Integer: {ledger.inflow.totalCustomerPaymentsPesewas.toLocaleString()} pesewas
-            </div>
           </div>
 
           {/* 2. Merchant Liabilities */}
@@ -491,54 +488,151 @@ export default function AdminPayoutsPage() {
         </div>
       </div>
 
-      {/* Daily Accounting Ledger Breakdown */}
-      {ledger && ledger.dailyBreakdown && ledger.dailyBreakdown.length > 0 && (
-        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200/80 overflow-hidden">
-          <div className="border-b border-zinc-100 p-5">
+      {/* Double-Entry Ledger Journal */}
+      <div className="mb-8 rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200/80 overflow-hidden">
+        <div className="border-b border-zinc-100 p-5">
+          <div className="flex items-center gap-2">
             <h3 className="font-bold text-zinc-900 sm:text-base">
-              Daily Ledger Activity &amp; Cashflow
+              Double-Entry Ledger Journal
             </h3>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Synchronized daily gateway inflows, vendor escrow additions, earned commissions, and disbursed transfers.
-            </p>
+            <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-bold text-zinc-600">
+              {ledger?.ledgerEntries?.length ?? 0} entries
+            </span>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-zinc-100 bg-zinc-50/75 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
-                <tr>
-                  <th className="py-3.5 pl-5 pr-3">Date</th>
-                  <th className="px-3 py-3.5">Customer Inflows</th>
-                  <th className="px-3 py-3.5">Vendor Escrow Incurred</th>
-                  <th className="px-3 py-3.5">Earned Commission</th>
-                  <th className="py-3.5 pl-3 pr-5 text-right">MoMo Disbursed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
-                {ledger.dailyBreakdown.map((row) => (
-                  <tr key={row.date} className="hover:bg-zinc-50/50 transition">
-                    <td className="py-3 pl-5 pr-3 font-semibold text-zinc-900">
-                      {row.date}
-                    </td>
-                    <td className="px-3 py-3 font-bold text-emerald-700">
-                      {formatPrice(row.customerPaymentsGhs, "GHS")}
-                    </td>
-                    <td className="px-3 py-3 text-amber-700">
-                      {formatPrice(row.vendorLiabilitiesGhs, "GHS")}
-                    </td>
-                    <td className="px-3 py-3 text-[#ff9900] font-semibold">
-                      {formatPrice(row.earnedCommissionGhs, "GHS")}
-                    </td>
-                    <td className="py-3 pl-3 pr-5 text-right font-semibold text-zinc-800">
-                      {formatPrice(row.payoutDisbursementsGhs, "GHS")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Immutable debit and credit journal entries recorded across escrow, commission, and payout accounts.
+          </p>
         </div>
-      )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-zinc-100 bg-zinc-50/75 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+              <tr>
+                <th className="py-3.5 pl-5 pr-3">Date</th>
+                <th className="px-3 py-3.5">Event Type</th>
+                <th className="px-3 py-3.5">Order</th>
+                <th className="px-3 py-3.5">Description</th>
+                <th className="py-3.5 pl-3 pr-5">Account Movements</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
+              {ledger?.ledgerEntries && ledger.ledgerEntries.length > 0 ? (
+                ledger.ledgerEntries.map((entry) => {
+                  const nonZeroLines = entry.lines.filter((l) => l.amountGhs > 0);
+                  return (
+                    <tr key={entry.id} className="hover:bg-zinc-50/50 transition align-top">
+                      <td className="py-3.5 pl-5 pr-3 whitespace-nowrap text-zinc-500">
+                        {new Date(entry.occurredAt).toLocaleDateString()} ·{" "}
+                        {new Date(entry.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                      <td className="px-3 py-3.5 whitespace-nowrap">
+                        <span className="inline-flex rounded-full bg-purple-50 border border-purple-200/70 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                          {entry.entryType.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3.5 whitespace-nowrap font-mono font-bold text-zinc-900">
+                        {entry.orderNumber || "—"}
+                      </td>
+                      <td className="px-3 py-3.5 text-zinc-700 max-w-xs">
+                        {entry.description}
+                      </td>
+                      <td className="py-3.5 pl-3 pr-5">
+                        <div className="space-y-1">
+                          {(nonZeroLines.length > 0 ? nonZeroLines : entry.lines).map((line) => (
+                            <div key={line.id} className="flex items-center justify-between gap-4 text-[11px]">
+                              <span className="text-zinc-600">
+                                <span
+                                  className={`mr-1.5 inline-block rounded px-1 py-0.2 font-mono text-[10px] font-bold ${
+                                    line.isDebit
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200/70"
+                                      : "bg-emerald-50 text-emerald-700 border border-emerald-200/70"
+                                  }`}
+                                >
+                                  {line.isDebit ? "DR" : "CR"}
+                                </span>
+                                {line.accountName}
+                              </span>
+                              <span className="font-mono font-semibold text-zinc-900 whitespace-nowrap">
+                                {formatPrice(line.amountGhs, entry.currency || "GHS")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-10 text-center text-xs text-zinc-400">
+                    No ledger journal entries recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Daily Accounting Ledger Breakdown */}
+      {(() => {
+        const activeDailyRows =
+          ledger?.dailyBreakdown?.filter(
+            (row) =>
+              row.customerPaymentsGhs > 0 ||
+              row.vendorLiabilitiesGhs > 0 ||
+              row.earnedCommissionGhs > 0 ||
+              row.payoutDisbursementsGhs > 0
+          ) ?? [];
+        if (activeDailyRows.length === 0) return null;
+        return (
+          <div className="rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200/80 overflow-hidden">
+            <div className="border-b border-zinc-100 p-5">
+              <h3 className="font-bold text-zinc-900 sm:text-base">
+                Daily Ledger Activity &amp; Cashflow
+              </h3>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                Synchronized daily gateway inflows, vendor escrow additions, earned commissions, and disbursed transfers.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-zinc-100 bg-zinc-50/75 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+                  <tr>
+                    <th className="py-3.5 pl-5 pr-3">Date</th>
+                    <th className="px-3 py-3.5">Customer Inflows</th>
+                    <th className="px-3 py-3.5">Vendor Escrow Incurred</th>
+                    <th className="px-3 py-3.5">Earned Commission</th>
+                    <th className="py-3.5 pl-3 pr-5 text-right">MoMo Disbursed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
+                  {activeDailyRows.map((row) => (
+                    <tr key={row.date} className="hover:bg-zinc-50/50 transition">
+                      <td className="py-3 pl-5 pr-3 font-semibold text-zinc-900">
+                        {row.date}
+                      </td>
+                      <td className="px-3 py-3 font-bold text-emerald-700">
+                        {formatPrice(row.customerPaymentsGhs, "GHS")}
+                      </td>
+                      <td className="px-3 py-3 text-amber-700">
+                        {formatPrice(row.vendorLiabilitiesGhs, "GHS")}
+                      </td>
+                      <td className="px-3 py-3 text-[#ff9900] font-semibold">
+                        {formatPrice(row.earnedCommissionGhs, "GHS")}
+                      </td>
+                      <td className="py-3 pl-3 pr-5 text-right font-semibold text-zinc-800">
+                        {formatPrice(row.payoutDisbursementsGhs, "GHS")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Batch Details Modal */}
       {selectedBatch && (

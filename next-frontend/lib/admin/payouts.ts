@@ -55,6 +55,26 @@ export interface LedgerDailyBreakdown {
   payoutDisbursementsGhs: number;
 }
 
+export interface LedgerEntryLineItem {
+  id: string;
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  amountGhs: number;
+  isDebit: boolean;
+  memo?: string | null;
+}
+
+export interface LedgerEntryItem {
+  id: string;
+  entryType: string;
+  description: string;
+  currency: string;
+  orderNumber?: string | null;
+  occurredAt: string;
+  lines: LedgerEntryLineItem[];
+}
+
 export interface FinancialLedgerReport {
   asOf: string;
   inflow: LedgerInflow;
@@ -63,6 +83,7 @@ export interface FinancialLedgerReport {
   disbursements: LedgerDisbursements;
   reconciliation: LedgerReconciliation;
   dailyBreakdown: LedgerDailyBreakdown[];
+  ledgerEntries?: LedgerEntryItem[];
 }
 
 export interface PayoutBatchItem {
