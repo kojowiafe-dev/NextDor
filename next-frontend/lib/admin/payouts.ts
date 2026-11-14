@@ -289,7 +289,9 @@ export async function generatePayoutBatch(
   });
   const json = await res.json();
   if (!res.ok || !json.success) {
-    throw new Error(json.message || "Failed to generate payout batch");
+    throw new Error(
+      json?.error?.message || json?.message || "Failed to generate payout batch"
+    );
   }
   return json.data;
 }
@@ -311,7 +313,9 @@ export async function executePayoutBatch(
   });
   const json = await res.json();
   if (!res.ok || !json.success) {
-    throw new Error(json.message || "Failed to execute payout batch");
+    throw new Error(
+      json?.error?.message || json?.message || "Failed to execute payout batch"
+    );
   }
   return json.data;
 }

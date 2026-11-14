@@ -34,7 +34,7 @@ import type { CreatePayoutBatchInput, ExecutePayoutBatchInput, PaystackTransferW
 const MIN_PAYOUT_GHS = 5;
 
 export class PayoutService {
-  constructor(private readonly repo: PayoutRepository = new PayoutRepository()) {}
+  constructor(private readonly repo: PayoutRepository = new PayoutRepository()) { }
 
   // ─── Generate batch (DRAFT) ─────────────────────────────────────────────────
 
@@ -245,7 +245,7 @@ export class PayoutService {
             amountPesewas,
             payoutId: payout.id,
             vendorId: payout.vendorId,
-          }).catch(() => {}); // Best-effort: entry F may not have been written if crash was before it
+          }).catch(() => { }); // Best-effort: entry F may not have been written if crash was before it
         });
       }
     }
@@ -459,7 +459,7 @@ export class PayoutService {
       SmsService.sendSms(
         notifyPhone,
         `Nextdor Update: Payout of GH₵${Number(payout.amount).toFixed(2)} was successfully credited to your wallet.`,
-      ).catch(() => {});
+      ).catch(() => { });
     }
 
     if (vendor.email) {
@@ -474,7 +474,7 @@ export class PayoutService {
           reference: payout.paystackTransferRef,
           batchReference: payout.batch?.batchReference,
         },
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }
 }
