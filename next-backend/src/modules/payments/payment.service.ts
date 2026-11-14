@@ -270,7 +270,21 @@ export class PaymentService {
       return { status: 401, body: { success: false, message: "Invalid webhook signature" } };
     }
 
-    if (input.payload?.event !== "charge.success") {
+    const event = input.payload?.event as string | undefined;
+    if (
+      event === "transfer.success" ||
+      event === "transfer.failed" ||
+      event === "transfer.reversed"
+    ) {
+      const { PayoutService } = await import("../payouts/payout.service.js");
+      await new PayoutService().handleTransferWebhook({
+        event,
+        data: input.payload?.data ?? {},
+      });
+      return { status: 200, body: { received: true } };
+    }
+
+    if (event !== "charge.success") {
       // Still acknowledge gracefully
       return { status: 200, body: { received: true } };
     }
