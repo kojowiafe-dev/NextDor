@@ -15,7 +15,7 @@ export const SITE_CONFIG = {
   phoneDisplay: process.env.NEXT_PUBLIC_SUPPORT_PHONE_DISPLAY || "+233 55 750 7693",
   whatsapp: (process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "+233557507693").replace(/\s+/g, ""),
   whatsappUrl: `https://wa.me/${(process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "233557507693").replace(/[^0-9]/g, "")}?text=${encodeURIComponent("Hello Nextdor Support, I have an inquiry about an order / product.")}`,
-  email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "hello@nextdor.online",
+  email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@nextdor.online",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@nextdor.online",
 
   // ─── Physical Address ───────────────────────────────────────────────────────

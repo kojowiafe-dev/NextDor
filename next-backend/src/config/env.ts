@@ -177,7 +177,7 @@ function parseEnv(): Config {
     // Use console.error intentionally here — logger not yet initialised
     console.error(
       `\n❌ Invalid environment configuration:\n${formatted}\n\n` +
-        `Copy .env.example to .env and fill in the required values.\n`,
+      `Copy .env.example to .env and fill in the required values.\n`,
     );
     process.exit(1);
   }
