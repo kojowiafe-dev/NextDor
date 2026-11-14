@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Store, ShieldCheck, ArrowRight, Star, ChevronRight } from "lucide-react";
 import type { MerchantGroup } from "@/lib/catalog/types";
 import { formatPrice } from "@/lib/utils";
@@ -53,9 +54,9 @@ export function MerchantSpotlightRow({ merchants }: MerchantSpotlightRowProps) {
               {/* Store Header Banner */}
               <div className="flex items-start justify-between gap-3 pb-4 border-b border-zinc-50">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-100 font-bold text-zinc-600 ring-1 ring-zinc-200">
+                  <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-100 font-bold text-zinc-600 ring-1 ring-zinc-200">
                     {merchant.logoUrl ? (
-                      <img src={merchant.logoUrl} alt={merchant.name} className="h-full w-full object-cover" />
+                      <Image src={merchant.logoUrl} alt={merchant.name} fill sizes="48px" className="object-cover" />
                     ) : (
                       <Store className="h-6 w-6 text-zinc-400" />
                     )}
@@ -111,10 +112,12 @@ export function MerchantSpotlightRow({ merchants }: MerchantSpotlightRowProps) {
                     >
                       <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-lg bg-white">
                         {imgUrl ? (
-                          <img
+                          <Image
                             src={imgUrl}
                             alt={p.name}
-                            className="h-full w-full object-contain p-1 transition-transform group-hover:scale-105"
+                            fill
+                            sizes="(max-width: 640px) 45vw, 150px"
+                            className="object-contain p-1 transition-transform group-hover:scale-105"
                           />
                         ) : (
                           <div className="flex h-full items-center justify-center text-[10px] text-zinc-400">

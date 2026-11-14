@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Store, CheckCircle, MapPin, Phone, Mail, ArrowLeft, ShoppingBag } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
@@ -82,9 +83,9 @@ export default async function VendorStorefrontPage({
         <div className="h-24 sm:h-36 w-full bg-gradient-to-r from-purple-800 via-indigo-800 to-zinc-900 object-cover" />
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <div className="relative -mt-10 sm:-mt-14 flex flex-col items-start gap-3 pb-4 sm:pb-6 sm:flex-row sm:items-end sm:gap-5">
-            <div className="flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-white shadow-md overflow-hidden font-bold text-xl text-purple-700">
+            <div className="relative flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-white shadow-md overflow-hidden font-bold text-xl text-purple-700">
               {vendor.logoUrl ? (
-                <img src={vendor.logoUrl} alt={vendor.name} className="h-full w-full object-cover" />
+                <Image src={vendor.logoUrl} alt={vendor.name} fill sizes="96px" className="object-cover" />
               ) : (
                 <Store className="h-9 w-9 sm:h-11 sm:w-11 text-purple-600" />
               )}
@@ -156,10 +157,12 @@ export default async function VendorStorefrontPage({
                 >
                   <Link href={`/product/${prod.slug}`} className="relative aspect-square w-full overflow-hidden bg-zinc-50 block">
                     {primaryImg ? (
-                      <img
+                      <Image
                         src={primaryImg}
                         alt={prod.name}
-                        className="h-full w-full object-contain p-2 transition duration-300 group-hover:scale-105"
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        className="object-contain p-2 transition duration-300 group-hover:scale-105"
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center font-bold text-zinc-300 text-2xl">

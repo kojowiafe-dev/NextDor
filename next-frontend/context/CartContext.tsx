@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { dispatchToast } from "@/components/ui/ToastContainer";
 
 export type CartItem = {
   productId: string;
@@ -26,6 +27,9 @@ type CartContextValue = {
   items: CartItem[];
   itemCount: number;
   subtotal: number;
+  isDrawerOpen: boolean;
+  openDrawer: () => void;
+  closeDrawer: () => void;
   addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
   removeItem: (productId: string) => void;
   updateQty: (productId: string, quantity: number) => void;
@@ -38,6 +42,10 @@ const STORAGE_KEY = "nextdor-cart";
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
+  const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
 
   useEffect(() => {
     try {
@@ -83,6 +91,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const initialQty = !item.isBackorder && item.maxQty != null ? Math.min(quantity, item.maxQty) : quantity;
         return [...current, { ...item, quantity: initialQty }];
       });
+      setIsDrawerOpen(true);
+      dispatchToast({
+        message: `Added ${item.name} to cart`,
+        variant: "cart",
+        href: "/cart",
+        actionLabel: "View Cart",
+      });
     },
     [],
   );
@@ -122,12 +137,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         (sum, item) => sum + item.price * item.quantity,
         0,
       ),
+      isDrawerOpen,
+      openDrawer,
+      closeDrawer,
       addItem,
       removeItem,
       updateQty,
       clearCart,
     }),
-    [items, addItem, removeItem, updateQty, clearCart],
+    [items, isDrawerOpen, openDrawer, closeDrawer, addItem, removeItem, updateQty, clearCart],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

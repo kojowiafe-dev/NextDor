@@ -6,6 +6,8 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { FloatingSupportButton } from "@/components/layout/FloatingSupportButton";
+import { CartDrawer } from "@/components/cart/CartDrawer";
+import { ToastContainer } from "@/components/ui/ToastContainer";
 import type { Category } from "@/lib/catalog";
 
 interface StorefrontShellProps {
@@ -32,6 +34,8 @@ export function StorefrontShell({ categories, children }: StorefrontShellProps) 
       <Footer />
       <FloatingSupportButton />
       <BottomNav />
+      <CartDrawer />
+      <ToastContainer />
     </div>
   );
 }

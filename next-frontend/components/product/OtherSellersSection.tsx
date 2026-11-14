@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Store, ShieldCheck, Star, ArrowRight, Tag } from "lucide-react";
 import type { OtherSellerOffer } from "@/lib/catalog/types";
 import { formatPrice } from "@/lib/utils";
@@ -53,12 +54,14 @@ export function OtherSellersSection({
             >
               {/* Seller details */}
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 font-bold">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-zinc-500 font-bold">
                   {seller.vendor.logoUrl ? (
-                    <img
+                    <Image
                       src={seller.vendor.logoUrl}
                       alt={seller.vendor.name}
-                      className="h-full w-full rounded-xl object-cover"
+                      fill
+                      sizes="40px"
+                      className="rounded-xl object-cover"
                     />
                   ) : (
                     <Store className="h-5 w-5 text-zinc-400" />

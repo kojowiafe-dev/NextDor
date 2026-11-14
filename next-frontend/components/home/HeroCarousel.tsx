@@ -361,7 +361,7 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-[#131921] text-white shadow-xl ring-1 ring-black/10 h-[410px] sm:h-[360px] lg:h-[400px]"
+        className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-[#131921] text-white shadow-xl ring-1 ring-black/10 min-h-[410px] sm:min-h-[360px] sm:aspect-[16/7] lg:aspect-[16/5]"
       >
         {/* Full-Bleed Background Lifestyle Image with Smooth Transition */}
         {slides.map((slide, idx) => (
@@ -374,7 +374,6 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
               src={slide.bgImage}
               alt={slide.title || slide.badge}
               fill
-              unoptimized
               priority={idx === 0}
               sizes="(max-width: 768px) 100vw, 1280px"
               className="object-cover object-center"
@@ -387,7 +386,7 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
         ))}
 
         {/* Slide Content Container */}
-        <div className="relative z-10 h-full w-full px-11 sm:px-16 lg:px-20 pt-4 pb-9 sm:py-8 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-6">
+        <div className="relative z-10 h-full w-full px-11 sm:px-16 lg:px-20 pt-5 pb-10 sm:py-8 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
           {/* Left Editorial Content */}
           <div className="flex flex-col justify-center space-y-1.5 sm:space-y-3 max-w-lg">
             <div className="flex items-center gap-2 whitespace-nowrap">
@@ -432,7 +431,7 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
           </div>
 
           {/* Visual Lifestyle Cards (Visible on Both Mobile & Desktop!) */}
-          <div className="grid grid-cols-2 md:flex items-center gap-2.5 sm:gap-3.5 shrink-0">
+          <div className="mt-3 md:mt-0 grid grid-cols-2 md:flex items-center gap-2.5 sm:gap-3.5 shrink-0">
             {activeBanner.accentCards.map((card) => (
               <Link
                 key={card.label}
@@ -443,7 +442,6 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
                   src={card.image}
                   alt={card.label}
                   fill
-                  unoptimized
                   sizes="180px"
                   className="object-cover transition duration-500 group-hover:scale-110"
                 />
@@ -573,12 +571,11 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
               href={card.href}
               className="group relative flex w-40 sm:w-52 shrink-0 flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50 transition hover:-translate-y-0.5 hover:border-[#ff9900] hover:bg-white hover:shadow-md"
             >
-              <div className="relative h-28 sm:h-36 w-full overflow-hidden bg-zinc-200">
+              <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-200">
                 <Image
                   src={card.image}
                   alt={card.title}
                   fill
-                  unoptimized
                   sizes="220px"
                   className="object-cover transition duration-500 group-hover:scale-105"
                 />

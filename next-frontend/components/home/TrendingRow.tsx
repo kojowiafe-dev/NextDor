@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Flame, Star, Sparkles, ArrowRight, ShieldCheck } from "lucide-react";
 import type { TrendingProduct } from "@/lib/catalog/types";
 import { formatPrice } from "@/lib/utils";
@@ -66,12 +67,12 @@ export function TrendingRow({ products }: TrendingRowProps) {
                 {/* Product Image */}
                 <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-zinc-50">
                   {image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={image.src}
                       alt={image.alt || product.name}
-                      className="h-full w-full object-contain p-2 transition duration-300 group-hover:scale-105"
-                      loading="lazy"
+                      fill
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                      className="object-contain p-2 transition duration-300 group-hover:scale-105"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-zinc-300">

@@ -16,7 +16,9 @@ const helpLinks = [
   { label: "Customer Service", href: "/contact" },
   { label: "Shipping Info", href: "/shipping-info" },
   { label: "Returns & Refunds", href: "/returns" },
-  { label: "Contact Us", href: "/contact" },
+  { label: "48h Escrow Protection", href: "/escrow-protection" },
+  { label: "Terms of Service", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy" },
 ];
 
 export function Footer() {

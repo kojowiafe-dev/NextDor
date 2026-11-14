@@ -3,8 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import { MapPin, ShoppingCart, User, ChevronDown, LogOut, Package, Settings, ShieldCheck, Store, Heart } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MapPin, ShoppingCart, User, ChevronDown, LogOut, Package, Settings, ShieldCheck, Store, Heart, Check } from "lucide-react";
 import type { Category } from "@/lib/catalog/types";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
@@ -15,6 +15,118 @@ import { SearchBar } from "./SearchBar";
 type HeaderProps = {
   categories: Category[];
 };
+
+const GHANA_LOCATIONS = [
+  { label: "Greater Accra", city: "Accra", eta: "Same-day / Next-day" },
+  { label: "Tema & Spintex", city: "Tema", eta: "Same-day / Next-day" },
+  { label: "Ashanti Region", city: "Kumasi", eta: "1–2 business days" },
+  { label: "Western Region", city: "Takoradi", eta: "1–2 business days" },
+  { label: "Central Region", city: "Cape Coast", eta: "1–2 business days" },
+  { label: "Eastern Region", city: "Koforidua", eta: "1–2 business days" },
+  { label: "Northern Region", city: "Tamale", eta: "2–3 business days" },
+  { label: "Volta Region", city: "Ho", eta: "2–3 business days" },
+  { label: "Bono Region", city: "Sunyani", eta: "2–3 business days" },
+  { label: "Upper East", city: "Bolgatanga", eta: "2–4 business days" },
+  { label: "Upper West", city: "Wa", eta: "2–4 business days" },
+];
+
+const DELIVERY_STORAGE_KEY = "nextdor_delivery_location";
+
+function DeliveryLocationDropdown() {
+  const [selected, setSelected] = useState("Ghana");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DELIVERY_STORAGE_KEY);
+      if (saved) setSelected(saved);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [open]);
+
+  function handleSelect(city: string) {
+    setSelected(city);
+    setOpen(false);
+    try {
+      localStorage.setItem(DELIVERY_STORAGE_KEY, city);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="relative hidden sm:block">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-left text-xs text-zinc-300 hover:text-[#ff9900] hover:bg-white/5 transition"
+      >
+        <MapPin className="h-4 w-4 shrink-0 text-[#ff9900]" />
+        <div className="leading-tight">
+          <p className="text-[11px] text-zinc-400">Deliver to</p>
+          <p className="flex items-center gap-0.5 font-semibold text-white">
+            <span>{selected}</span>
+            <ChevronDown className="h-3 w-3 opacity-80" />
+          </p>
+        </div>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Choose Ghana delivery location"
+          className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-zinc-200 bg-white p-2 text-zinc-900 shadow-xl"
+        >
+          <div className="border-b border-zinc-100 px-2.5 py-2">
+            <p className="text-xs font-bold text-zinc-900">Choose your delivery location</p>
+            <p className="text-[11px] text-zinc-500">Delivery speeds and courier fees vary by region</p>
+          </div>
+          <div className="mt-1 max-h-64 overflow-y-auto space-y-0.5">
+            {GHANA_LOCATIONS.map((loc) => {
+              const isSelected = selected === loc.city;
+              return (
+                <button
+                  key={loc.city}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => handleSelect(loc.city)}
+                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
+                    isSelected
+                      ? "bg-[#ff9900]/15 font-bold text-zinc-900"
+                      : "hover:bg-zinc-100 text-zinc-700"
+                  }`}
+                >
+                  <div>
+                    <p className="font-semibold text-zinc-900">{loc.city}</p>
+                    <p className="text-[11px] text-zinc-500">{loc.label} • {loc.eta}</p>
+                  </div>
+                  {isSelected && <Check className="h-4 w-4 text-[#c7511f] shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AccountDropdown() {
   const router = useRouter();
@@ -183,13 +295,7 @@ export function Header({ categories }: HeaderProps) {
           </Link>
         </div>
 
-        <div className="hidden items-center gap-1 text-xs text-zinc-300 sm:flex">
-          <MapPin className="h-4 w-4" />
-          <div>
-            <p className="text-[11px]">Deliver to</p>
-            <p className="font-semibold text-white">Ghana</p>
-          </div>
-        </div>
+        <DeliveryLocationDropdown />
 
         <SearchBar className="hidden md:flex" />
 

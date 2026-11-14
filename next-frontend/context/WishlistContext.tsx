@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { dispatchToast } from "@/components/ui/ToastContainer";
 
 export type WishlistItem = {
   id: string;
@@ -100,13 +101,24 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         return;
       }
       persistItems([...items, item]);
+      dispatchToast({
+        message: `Saved ${item.name} to wishlist`,
+        variant: "wishlist",
+        href: "/wishlist",
+        actionLabel: "View",
+      });
     },
     [items, persistItems]
   );
 
   const removeFromWishlist = useCallback(
     (productId: string) => {
+      const target = items.find((item) => item.id === productId);
       persistItems(items.filter((item) => item.id !== productId));
+      dispatchToast({
+        message: target ? `Removed ${target.name} from wishlist` : "Removed from wishlist",
+        variant: "wishlist",
+      });
     },
     [items, persistItems]
   );
@@ -116,9 +128,19 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       const exists = items.some((existing) => existing.id === item.id);
       if (exists) {
         persistItems(items.filter((existing) => existing.id !== item.id));
+        dispatchToast({
+          message: `Removed ${item.name} from wishlist`,
+          variant: "wishlist",
+        });
         return false;
       } else {
         persistItems([...items, item]);
+        dispatchToast({
+          message: `Saved ${item.name} to wishlist`,
+          variant: "wishlist",
+          href: "/wishlist",
+          actionLabel: "View",
+        });
         return true;
       }
     },

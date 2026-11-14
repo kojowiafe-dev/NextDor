@@ -223,7 +223,10 @@ export class EscrowService {
     const expired = await prisma.vendorOrder.findMany({
       where: {
         fundsStatus: "ESCROW",
-        escrowExpiresAt: { lte: now },
+        OR: [
+          { escrowExpiresAt: { lte: now } },
+          { escrowExpiresAt: null, clearedAt: { lte: now } },
+        ],
         flaggedForReview: false,
         // No open dispute
         disputes: { none: { status: { in: ["OPEN", "UNDER_REVIEW"] } } },
