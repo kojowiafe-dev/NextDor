@@ -296,14 +296,6 @@ export default function AdminProductsPage() {
             <Store className="h-4 w-4 text-purple-600 shrink-0" />
             <span className="hidden md:inline">Vendor Portal</span>
           </Link>
-
-          <Link
-            href="/admin/products/new"
-            className="flex items-center gap-1.5 rounded-lg bg-[#ff9900] px-4 py-2 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-[#f08804]"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Product</span>
-          </Link>
         </div>
       }
     >

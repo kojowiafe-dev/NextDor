@@ -362,10 +362,6 @@ export default function VendorDashboardPage() {
         dashJson.error?.code === "NO_VENDOR_STORE" ||
         dashJson.error?.code === "FORBIDDEN"
       ) {
-        if (user && (user.role === "admin" || user.role === "super_admin")) {
-          router.replace("/admin");
-          return;
-        }
         setIsNotVendor(true);
         setIsDataLoading(false);
         return;
@@ -469,10 +465,6 @@ export default function VendorDashboardPage() {
     if (authLoading) return;
     if (!isAuthenticated) {
       router.replace("/login?redirect=/vendor/dashboard");
-      return;
-    }
-    if (user && (user.role === "admin" || user.role === "super_admin") && !user.vendorId) {
-      router.replace("/admin");
       return;
     }
     loadVendorData();
@@ -837,15 +829,7 @@ export default function VendorDashboardPage() {
   }
 
   if (isNotVendor) {
-    if (user && (user.role === "admin" || user.role === "super_admin")) {
-      router.replace("/admin");
-      return (
-        <div className="flex min-h-[60vh] flex-col items-center justify-center bg-zinc-50 gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-200 border-t-[#ff9900]" />
-          <p className="text-xs font-medium text-zinc-500">Redirecting to Admin Portal...</p>
-        </div>
-      );
-    }
+    const isAdminUser = Boolean(user && (user.role === "admin" || user.role === "super_admin"));
     return (
       <div className="flex min-h-[65vh] flex-col items-center justify-center bg-zinc-50 px-4 py-16 text-center">
         <div className="mx-auto max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
@@ -854,7 +838,8 @@ export default function VendorDashboardPage() {
           </div>
           <h2 className="text-xl font-bold text-zinc-900">Merchant Store Not Found</h2>
           <p className="mt-2 text-sm text-zinc-600">
-            You are signed in as <span className="font-semibold text-zinc-900">{user?.email}</span> (Customer Account).
+            You are signed in as <span className="font-semibold text-zinc-900">{user?.email}</span>{" "}
+            ({isAdminUser ? "Admin Account" : "Customer Account"}).
           </p>
           <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
             Your account does not have an active merchant store registered. To start selling on Nextdor, register your store below or sign in with your vendor credentials.
@@ -873,6 +858,14 @@ export default function VendorDashboardPage() {
             >
               Sign In with Merchant Account
             </button>
+            {isAdminUser && (
+              <Link
+                href="/admin"
+                className="text-xs font-semibold text-[#c7511f] hover:underline pt-1"
+              >
+                ← Return to Admin Portal
+              </Link>
+            )}
             <Link
               href="/"
               className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline pt-1"
