@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -70,10 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  // Incremented on any explicit login/logout/session change so in-flight initAuth() calls never overwrite a logout
+  const authEpochRef = useRef(0);
 
   // Restore and verify session on initial mount
   useEffect(() => {
     let isMounted = true;
+    const initEpoch = authEpochRef.current;
+    const isStale = () => !isMounted || authEpochRef.current !== initEpoch;
 
     async function initAuth() {
       try {
@@ -83,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (storedUser && storedToken) {
           const parsedUser = JSON.parse(storedUser) as AuthUser;
-          if (isMounted) {
+          if (!isStale()) {
             setUser(parsedUser);
             setToken(storedToken);
           }
@@ -95,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Token is still active and valid — verify quietly in background
             try {
               const freshUser = await fetchCurrentUser(storedToken);
-              if (freshUser && isMounted) {
+              if (freshUser && !isStale() && localStorage.getItem(TOKEN_KEY) === storedToken) {
                 setUser(freshUser);
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(freshUser));
               }
@@ -106,10 +111,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Access token expired — attempt silent refresh
             try {
               const newAccessToken = await refreshAccessToken();
+              if (isStale()) return;
               if (newAccessToken) {
                 setSessionCookie();
                 const refreshedUser = await fetchCurrentUser(newAccessToken);
-                if (refreshedUser && isMounted) {
+                if (refreshedUser && !isStale()) {
                   setUser(refreshedUser);
                   setToken(newAccessToken);
                   localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshedUser));
@@ -121,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               } else {
                 // Refresh failed — both access and refresh tokens expired
                 clearSessionCookie();
-                if (isMounted) {
+                if (!isStale()) {
                   setUser(null);
                   setToken(null);
                   localStorage.removeItem(STORAGE_KEY);
@@ -162,6 +168,7 @@ function clearSessionCookie() {
 }
 
   const login = useCallback(async (payload: SignInPayload): Promise<AuthUser> => {
+    authEpochRef.current += 1;
     const { user: authUser, accessToken } = await apiSignIn(payload);
     setUser(authUser);
     setToken(accessToken);
@@ -179,6 +186,7 @@ function clearSessionCookie() {
   }, []);
 
   const loginWithGoogle = useCallback(async (idToken: string): Promise<AuthUser> => {
+    authEpochRef.current += 1;
     const { user: authUser, accessToken } = await apiSignInWithGoogle(idToken);
     setUser(authUser);
     setToken(accessToken);
@@ -201,6 +209,7 @@ function clearSessionCookie() {
 
   const verifyEmailSession = useCallback(
     async (payload: { email: string; code: string }): Promise<AuthUser> => {
+      authEpochRef.current += 1;
       const { user: authUser, accessToken } = await apiVerifyEmail(payload);
       setUser(authUser);
       setToken(accessToken);
@@ -221,6 +230,7 @@ function clearSessionCookie() {
 
   const setSession = useCallback(
     (authUser: AuthUser, accessToken: string, refreshToken?: string) => {
+      authEpochRef.current += 1;
       setUser(authUser);
       setToken(accessToken);
 
@@ -240,6 +250,7 @@ function clearSessionCookie() {
   );
 
   const logout = useCallback(async () => {
+    authEpochRef.current += 1;
     setUser(null);
     setToken(null);
 

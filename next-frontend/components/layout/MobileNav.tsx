@@ -264,10 +264,10 @@ export function MobileNav({ categories }: MobileNavProps) {
               {isAuthenticated && (
                 <button
                   type="button"
-                  onClick={() => {
-                    logout();
+                  onClick={async () => {
                     close();
-                    router.push("/login");
+                    await logout();
+                    router.replace("/login");
                   }}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-red-400 hover:bg-red-500/10 transition font-medium"
                 >

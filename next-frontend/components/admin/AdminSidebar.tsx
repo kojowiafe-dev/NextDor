@@ -201,9 +201,9 @@ export function AdminSidebar({ collapsed = false, onClose }: AdminSidebarProps) 
             </Link>
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 onClose?.();
-                logout();
+                await logout();
               }}
               title="Sign Out"
               aria-label="Sign Out"

@@ -122,9 +122,9 @@ export function AccountSidebar() {
       <div className="border-t border-zinc-100 p-3">
         <button
           type="button"
-          onClick={() => {
-            logout();
-            router.push("/login");
+          onClick={async () => {
+            await logout();
+            router.replace("/login");
           }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-red-50 hover:text-red-600"
         >
@@ -170,9 +170,9 @@ export function AccountBottomNav() {
         })}
         <button
           type="button"
-          onClick={() => {
-            logout();
-            router.push("/login");
+          onClick={async () => {
+            await logout();
+            router.replace("/login");
           }}
           className="flex flex-col items-center gap-1 px-3 py-3 text-xs font-medium text-zinc-500 hover:text-red-600"
         >

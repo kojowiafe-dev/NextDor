@@ -254,10 +254,10 @@ function AccountDropdown() {
           <div className="border-t border-zinc-100 mt-1">
             <button
               type="button"
-              onClick={() => {
-                logout();
+              onClick={async () => {
                 setOpen(false);
-                router.push("/login");
+                await logout();
+                router.replace("/login");
               }}
               className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-700 hover:bg-red-50 hover:text-red-600"
             >
