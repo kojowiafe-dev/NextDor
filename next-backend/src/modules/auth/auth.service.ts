@@ -410,6 +410,40 @@ export class AuthService {
   }
 
   /**
+   * Changes the authenticated user's password after verifying their current password,
+   * then revokes all active refresh tokens.
+   */
+  async changePassword(
+    userId: string,
+    input: { currentPassword: string; newPassword: string }
+  ): Promise<{ success: boolean; message: string }> {
+    const user = await this.userRepo.findById(userId);
+    if (!user || user.deletedAt) {
+      throw new NotFoundError("Account not found");
+    }
+
+    const matches = await bcrypt.compare(input.currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new UnauthorizedError("Current password is incorrect.");
+    }
+
+    if (input.currentPassword === input.newPassword) {
+      throw new BadRequestError("New password must be different from your current password.");
+    }
+
+    const passwordHash = await bcrypt.hash(input.newPassword, 12);
+    await this.userRepo.updatePassword(user.id, passwordHash);
+    await this.userRepo.revokeAllUserTokens(user.id);
+
+    logger.info({ userId: user.id, role: user.role }, "auth: password changed successfully");
+
+    return {
+      success: true,
+      message: "Password updated successfully.",
+    };
+  }
+
+  /**
    * Authenticate with email + password.
    */
   async login(input: {

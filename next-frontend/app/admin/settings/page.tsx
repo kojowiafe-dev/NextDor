@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AuthFormField } from "@/components/account/AuthFormField";
+import { ChangePasswordCard } from "@/components/auth/ChangePasswordCard";
 
 const GHANA_REGIONS = [
   "Greater Accra", "Ashanti", "Western", "Central", "Eastern", "Northern",
@@ -183,6 +184,13 @@ export default function AdminSettingsPage() {
           {isSaving ? "Saving..." : "Save Settings"}
         </button>
       </form>
+
+      <div className="mt-8 max-w-2xl">
+        <ChangePasswordCard
+          title="Admin Account Password"
+          subtitle="Update the password for your signed-in admin account."
+        />
+      </div>
     </AdminLayout>
   );
 }

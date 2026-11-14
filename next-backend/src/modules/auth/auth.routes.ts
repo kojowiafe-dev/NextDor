@@ -34,6 +34,7 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
   verifyEmailSchema,
   resendCodeSchema,
 } from "@nextdor/shared";
@@ -226,6 +227,28 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         code: body.code,
         password: body.password,
       });
+      return reply.send({ success: true, message: result.message });
+    },
+  );
+
+  /**
+   * POST /auth/change-password
+   * Authenticated password change for all roles (Customer, Vendor, Admin, Super Admin).
+   */
+  app.post(
+    "/change-password",
+    {
+      preHandler: requireAuth,
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Change password for the currently authenticated user",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (req, reply) => {
+      const body = changePasswordSchema.parse(req.body);
+      const result = await authService.changePassword(req.authUser!.userId, body);
       return reply.send({ success: true, message: result.message });
     },
   );

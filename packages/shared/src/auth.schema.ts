@@ -84,6 +84,11 @@ export const resetPasswordSchema = z.object({
   password: passwordSchema,
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: passwordSchema,
+});
+
 // ─── Inferred TypeScript types ────────────────────────────────────────────────
 
 export type RegisterInput       = z.infer<typeof registerSchema>;
@@ -92,3 +97,4 @@ export type VerifyEmailInput    = z.infer<typeof verifyEmailSchema>;
 export type ResendCodeInput     = z.infer<typeof resendCodeSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput  = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

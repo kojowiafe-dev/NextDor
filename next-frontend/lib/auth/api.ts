@@ -347,6 +347,29 @@ export async function requestPasswordReset(email: string): Promise<void> {
 }
 
 /**
+ * Change password for the currently authenticated user via POST /api/v1/auth/change-password.
+ */
+export async function changePasswordApi(
+  token: string,
+  payload: { currentPassword: string; newPassword: string },
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json?.error?.message || json?.message || "Failed to update password.");
+  }
+  return { success: true, message: json.message || "Password updated successfully." };
+}
+
+/**
  * Update user profile details.
  */
 export async function updateUserProfile(

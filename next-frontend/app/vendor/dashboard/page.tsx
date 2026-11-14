@@ -53,6 +53,7 @@ import { BulkUploadModal } from "@/components/vendor/BulkUploadModal";
 import { StoreSyncModal } from "@/components/vendor/StoreSyncModal";
 import { CourierDispatchModal } from "@/components/vendor/CourierDispatchModal";
 import { PackingSlipModal } from "@/components/vendor/PackingSlipModal";
+import { ChangePasswordCard } from "@/components/auth/ChangePasswordCard";
 import {
   VendorAnalyticsResponse,
   getVendorPortalAnalytics,
@@ -2418,6 +2419,13 @@ export default function VendorDashboardPage() {
                   </button>
                 </div>
               </form>
+            </div>
+
+            <div className="mt-6">
+              <ChangePasswordCard
+                title="Account Security & Password"
+                subtitle="Change the password for your vendor login account."
+              />
             </div>
           </div>
         )}
