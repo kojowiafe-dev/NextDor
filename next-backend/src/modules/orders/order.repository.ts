@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "../../lib/prisma.js";
+import { isCodOrder } from "./cod.utils.js";
 import { ConflictError, UnprocessableError } from "../../lib/errors.js";
 import type {
   Order,
@@ -475,11 +476,7 @@ export class OrderRepository {
           where: { id: orderId },
           select: { notes: true, paymentStatus: true },
         });
-        const notesLower = (currentOrder?.notes || "").toLowerCase();
-        const isCod =
-          notesLower.includes("payment method: cod") ||
-          notesLower.includes("cash on delivery") ||
-          notesLower.includes("cod");
+        const isCod = isCodOrder(currentOrder?.notes);
         if (isCod && currentOrder?.paymentStatus === "PENDING") {
           await tx.order.update({
             where: { id: orderId },

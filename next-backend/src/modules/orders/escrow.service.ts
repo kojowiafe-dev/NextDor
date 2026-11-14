@@ -13,6 +13,7 @@
 
 import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
+import { isCodOrder } from "./cod.utils.js";
 import { LedgerService } from "../payments/ledger.service.js";
 import { Money } from "../../domain/Money.js";
 import { dispatchEmailAsync } from "../../lib/email.queue.js";
@@ -113,6 +114,17 @@ export class EscrowService {
           `Cannot verify delivery: order must be SHIPPED first (current: ${vo.status})`,
         );
       }
+      const isCod = isCodOrder(vo.order.notes);
+      if (!isCod && vo.order.paymentStatus !== "PAID") {
+        throw new BadRequestError(
+          "Cannot verify delivery: online payment has not been confirmed yet.",
+        );
+      }
+      if (isCod && vo.order.paymentStatus !== "PAID" && input.confirmedBy === "CUSTOMER") {
+        throw new BadRequestError(
+          "Cash on Delivery orders require courier or admin confirmation of cash collection before escrow starts.",
+        );
+      }
 
       const now = new Date();
       const escrowExpiry = new Date(now.getTime() + ESCROW_WINDOW_HOURS * 60 * 60 * 1000);
@@ -147,11 +159,7 @@ export class EscrowService {
         (v) => v.fundsStatus === "ESCROW" || v.fundsStatus === "AVAILABLE" || v.fundsStatus === "PAID_OUT",
       );
       if (allVerified) {
-        const notesLower = (vo.order.notes || "").toLowerCase();
-        const isCod =
-          notesLower.includes("payment method: cod") ||
-          notesLower.includes("cash on delivery") ||
-          notesLower.includes("cod");
+        const isCod = isCodOrder(vo.order.notes);
 
         await tx.order.update({
           where: { id: vo.orderId },
@@ -519,7 +527,7 @@ export class EscrowService {
         where: { id: vendorOrderId },
         include: {
           vendor: { select: { id: true, commissionRate: true } },
-          order: { select: { id: true, userId: true } },
+          order: { select: { id: true, userId: true, paymentStatus: true, notes: true } },
         },
       });
       if (!vo) throw new NotFoundError(`VendorOrder ${vendorOrderId}`);
@@ -528,6 +536,19 @@ export class EscrowService {
         if (!actorId || actorId !== vo.order.userId) {
           throw new ForbiddenError("You can only confirm receipt for your own orders.");
         }
+      }
+
+      if (!isCodOrder(vo.order.notes) && vo.order.paymentStatus !== "PAID") {
+        if (trigger === "CUSTOMER_CONFIRMED") {
+          throw new BadRequestError(
+            "Cannot release escrow funds for an unpaid online order.",
+          );
+        }
+        logger.warn(
+          { vendorOrderId, paymentStatus: vo.order.paymentStatus },
+          "escrow: clearance skipped, online payment not confirmed",
+        );
+        return;
       }
 
       if (vo.fundsStatus !== "ESCROW") {

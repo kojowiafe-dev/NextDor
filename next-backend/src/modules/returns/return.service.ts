@@ -12,6 +12,7 @@ import {
 import { ReturnRepository } from "./return.repository.js";
 import { Money } from "../../domain/Money.js";
 import { toPesewas } from "../payments/paystack.js";
+import { isCodOrder } from "../orders/cod.utils.js";
 import { ADMIN_ROLES, type AuthUser } from "../../lib/auth.guards.js";
 import type {
   CreateReturnRequestInput,
@@ -229,11 +230,7 @@ export class ReturnService {
     }
 
     let successfulPayment = returnRequest.order.payments[0];
-    const notesLower = (returnRequest.order.notes || "").toLowerCase();
-    const isCod =
-      notesLower.includes("payment method: cod") ||
-      notesLower.includes("cash on delivery") ||
-      notesLower.includes("cod");
+    const isCod = isCodOrder(returnRequest.order.notes);
 
     if (!successfulPayment) {
       if (isCod && returnRequest.order.paymentStatus === "PAID") {

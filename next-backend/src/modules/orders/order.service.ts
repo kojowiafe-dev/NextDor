@@ -18,6 +18,7 @@
 
 import { prisma } from "../../lib/prisma.js";
 import { OrderRepository } from "./order.repository.js";
+import { isCodOrder } from "./cod.utils.js";
 import { Money } from "../../domain/Money.js";
 import { CommissionCalculator } from "../../domain/CommissionCalculator.js";
 import { logger } from "../../lib/logger.js";
@@ -361,11 +362,7 @@ export class OrderService {
 
     const shipping = (order.shippingAddress || {}) as any;
 
-    const notesLower = (order.notes || "").toLowerCase();
-    const isCod =
-      notesLower.includes("payment method: cod") ||
-      notesLower.includes("cash on delivery") ||
-      (order.payments.length === 0 && notesLower.includes("cod"));
+    const isCod = isCodOrder(order.notes);
 
     const paymentMethod = isCod
       ? "CASH_ON_DELIVERY"

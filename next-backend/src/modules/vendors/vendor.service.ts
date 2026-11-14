@@ -23,6 +23,7 @@ import {
   UnauthorizedError,
 } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
+import { isCodOrder as checkIsCodOrder } from "../orders/cod.utils.js";
 import { AuditService } from "../audit/audit.service.js";
 import { prisma } from "../../lib/prisma.js";
 import type { OrderStatus } from "@prisma/client";
@@ -614,6 +615,13 @@ export class VendorService {
       throw new NotFoundError("Sub-order not found or does not belong to your store.");
     }
 
+    const isCodOrder = checkIsCodOrder(existing.order.notes);
+    if (!isCodOrder && existing.order.paymentStatus !== "PAID") {
+      throw new BadRequestError(
+        "Cannot fulfill or dispatch an unpaid online order. Awaiting payment confirmation."
+      );
+    }
+
     const previousStatus = existing.status;
     const updated = await this.vendorRepo.updateVendorOrderStatus(vendorId, vendorOrderId, status, notes);
 
@@ -709,11 +717,7 @@ export class VendorService {
         });
 
         if (parentOrder && parentOrder.status !== masterNewStatus && parentOrder.status !== "DELIVERED_VERIFIED" && parentOrder.status !== "COMPLETED" && parentOrder.status !== "CANCELLED") {
-          const notesLower = (orderObj.notes || "").toLowerCase();
-          const isCod =
-            notesLower.includes("payment method: cod") ||
-            notesLower.includes("cash on delivery") ||
-            notesLower.includes("cod");
+          const isCod = checkIsCodOrder(orderObj.notes);
 
           const updateData: { status: OrderStatus; paymentStatus?: "PAID" } = {
             status: masterNewStatus,
