@@ -112,6 +112,40 @@ export async function signIn(payload: SignInPayload): Promise<AuthResponse> {
   };
 }
 
+/**
+ * Sign in or register with a Google ID token via backend POST /api/v1/auth/google.
+ */
+export async function signInWithGoogle(idToken: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ idToken }),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message || "Google sign-in failed. Please try again.");
+  }
+
+  const rawUser = json.data.user;
+  if (json.data.refreshToken) {
+    setInMemoryRefreshToken(json.data.refreshToken);
+  }
+  return {
+    user: {
+      id: rawUser.id,
+      name: rawUser.name,
+      email: rawUser.email,
+      phone: rawUser.phone ?? undefined,
+      role: normalizeRole(rawUser.role),
+      vendorId: rawUser.vendorId ?? undefined,
+      avatarInitials: makeInitials(rawUser.name),
+    },
+    accessToken: json.data.accessToken,
+  };
+}
+
 export type SignUpResult = {
   user: AuthUser;
   requiresVerification: boolean;

@@ -57,7 +57,7 @@ export function MobileNav({ categories }: MobileNavProps) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] md:hidden flex animate-in fade-in duration-200">
           {/* Backdrop */}
           <button
             type="button"
@@ -67,7 +67,7 @@ export function MobileNav({ categories }: MobileNavProps) {
           />
 
           {/* Drawer Sidebar */}
-          <aside className="relative flex h-full w-[min(85vw,340px)] flex-col bg-[#131921] text-white shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+          <aside className="relative z-10 flex h-full w-[min(85vw,340px)] flex-col bg-[#131921] text-white shadow-2xl animate-in slide-in-from-left duration-200">
             {/* Header with Nextdor logo and close button */}
             <div className="flex h-15 items-center justify-between border-b border-white/10 px-4 py-3 bg-[#0d1117]">
               <Link href="/" onClick={close} className="flex items-center">

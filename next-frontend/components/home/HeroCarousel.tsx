@@ -351,7 +351,7 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
 
   return (
     <section
-      className="relative mx-auto max-w-7xl px-3 sm:px-4 pt-2 sm:pt-3"
+      className="relative isolate z-0 mx-auto max-w-7xl px-3 sm:px-4 pt-2 sm:pt-3"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
@@ -361,7 +361,7 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-[#131921] text-white shadow-xl ring-1 ring-black/10 min-h-[410px] sm:min-h-[360px] sm:aspect-[16/7] lg:aspect-[16/5]"
+        className="relative isolate overflow-hidden rounded-2xl sm:rounded-3xl bg-[#131921] text-white shadow-xl ring-1 ring-black/10 min-h-[410px] sm:min-h-[360px] sm:aspect-[16/7] lg:aspect-[16/5]"
       >
         {/* Full-Bleed Background Lifestyle Image with Smooth Transition */}
         {slides.map((slide, idx) => (
@@ -470,7 +470,7 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
             prevSlide();
           }}
           aria-label="Previous slide"
-          className="absolute left-1.5 sm:left-3.5 top-1/2 -translate-y-1/2 z-50 flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-white/35 bg-black/65 text-white shadow-xl backdrop-blur-md transition hover:bg-black/85 active:bg-[#ff9900] active:text-zinc-950 touch-manipulation cursor-pointer"
+          className="absolute left-1.5 sm:left-3.5 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-white/35 bg-black/65 text-white shadow-xl backdrop-blur-md transition hover:bg-black/85 active:bg-[#ff9900] active:text-zinc-950 touch-manipulation cursor-pointer"
         >
           <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 pointer-events-none" />
         </button>
@@ -487,13 +487,13 @@ export function HeroCarousel({ banners = [], featuredProducts = [] }: HeroCarous
             nextSlide();
           }}
           aria-label="Next slide"
-          className="absolute right-1.5 sm:right-3.5 top-1/2 -translate-y-1/2 z-50 flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-white/35 bg-black/65 text-white shadow-xl backdrop-blur-md transition hover:bg-black/85 active:bg-[#ff9900] active:text-zinc-950 touch-manipulation cursor-pointer"
+          className="absolute right-1.5 sm:right-3.5 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-white/35 bg-black/65 text-white shadow-xl backdrop-blur-md transition hover:bg-black/85 active:bg-[#ff9900] active:text-zinc-950 touch-manipulation cursor-pointer"
         >
           <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6 pointer-events-none" />
         </button>
 
         {/* Slide Indicator Dots */}
-        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 backdrop-blur-md border border-white/15">
+        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 backdrop-blur-md border border-white/15">
           {slides.map((slide, idx) => (
             <button
               key={slide.id}

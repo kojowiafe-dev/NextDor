@@ -16,6 +16,7 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import { config } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import {
@@ -422,6 +423,12 @@ export class AuthService {
       throw new NotFoundError("Account not found");
     }
 
+    if (!user.passwordHash) {
+      throw new BadRequestError(
+        "This account uses Google Sign-In and does not have a password yet. Use Forgot Password to set one.",
+      );
+    }
+
     const matches = await bcrypt.compare(input.currentPassword, user.passwordHash);
     if (!matches) {
       throw new UnauthorizedError("Current password is incorrect.");
@@ -496,6 +503,82 @@ export class AuthService {
 
     const tokens = await this._issueTokens(user.id);
     logger.info({ userId: user.id }, "auth: user logged in");
+    return { user: this._safeUser(user), tokens };
+  }
+
+  /**
+   * Authenticate or register a customer using a verified Google ID token.
+   */
+  async loginWithGoogle(idToken: string): Promise<{ user: AuthUser; tokens: AuthTokens }> {
+    if (!config.GOOGLE_CLIENT_ID) {
+      throw new BadRequestError("Google Sign-In is not configured on the server.");
+    }
+
+    let payload;
+    try {
+      const client = new OAuth2Client(config.GOOGLE_CLIENT_ID);
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: config.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (err) {
+      logger.warn({ err }, "auth: Google ID token verification failed");
+      throw new UnauthorizedError("Invalid or expired Google sign-in token.");
+    }
+
+    if (!payload?.sub || !payload?.email) {
+      throw new UnauthorizedError("Google account did not return an email address.");
+    }
+
+    if (!payload.email_verified) {
+      throw new UnauthorizedError("Please verify your Google email address before signing in.");
+    }
+
+    const normalizedEmail = payload.email.toLowerCase().trim();
+
+    let user = await this.userRepo.findByGoogleId(payload.sub);
+    if (!user) {
+      user = await this.userRepo.findByEmail(normalizedEmail);
+    }
+
+    if (user) {
+      if (user.deletedAt) {
+        throw new UnauthorizedError("Account not found");
+      }
+
+      if (user.status === "SUSPENDED") {
+        throw new UnauthorizedError("Your account has been suspended. Contact support.");
+      }
+
+      if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+        throw new UnauthorizedError("Admin accounts must sign in with email and password.");
+      }
+
+      if (!user.googleId || !user.emailVerified) {
+        user = await this.userRepo.update(user.id, {
+          googleId: user.googleId ?? payload.sub,
+          emailVerified: true,
+        });
+      }
+    } else {
+      const displayName = (payload.name || normalizedEmail.split("@")[0] || "Customer")
+        .trim()
+        .slice(0, 100);
+
+      user = await this.userRepo.create({
+        email: normalizedEmail,
+        name: displayName,
+        googleId: payload.sub,
+        passwordHash: null,
+        emailVerified: true,
+        role: "CUSTOMER",
+        status: "ACTIVE",
+      });
+    }
+
+    const tokens = await this._issueTokens(user.id);
+    logger.info({ userId: user.id, role: user.role }, "auth: user signed in with Google");
     return { user: this._safeUser(user), tokens };
   }
 

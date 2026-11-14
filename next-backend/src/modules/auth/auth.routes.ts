@@ -32,6 +32,7 @@ import { AuthService, authService } from "./auth.service.js";
 import {
   registerSchema,
   loginSchema,
+  googleAuthSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
   changePasswordSchema,
@@ -313,6 +314,57 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         req.log.warn(
           { ip: req.ip, email: body.email, err: err.message, userAgent: req.headers["user-agent"] },
           "security: failed login attempt"
+        );
+        throw err;
+      }
+    },
+  );
+
+  /**
+   * POST /auth/google
+   * Authenticate or register using a Google ID token.
+   */
+  app.post(
+    "/google",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+      schema: {
+        description: "Authenticate or register with Google ID token",
+        tags: ["Auth"],
+        body: {
+          type: "object",
+          required: ["idToken"],
+          properties: {
+            idToken: { type: "string", minLength: 10 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const body = googleAuthSchema.parse(req.body);
+
+      try {
+        const { user, tokens } = await authService.loginWithGoogle(body.idToken);
+
+        req.log.info(
+          { ip: req.ip, userId: user.id, email: user.email, role: user.role, userAgent: req.headers["user-agent"] },
+          "security: user signed in with Google"
+        );
+
+        reply
+          .setCookie(REFRESH_COOKIE_NAME, tokens.refreshToken, refreshCookieOptions(REFRESH_MAX_AGE))
+          .send({
+            success: true,
+            data: {
+              user,
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+            },
+          });
+      } catch (err: any) {
+        req.log.warn(
+          { ip: req.ip, err: err.message, userAgent: req.headers["user-agent"] },
+          "security: failed Google sign-in attempt"
         );
         throw err;
       }

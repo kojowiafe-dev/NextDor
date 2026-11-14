@@ -51,6 +51,17 @@ export class UserRepository {
   }
 
   /**
+   * Finds user by unique Google subject ID.
+   */
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    return this.withRetry(() =>
+      prisma.user.findUnique({
+        where: { googleId },
+      }),
+    );
+  }
+
+  /**
    * Finds user by primary UUID.
    */
   async findById(id: string): Promise<User | null> {

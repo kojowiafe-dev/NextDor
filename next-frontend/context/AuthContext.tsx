@@ -12,6 +12,7 @@ import {
 import type { AuthUser, SignInPayload, SignUpPayload, UpdateProfilePayload } from "@/lib/auth/api";
 import {
   signIn as apiSignIn,
+  signInWithGoogle as apiSignInWithGoogle,
   signUp as apiSignUp,
   fetchCurrentUser,
   refreshAccessToken,
@@ -32,6 +33,7 @@ type AuthContextValue = {
   isVendor: boolean;
   isLoading: boolean;
   login: (payload: SignInPayload) => Promise<AuthUser>;
+  loginWithGoogle: (idToken: string) => Promise<AuthUser>;
   register: (payload: SignUpPayload) => Promise<SignUpResult>;
   verifyEmailSession: (payload: { email: string; code: string }) => Promise<AuthUser>;
   setSession: (user: AuthUser, accessToken: string, refreshToken?: string) => void;
@@ -176,6 +178,23 @@ function clearSessionCookie() {
     return authUser;
   }, []);
 
+  const loginWithGoogle = useCallback(async (idToken: string): Promise<AuthUser> => {
+    const { user: authUser, accessToken } = await apiSignInWithGoogle(idToken);
+    setUser(authUser);
+    setToken(accessToken);
+
+    if (typeof window !== "undefined") {
+      setSessionCookie();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+      localStorage.setItem(TOKEN_KEY, accessToken);
+      if (authUser.role === "vendor_owner" || authUser.role === "vendor_staff" || authUser.vendorId) {
+        localStorage.setItem("vendor_token", accessToken);
+      }
+    }
+
+    return authUser;
+  }, []);
+
   const register = useCallback(async (payload: SignUpPayload): Promise<SignUpResult> => {
     return apiSignUp(payload);
   }, []);
@@ -258,13 +277,14 @@ function clearSessionCookie() {
       isVendor: user?.role === "vendor_owner" || user?.role === "vendor_staff" || !!user?.vendorId,
       isLoading: !hydrated,
       login,
+      loginWithGoogle,
       register,
       verifyEmailSession,
       setSession,
       logout,
       updateProfile,
     }),
-    [user, token, hydrated, login, register, verifyEmailSession, setSession, logout, updateProfile],
+    [user, token, hydrated, login, loginWithGoogle, register, verifyEmailSession, setSession, logout, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

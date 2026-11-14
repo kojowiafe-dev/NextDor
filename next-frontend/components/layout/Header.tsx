@@ -277,7 +277,7 @@ export function Header({ categories }: HeaderProps) {
   const { isAdmin, isVendor } = useAuth();
 
   return (
-    <header className="bg-[#131921] text-white">
+    <header className="relative z-50 bg-[#131921] text-white">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2">
         <div className="flex shrink-0 items-center gap-1">
           <div className="md:hidden">

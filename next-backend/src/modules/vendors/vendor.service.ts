@@ -151,7 +151,7 @@ export class VendorService {
       // Verify rightful ownership of the existing customer account via active JWT OR password match
       const isJwtOwner = Boolean(authenticatedUserId && authenticatedUserId === existingUser.id);
       let isPasswordValid = false;
-      if (!isJwtOwner && dto.password) {
+      if (!isJwtOwner && dto.password && existingUser.passwordHash) {
         isPasswordValid = await bcrypt.compare(dto.password, existingUser.passwordHash);
       }
 

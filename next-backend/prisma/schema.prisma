@@ -32,7 +32,8 @@ model User {
   id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email         String     @unique
   emailVerified Boolean    @default(false)
-  passwordHash  String
+  passwordHash  String?
+  googleId      String?    @unique
   name          String
   phone         String?
   whatsappOptIn Boolean    @default(true)
